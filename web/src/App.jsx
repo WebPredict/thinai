@@ -4,6 +4,9 @@ import './App.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
+// Display order: most interesting demos first
+const GAME_ORDER = ['reversi', 'connect_four', 'mancala', 'tictactoe', 'nim', 'chutes_and_ladders']
+
 const GAME_LABELS = {
   tictactoe: 'Tic-Tac-Toe',
   connect_four: 'Connect Four',
@@ -99,7 +102,7 @@ function App() {
   const [sessionId, setSessionId] = useState(null)
   const [gameState, setGameState] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [selectedGame, setSelectedGame] = useState('tictactoe')
+  const [selectedGame, setSelectedGame] = useState('reversi')
   const [mode, setMode] = useState('play') // 'play' or 'train'
   const [aiLastMove, setAiLastMove] = useState(null) // highlight AI's last move
   const [aiThinking, setAiThinking] = useState(null) // confidence + effort info from last AI move
@@ -108,8 +111,14 @@ function App() {
   useEffect(() => {
     fetch(`${API}/games`)
       .then(r => r.json())
-      .then(d => setGames(d.games))
-      .catch(() => setGames(['tictactoe', 'connect_four', 'mancala', 'reversi', 'nim', 'chutes_and_ladders']))
+      .then(d => {
+        const sorted = [...d.games].sort((a, b) => {
+          const ai = GAME_ORDER.indexOf(a), bi = GAME_ORDER.indexOf(b)
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+        })
+        setGames(sorted)
+      })
+      .catch(() => setGames(GAME_ORDER))
   }, [])
 
   const startGame = useCallback(async () => {
@@ -774,6 +783,77 @@ function ChutesAndLaddersBoard({ state, onMove, disabled, aiLastMove }) {
   const aiRollVal = aiLastMove?.roll
   const isYourTurn = state.current_player === 'player1' && !state.game_result
 
+  // Compute cell center coordinates for SVG overlay
+  const cellSize = 96
+  const boardW = cols * cellSize
+  const boardH = rows * cellSize
+  const getCellCenter = (num) => {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (getSpaceNumber(r, c) === num) {
+          return { x: c * cellSize + cellSize / 2, y: r * cellSize + cellSize / 2 }
+        }
+      }
+    }
+    return { x: 0, y: 0 }
+  }
+
+  // Build ladder SVG (two parallel rails + rungs)
+  const renderLadder = (from, to) => {
+    const a = getCellCenter(from)
+    const b = getCellCenter(to)
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.sqrt(dx * dx + dy * dy)
+    // Perpendicular offset for rails
+    const px = (-dy / len) * 8
+    const py = (dx / len) * 8
+    // Rungs
+    const rungCount = Math.max(2, Math.floor(len / 30))
+    const rungs = []
+    for (let i = 1; i <= rungCount; i++) {
+      const t = i / (rungCount + 1)
+      const mx = a.x + dx * t
+      const my = a.y + dy * t
+      rungs.push(<line key={i} x1={mx + px} y1={my + py} x2={mx - px} y2={my - py}
+        stroke="#4aba5a" strokeWidth="2" strokeLinecap="round" opacity="0.7" />)
+    }
+    return (
+      <g key={`l${from}`}>
+        <line x1={a.x + px} y1={a.y + py} x2={b.x + px} y2={b.y + py}
+          stroke="#4aba5a" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+        <line x1={a.x - px} y1={a.y - py} x2={b.x - px} y2={b.y - py}
+          stroke="#4aba5a" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+        {rungs}
+      </g>
+    )
+  }
+
+  // Build chute SVG (wavy line)
+  const renderChute = (from, to) => {
+    const a = getCellCenter(from)
+    const b = getCellCenter(to)
+    const mx = (a.x + b.x) / 2
+    const my = (a.y + b.y) / 2
+    // Perpendicular offset for curve
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.sqrt(dx * dx + dy * dy)
+    const px = (-dy / len) * 20
+    const py = (dx / len) * 20
+    return (
+      <g key={`c${from}`}>
+        <path
+          d={`M ${a.x} ${a.y} Q ${mx + px} ${my + py} ${b.x} ${b.y}`}
+          fill="none" stroke="#e04040" strokeWidth="5" strokeLinecap="round" opacity="0.5" />
+        <path
+          d={`M ${a.x} ${a.y} Q ${mx + px} ${my + py} ${b.x} ${b.y}`}
+          fill="none" stroke="#ff6060" strokeWidth="2" strokeLinecap="round" opacity="0.4"
+          strokeDasharray="4 6" />
+      </g>
+    )
+  }
+
   return (
     <div className="cl-board-container">
       <div className="cl-board-wrapper">
@@ -796,16 +876,6 @@ function ChutesAndLaddersBoard({ state, onMove, disabled, aiLastMove }) {
                     isFinish ? 'cl-finish' : '',
                   ].filter(Boolean).join(' ')} style={{ background: getSquareColor(num) }}>
                     <span className="cl-number">{num}</span>
-                    {isLadder && (
-                      <div className="cl-badge cl-ladder-badge">
-                        LADDER &uarr; {ladders[num]}
-                      </div>
-                    )}
-                    {isChute && (
-                      <div className="cl-badge cl-chute-badge">
-                        CHUTE &darr; {chutes[num]}
-                      </div>
-                    )}
                     {isFinish && !hasP1 && !hasP2 && (
                       <div className="cl-finish-star">&#9733;</div>
                     )}
@@ -819,6 +889,10 @@ function ChutesAndLaddersBoard({ state, onMove, disabled, aiLastMove }) {
             </div>
           ))}
         </div>
+        <svg className="cl-svg-overlay" viewBox={`0 0 ${boardW} ${boardH}`} preserveAspectRatio="none">
+          {Object.entries(ladders).map(([f, t]) => renderLadder(Number(f), Number(t)))}
+          {Object.entries(chutes).map(([f, t]) => renderChute(Number(f), Number(t)))}
+        </svg>
       </div>
       <div className="cl-controls">
         <div className="cl-roll-area">

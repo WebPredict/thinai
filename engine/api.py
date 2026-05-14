@@ -254,15 +254,16 @@ def ai_move(request: Request, session_id: str):
         state = engine.apply_move(state, move)
         session["state"] = state
 
-        # Capture metacognition info
-        if hasattr(reasoner, 'last_confidence') and reasoner.last_confidence:
-            ai_confidence = reasoner.last_confidence.to_dict()
-        if hasattr(reasoner, 'last_effort_reason'):
-            ai_effort = {
-                "depth_used": reasoner.last_depth_used,
-                "nodes_searched": reasoner.nodes_searched,
-                "reason": reasoner.last_effort_reason,
-            }
+        # Capture metacognition info (only for non-chance games)
+        if not is_chance and 'reasoner' in dir():
+            if hasattr(reasoner, 'last_confidence') and reasoner.last_confidence:
+                ai_confidence = reasoner.last_confidence.to_dict()
+            if hasattr(reasoner, 'last_effort_reason'):
+                ai_effort = {
+                    "depth_used": reasoner.last_depth_used,
+                    "nodes_searched": reasoner.nodes_searched,
+                    "reason": reasoner.last_effort_reason,
+                }
 
     handler = session.get("correction_handler")
     result = engine.check_terminal(state)

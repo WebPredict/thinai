@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "name": "Reversi",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if has_legal_move(next_player): next_player else: same_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "grid",
+    "grid": {
+      "rows": 8,
+      "cols": 8,
+      "topology": "rect8"
+    }
+  },
+
+  "pieces": [
+    {
+      "name": "disc",
+      "owner": "each",
+      "properties": {
+        "flippable": { "type": "bool", "default": true }
+      },
+      "display": "disc_bw"
+    }
+  ],
+
+  "state_vars": [],
+
+  "setup": [
+    { "action": "place", "piece": "disc(player1)", "at": "space_at(3, 3)" },
+    { "action": "place", "piece": "disc(player2)", "at": "space_at(3, 4)" },
+    { "action": "place", "piece": "disc(player2)", "at": "space_at(4, 3)" },
+    { "action": "place", "piece": "disc(player1)", "at": "space_at(4, 4)" }
+  ],
+
+  "rules": [
+    {
+      "name": "place_disc",
+      "action": "place",
+      "params": [
+        {
+          "name": "target",
+          "select": "empty_space"
+        }
+      ],
+      "conditions": [
+        "piece_at(target) == empty",
+        "any d in directions: flanks(target, d, current_player)"
+      ],
+      "effects": [
+        "place disc(current_player) at target",
+        "for d in directions[flanks(target, d, current_player)]: flip_line(target, d, current_player)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "has_legal_move(player1) == false and has_legal_move(player2) == false",
+      "score": "count(pieces[owner == current_player])"
+    },
+    {
+      "type": "draw",
+      "condition": "has_legal_move(player1) == false and has_legal_move(player2) == false and count(pieces[owner == player1]) == count(pieces[owner == player2])"
+    }
+  ],
+
+  "_comments": {
+    "flanks": "flanks(space, direction, player) returns true if placing at space and looking in direction, there is one or more opponent pieces followed by a piece owned by player. This is the core legality check for Reversi.",
+    "flip_line": "flip_line(space, direction, player) walks from space in direction, changing ownership of each opponent piece until reaching a piece owned by player. Only pieces that were flanked by the original placement flip — newly flipped pieces do NOT trigger further flips.",
+    "has_legal_move": "has_legal_move(player) returns true if the player has at least one space where placing would flank opponent pieces in any direction. Used for the pass/turn-skip mechanic.",
+    "directions": "All 8 directions on a rect8 grid: N, NE, E, SE, S, SW, W, NW."
+  }
+}

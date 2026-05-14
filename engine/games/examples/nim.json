@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "name": "Nim",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "track",
+    "track": {
+      "length": 3,
+      "loop": false
+    }
+  },
+
+  "pieces": [
+    {
+      "name": "stone",
+      "owner": "none",
+      "display": "stone"
+    }
+  ],
+
+  "state_vars": [],
+
+  "setup": [
+    {
+      "action": "fill",
+      "piece": "stone",
+      "at": "index == 0",
+      "count": 3
+    },
+    {
+      "action": "fill",
+      "piece": "stone",
+      "at": "index == 1",
+      "count": 4
+    },
+    {
+      "action": "fill",
+      "piece": "stone",
+      "at": "index == 2",
+      "count": 5
+    }
+  ],
+
+  "rules": [
+    {
+      "name": "take_stones",
+      "action": "remove",
+      "params": [
+        {
+          "name": "pile",
+          "select": "space"
+        },
+        {
+          "name": "amount",
+          "select": "int_range(1, 5)"
+        }
+      ],
+      "conditions": [
+        "count(pieces_at(pile)) >= amount"
+      ],
+      "effects": [
+        "remove_n(pile, amount)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "all s in spaces: count(pieces_at(s)) == 0"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Standard Nim with 3 piles (3, 4, 5 stones). On each turn, a player removes 1 or more stones from a single pile. The player who takes the last stone wins (normal play convention).",
+    "remove_n": "Built-in effect: removes exactly N pieces from a space."
+  }
+}

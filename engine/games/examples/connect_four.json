@@ -1,0 +1,61 @@
+{
+  "meta": {
+    "name": "Connect Four",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "grid",
+    "grid": {
+      "rows": 6,
+      "cols": 7,
+      "topology": "rect8"
+    }
+  },
+
+  "pieces": [
+    {
+      "name": "disc",
+      "owner": "each",
+      "display": "disc"
+    }
+  ],
+
+  "state_vars": [],
+
+  "setup": [],
+
+  "rules": [
+    {
+      "name": "drop_disc",
+      "action": "place",
+      "params": [
+        {
+          "name": "column",
+          "select": "int_range(0, 6)"
+        }
+      ],
+      "conditions": [
+        "piece_at(space_at(0, column)) == empty"
+      ],
+      "effects": [
+        "set _target = space_at(lowest_empty_row(column), column)",
+        "place disc(current_player) at _target"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "any d in directions: line_length(_target, d, current_player) >= 4"
+    },
+    {
+      "type": "draw",
+      "condition": "all c in range(0, 6): piece_at(space_at(0, c)) != empty"
+    }
+  ]
+}

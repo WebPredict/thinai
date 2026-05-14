@@ -1,0 +1,118 @@
+"""Learnable evaluation function for ThinAI.
+
+A linear model over hand-crafted features. Weights start at zero
+(random play) and shift based on game outcomes. Interpretable,
+serializable, and per-game.
+"""
+
+from __future__ import annotations
+import random
+from dataclasses import dataclass, field
+from typing import Optional
+
+from engine.gdl.state import GameState
+from engine.reasoner.features import FeatureSpec, get_features
+
+
+class LearnableEval:
+    """Weighted feature evaluation that learns from game outcomes."""
+
+    def __init__(
+        self,
+        game_name: str,
+        features: Optional[list[FeatureSpec]] = None,
+        weights: Optional[list[float]] = None,
+        learning_rate: float = 0.15,
+    ):
+        self.game_name = game_name
+        self.features = features or get_features(game_name)
+        if not self.features:
+            raise ValueError(f"No features registered for game: {game_name}")
+
+        if weights is not None:
+            self.weights = list(weights)
+        else:
+            # Small random initial weights to break symmetry
+            self.weights = [random.uniform(-0.05, 0.05) for _ in self.features]
+
+        self.learning_rate = learning_rate
+        self.generation = 0
+        self.history: list[dict] = []
+
+    def __call__(self, state: GameState, player: str, engine=None) -> float:
+        """Evaluate a position from player's perspective."""
+        score = 0.0
+        for spec, weight in zip(self.features, self.weights):
+            score += weight * spec.extract(state, player)
+        return score
+
+    def extract_features(self, state: GameState, player: str) -> list[float]:
+        """Extract feature values for a state (used for trace collection)."""
+        return [spec.extract(state, player) for spec in self.features]
+
+    def update_weights(self, game_trace: list[dict], outcome: float):
+        """Update weights based on a completed game.
+
+        Args:
+            game_trace: list of {"features": list[float], "move_index": int, "total_moves": int}
+            outcome: +1.0 (win), 0.0 (draw), -1.0 (loss) from learner's perspective
+        """
+        self.generation += 1
+
+        for snapshot in game_trace:
+            features = snapshot["features"]
+            # Weight late-game positions more heavily
+            total = snapshot.get("total_moves", 1)
+            idx = snapshot.get("move_index", 0)
+            move_weight = 0.3 + 0.7 * (idx / max(total, 1))
+
+            for i, f_val in enumerate(features):
+                adjustment = self.learning_rate * outcome * f_val * move_weight
+                self.weights[i] += adjustment
+
+        # Decay learning rate slowly
+        self.learning_rate = max(0.01, self.learning_rate * 0.995)
+
+        # Record snapshot
+        self.history.append({
+            "generation": self.generation,
+            "weights": list(self.weights),
+            "outcome": outcome,
+            "learning_rate": self.learning_rate,
+        })
+
+    def weight_summary(self) -> list[dict]:
+        """Human-readable summary of current weights."""
+        items = []
+        for spec, w in zip(self.features, self.weights):
+            items.append({
+                "feature": spec.name,
+                "description": spec.description,
+                "weight": round(w, 4),
+            })
+        return sorted(items, key=lambda x: abs(x["weight"]), reverse=True)
+
+    def to_dict(self) -> dict:
+        """Serialize for storage."""
+        return {
+            "game_name": self.game_name,
+            "feature_names": [f.name for f in self.features],
+            "weights": list(self.weights),
+            "learning_rate": self.learning_rate,
+            "generation": self.generation,
+            "history": self.history,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "LearnableEval":
+        """Deserialize from storage."""
+        features = get_features(data["game_name"])
+        evaluator = cls(
+            game_name=data["game_name"],
+            features=features,
+            weights=data["weights"],
+            learning_rate=data["learning_rate"],
+        )
+        evaluator.generation = data["generation"]
+        evaluator.history = data.get("history", [])
+        return evaluator

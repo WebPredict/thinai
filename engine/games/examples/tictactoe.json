@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "name": "Tic-Tac-Toe",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "grid",
+    "grid": {
+      "rows": 3,
+      "cols": 3,
+      "topology": "rect8"
+    }
+  },
+
+  "pieces": [
+    {
+      "name": "mark",
+      "owner": "each",
+      "display": "X/O"
+    }
+  ],
+
+  "state_vars": [],
+
+  "setup": [],
+
+  "rules": [
+    {
+      "name": "place_mark",
+      "action": "place",
+      "params": [
+        {
+          "name": "target",
+          "select": "empty_space"
+        }
+      ],
+      "conditions": [
+        "piece_at(target) == empty"
+      ],
+      "effects": [
+        "place mark(current_player) at target"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "any d in directions: line_length(last_placed, d, current_player) >= 3"
+    },
+    {
+      "type": "draw",
+      "condition": "count(spaces[piece_at(s) == empty]) == 0"
+    }
+  ]
+}

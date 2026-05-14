@@ -1,0 +1,117 @@
+{
+  "meta": {
+    "name": "Mancala (Kalah)",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if last_pit_is_store: same_player else: next_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "track",
+    "track": {
+      "length": 14,
+      "loop": true
+    },
+    "regions": [
+      {
+        "name": "pits_p1",
+        "spaces": "index >= 0 and index <= 5",
+        "owner": "player1"
+      },
+      {
+        "name": "store_p1",
+        "spaces": "index == 6",
+        "owner": "player1"
+      },
+      {
+        "name": "pits_p2",
+        "spaces": "index >= 7 and index <= 12",
+        "owner": "player2"
+      },
+      {
+        "name": "store_p2",
+        "spaces": "index == 13",
+        "owner": "player2"
+      }
+    ]
+  },
+
+  "pieces": [
+    {
+      "name": "stone",
+      "owner": "none",
+      "display": "stone"
+    }
+  ],
+
+  "state_vars": [
+    {
+      "name": "last_pit_is_store",
+      "type": "bool",
+      "scope": "global",
+      "initial": false
+    },
+    {
+      "name": "last_pit_index",
+      "type": "int",
+      "scope": "global",
+      "initial": -1
+    }
+  ],
+
+  "setup": [
+    {
+      "action": "fill",
+      "piece": "stone",
+      "at": "index >= 0 and index <= 5",
+      "count": 4
+    },
+    {
+      "action": "fill",
+      "piece": "stone",
+      "at": "index >= 7 and index <= 12",
+      "count": 4
+    }
+  ],
+
+  "rules": [
+    {
+      "name": "sow_stones",
+      "action": "distribute",
+      "params": [
+        {
+          "name": "pit",
+          "select": "space",
+          "from": "region(current_player_pits)"
+        }
+      ],
+      "conditions": [
+        "count(pieces_at(pit)) > 0"
+      ],
+      "effects": [
+        "mancala_sow_and_resolve(pit)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "mancala_side_empty()",
+      "score": "mancala_store_count(current_player)"
+    },
+    {
+      "type": "draw",
+      "condition": "mancala_side_empty()",
+      "score": "mancala_store_count(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "mancala_sow_and_resolve": "Compound built-in: pick up stones from pit, distribute counter-clockwise skipping opponent store, then resolve extra turn (if last stone in own store) and capture (if last stone in empty own-side pit with opposite non-empty).",
+    "mancala_side_empty": "Returns true if either player's pits are all empty (triggers end of game with remaining stones collected).",
+    "mancala_store_count": "Returns the number of stones in the given player's store."
+  }
+}

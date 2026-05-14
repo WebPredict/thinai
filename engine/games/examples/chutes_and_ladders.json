@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "name": "Chutes and Ladders",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "track",
+    "track": {
+      "length": 26,
+      "loop": false
+    }
+  },
+
+  "pieces": [
+    {
+      "name": "token",
+      "owner": "each",
+      "display": "token"
+    }
+  ],
+
+  "state_vars": [],
+
+  "setup": [
+    {
+      "action": "place",
+      "piece": "token(player1)",
+      "at": "space_at(0)"
+    },
+    {
+      "action": "place",
+      "piece": "token(player2)",
+      "at": "space_at(0)"
+    }
+  ],
+
+  "rules": [
+    {
+      "name": "roll_and_move",
+      "action": "chance",
+      "chance": true,
+      "params": [
+        {
+          "name": "roll",
+          "select": "int_range(1, 6)"
+        }
+      ],
+      "conditions": [],
+      "effects": [
+        "chutes_and_ladders_move(roll)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "chutes_and_ladders_winner()"
+    }
+  ],
+
+  "chutes_and_ladders": {
+    "board_size": 25,
+    "ladders": {
+      "2": 10,
+      "6": 16,
+      "8": 12,
+      "15": 23
+    },
+    "chutes": {
+      "14": 3,
+      "19": 7,
+      "22": 11,
+      "24": 18
+    }
+  },
+
+  "_comments": {
+    "rules": "Simplified Chutes and Ladders on a 25-space board (spaces 1-25). Space 0 is the start. Players roll a die (1-6) and move forward. Landing on a ladder bottom sends you up; landing on a chute top sends you down. First to reach or pass space 25 wins.",
+    "chance": "The roll parameter is a chance event — not a player choice. During play, one value is chosen uniformly at random.",
+    "chutes_and_ladders_move": "Built-in effect: moves current player's token forward by roll amount, resolves chutes/ladders."
+  }
+}

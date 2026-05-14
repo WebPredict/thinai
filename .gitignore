@@ -1,0 +1,57 @@
+# Claude Code
+.claude/
+
+# Secrets & credentials
+.env
+.env.*
+*.pem
+*.key
+*.secret
+credentials.json
+service-account.json
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Node / Web
+node_modules/
+web/dist/
+.npm/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing & caching
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# ThinAI runtime data
+engine/memory/data/
+scripts/results/
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
+.Spotlight-V100
+.Trashes

@@ -112,6 +112,60 @@
 
   .nav-links a:hover { color: var(--ink); }
 
+  .nav-demo-link {
+    color: var(--accent) !important;
+    border: 1px solid var(--accent-dim);
+    padding: 0.3rem 0.9rem;
+    border-radius: 3px;
+    transition: all 0.2s ease !important;
+  }
+
+  .nav-demo-link:hover {
+    background: rgba(212, 166, 86, 0.12);
+    border-color: var(--accent);
+  }
+
+  .hero-cta {
+    display: inline-block;
+    margin-top: 2.5rem;
+    padding: 0.85rem 2.5rem;
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: opacity 0.15s;
+    animation: fadeUp 1.2s ease 0.8s backwards;
+  }
+
+  .hero-cta:hover { opacity: 0.88; }
+
+  /* Tier status badges */
+  .tier-status {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.55rem;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .tier-status.done {
+    color: #4aba5a;
+    background: rgba(74, 186, 90, 0.1);
+    border: 1px solid rgba(74, 186, 90, 0.25);
+  }
+
+  .tier-status.upcoming {
+    color: var(--ink-faint);
+    background: transparent;
+    border: 1px solid var(--rule-bright);
+  }
+
   /* HERO */
   .hero {
     min-height: 100vh;
@@ -767,6 +821,7 @@
     <a href="#questions">Research</a>
     <a href="#benchmark">Benchmark</a>
     <a href="#notes">Notes</a>
+    <a href="/" class="nav-demo-link">Try the Demo</a>
   </div>
 </nav>
 
@@ -786,9 +841,10 @@
       </div>
       <div>
         <span>Status</span>
-        <strong>Active research</strong>
+        <strong>Phase 3 — corrections</strong>
       </div>
     </div>
+    <a href="/" class="hero-cta">Try the Demo — 6 games playable</a>
   </div>
 
   <div class="hero-diagram">
@@ -1000,26 +1056,31 @@
       <div class="tier">
         <span class="tier-num">I</span>
         <span class="tier-games">tic-tac-toe · nim · chutes & ladders</span>
+        <span class="tier-status done">playable</span>
         <span class="tier-budget">≤ 10 games</span>
       </div>
       <div class="tier">
         <span class="tier-num">II</span>
         <span class="tier-games">connect four · reversi · mancala</span>
+        <span class="tier-status done">playable</span>
         <span class="tier-budget">≤ 30 games</span>
       </div>
       <div class="tier">
         <span class="tier-num">III</span>
         <span class="tier-games">checkers · backgammon · gin rummy</span>
+        <span class="tier-status upcoming">upcoming</span>
         <span class="tier-budget">≤ 50 games</span>
       </div>
       <div class="tier">
         <span class="tier-num">IV</span>
         <span class="tier-games">chess · scrabble · risk</span>
+        <span class="tier-status upcoming">upcoming</span>
         <span class="tier-budget">≤ 100 games</span>
       </div>
       <div class="tier">
         <span class="tier-num">V</span>
         <span class="tier-games">novel games · procedurally generated</span>
+        <span class="tier-status upcoming">upcoming</span>
         <span class="tier-budget">transfer test</span>
       </div>
     </div>
@@ -1054,8 +1115,9 @@
   <div class="foot-inner">
     <div class="foot-quote">Intelligence is not a matter of how much you know, but how quickly you learn what you don't.</div>
     <div class="foot-status">
-      <div class="active"><span class="dot"></span>CURRENTLY · PHASE 0</div>
-      <div style="margin-top: 0.5rem; color: var(--ink-faint);">design · foundations</div>
+      <div class="active"><span class="dot"></span>CURRENTLY · PHASE 3</div>
+      <div style="margin-top: 0.5rem; color: var(--ink-faint);">corrections · refinement</div>
+      <div style="margin-top: 0.35rem; color: var(--ink-faint); font-size: 0.75rem;">6 games · 287 tests · <a href="/" style="color: var(--accent); text-decoration: none;">live demo</a></div>
     </div>
   </div>
   <div class="copyright">

@@ -4,7 +4,7 @@ A research project building an AI system that learns to play arbitrary turn-base
 
 Everything runs on a single laptop. No cloud APIs, no pre-trained foundation models, no LLM dependencies.
 
-**[Read the full research manifesto](thinai.html)**
+**[Read the full research manifesto](https://www.thinai.io/)**
 
 ## Status
 

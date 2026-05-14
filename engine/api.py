@@ -11,9 +11,13 @@ import threading
 import random
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from engine.engine import GameEngine
 from engine.gdl.state import GameState, Move, GameResult
@@ -25,11 +29,19 @@ from engine.training.opponents import RandomOpponent
 from engine.memory.store import MemoryStore
 from engine.corrections.handler import CorrectionHandler
 
+# --- Rate Limiting ---
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="ThinAI Game Engine API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- CORS ---
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -118,7 +130,8 @@ class TrainingRequest(BaseModel):
 # --- Game Endpoints ---
 
 @app.get("/api/games")
-def list_games():
+@limiter.limit("60/minute")
+def list_games(request: Request):
     games = []
     for f in os.listdir(EXAMPLES_DIR):
         if f.endswith(".json"):
@@ -127,7 +140,8 @@ def list_games():
 
 
 @app.post("/api/game/new")
-def new_game(req: NewGameRequest):
+@limiter.limit("30/minute")
+def new_game(request: Request, req: NewGameRequest):
     engine = _load_engine(req.game)
     state = engine.initial_state()
     session_id = f"{req.game}_{len(_sessions)}"
@@ -157,7 +171,8 @@ def new_game(req: NewGameRequest):
 
 
 @app.post("/api/game/{session_id}/move")
-def make_move(session_id: str, req: MoveRequest):
+@limiter.limit("120/minute")
+def make_move(request: Request, session_id: str, req: MoveRequest):
     """Apply the player's move only. Returns intermediate state (before AI plays)."""
     session = _sessions.get(session_id)
     if not session:
@@ -195,7 +210,8 @@ def make_move(session_id: str, req: MoveRequest):
 
 
 @app.post("/api/game/{session_id}/ai-move")
-def ai_move(session_id: str):
+@limiter.limit("120/minute")
+def ai_move(request: Request, session_id: str):
     """Let the AI play its turn. Called separately so the frontend can show a pause."""
     session = _sessions.get(session_id)
     if not session:
@@ -210,11 +226,22 @@ def ai_move(session_id: str):
         ai_moves = engine.legal_moves(state)
         move = random.choice(ai_moves) if ai_moves else None
     else:
+        from engine.metacognition.effort import EffortAllocator
+        from engine.metacognition.confidence import DecisionConfidenceTracker
+        allocator = session.get("effort_allocator") or EffortAllocator()
+        conf_tracker = session.get("confidence_tracker") or DecisionConfidenceTracker()
         reasoner = Reasoner(engine, max_depth=session["ai_depth"],
-                           eval_fn=session.get("eval_fn"))
+                           eval_fn=session.get("eval_fn"),
+                           effort_allocator=allocator,
+                           confidence_tracker=conf_tracker)
         move = reasoner.choose_move(state)
+        # Store for future moves in this session
+        session["effort_allocator"] = allocator
+        session["confidence_tracker"] = conf_tracker
 
     ai_move_info = None
+    ai_confidence = None
+    ai_effort = None
     if move:
         ai_move_info = {}
         for k, v in move.params.items():
@@ -227,12 +254,27 @@ def ai_move(session_id: str):
         state = engine.apply_move(state, move)
         session["state"] = state
 
+        # Capture metacognition info
+        if hasattr(reasoner, 'last_confidence') and reasoner.last_confidence:
+            ai_confidence = reasoner.last_confidence.to_dict()
+        if hasattr(reasoner, 'last_effort_reason'):
+            ai_effort = {
+                "depth_used": reasoner.last_depth_used,
+                "nodes_searched": reasoner.nodes_searched,
+                "reason": reasoner.last_effort_reason,
+            }
+
     handler = session.get("correction_handler")
     result = engine.check_terminal(state)
     if result and handler:
         handler.on_game_end(state, result)
 
-    return {"state": _state_to_dict(state, engine), "ai_move": ai_move_info}
+    return {
+        "state": _state_to_dict(state, engine),
+        "ai_move": ai_move_info,
+        "ai_confidence": ai_confidence,
+        "ai_effort": ai_effort,
+    }
 
 
 @app.get("/api/game/{session_id}/corrections")
@@ -277,7 +319,8 @@ def get_state(session_id: str):
 # --- Training Endpoints ---
 
 @app.post("/api/training/start")
-def start_training(req: TrainingRequest):
+@limiter.limit("5/minute")
+def start_training(request: Request, req: TrainingRequest):
     global _training_counter
     _training_counter += 1
     training_id = f"train_{_training_counter}"
@@ -305,8 +348,24 @@ def start_training(req: TrainingRequest):
     }
     _training_runs[training_id] = run_state
 
+    # Metacognition components for this training run
+    from engine.metacognition.effort import EffortAllocator
+    from engine.metacognition.confidence import DecisionConfidenceTracker
+    from engine.metacognition.self_assessment import SelfAssessor
+    effort_alloc = EffortAllocator(min_depth=1, max_depth=max(req.depth + 1, 4))
+    conf_tracker = DecisionConfidenceTracker()
+    self_assessor = SelfAssessor()
+    run_state["effort_allocator"] = effort_alloc
+    run_state["confidence_tracker"] = conf_tracker
+    run_state["self_assessor"] = self_assessor
+
     def _run_training():
-        runner = LearningRunner(engine, evaluator, max_depth=req.depth)
+        runner = LearningRunner(
+            engine, evaluator, max_depth=req.depth,
+            effort_allocator=effort_alloc,
+            confidence_tracker=conf_tracker,
+            self_assessor=self_assessor,
+        )
 
         def on_progress(snapshot, results):
             run_state["games_played"] = snapshot.game_number
@@ -337,7 +396,11 @@ def training_status(training_id: str):
         raise HTTPException(404, "Training run not found")
 
     evaluator = run["evaluator"]
-    return {
+    assessor = run.get("self_assessor")
+    conf_tracker = run.get("confidence_tracker")
+    effort_alloc = run.get("effort_allocator")
+
+    response = {
         "status": run["status"],
         "game": run["game"],
         "game_name": run["game_name"],
@@ -351,6 +414,17 @@ def training_status(training_id: str):
         "generation": evaluator.generation,
         "results": run["results"],
     }
+
+    # Add metacognition data
+    if assessor:
+        profile = assessor.assess(run["game_name"])
+        response["self_assessment"] = profile.to_dict()
+    if conf_tracker:
+        response["confidence_stats"] = conf_tracker.stats()
+    if effort_alloc:
+        response["effort_stats"] = effort_alloc.stats()
+
+    return response
 
 
 # --- Memory Endpoints ---

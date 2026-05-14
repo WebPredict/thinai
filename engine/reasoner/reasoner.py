@@ -16,11 +16,17 @@ from engine.gdl.state import GameState, Move, GameResult
 class Reasoner:
     """Minimax reasoner with alpha-beta pruning."""
 
-    def __init__(self, engine: GameEngine, max_depth: int = 6, eval_fn=None):
+    def __init__(self, engine: GameEngine, max_depth: int = 6, eval_fn=None,
+                 effort_allocator=None, confidence_tracker=None):
         self.engine = engine
         self.max_depth = max_depth
         self.eval_fn = eval_fn or default_eval
+        self.effort_allocator = effort_allocator
+        self.confidence_tracker = confidence_tracker
         self.nodes_searched = 0
+        self.last_confidence = None  # MoveConfidence from most recent move
+        self.last_depth_used = 0
+        self.last_effort_reason = ""
 
     def choose_move(self, state: GameState) -> Optional[Move]:
         """Choose the best move for the current player."""
@@ -28,9 +34,20 @@ class Reasoner:
         if not moves:
             return None
 
+        # Determine search depth — adaptive or fixed
+        if self.effort_allocator:
+            decision = self.effort_allocator.recommend(state, self.engine, self.eval_fn)
+            depth = decision.depth
+            self.last_effort_reason = decision.reason
+        else:
+            depth = self.max_depth
+            self.last_effort_reason = f"fixed depth {depth}"
+        self.last_depth_used = depth
+
         self.nodes_searched = 0
         best_move = None
         best_score = -math.inf
+        second_score = -math.inf
         alpha = -math.inf
         beta = math.inf
 
@@ -41,11 +58,22 @@ class Reasoner:
 
         for move in moves:
             new_state = self.engine.apply_move(state, move)
-            score = -self._negamax(new_state, self.max_depth - 1, -beta, -alpha)
+            score = -self._negamax(new_state, depth - 1, -beta, -alpha)
             if score > best_score:
+                second_score = best_score
                 best_score = score
                 best_move = move
+            elif score > second_score:
+                second_score = score
             alpha = max(alpha, score)
+
+        # Score confidence
+        self.last_confidence = None
+        if self.confidence_tracker and best_move:
+            second = second_score if second_score > -math.inf else None
+            self.last_confidence = self.confidence_tracker.score_move(
+                best_score, second, depth, len(moves)
+            )
 
         return best_move
 

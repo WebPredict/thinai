@@ -101,11 +101,17 @@ class LearningRunner:
         evaluator: LearnableEval,
         max_depth: int = 4,
         learner_player: str = "player1",
+        effort_allocator=None,
+        confidence_tracker=None,
+        self_assessor=None,
     ):
         self.engine = engine
         self.evaluator = evaluator
         self.max_depth = max_depth
         self.learner_player = learner_player
+        self.effort_allocator = effort_allocator
+        self.confidence_tracker = confidence_tracker
+        self.self_assessor = self_assessor
 
     def train(
         self,
@@ -115,7 +121,7 @@ class LearningRunner:
     ) -> LearningResults:
         """Run training games, updating weights after each."""
         if opponent is None:
-            opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth + 1)
+            opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
 
         results = LearningResults(
             game_name=self.evaluator.game_name,
@@ -132,6 +138,15 @@ class LearningRunner:
 
             # Update weights
             self.evaluator.update_weights(trace, outcome)
+
+            # Update metacognition
+            if self.confidence_tracker:
+                winner = self.learner_player if outcome > 0 else (
+                    "opponent" if outcome < 0 else None
+                )
+                self.confidence_tracker.on_game_end(winner, self.learner_player)
+            if self.self_assessor:
+                self.self_assessor.record_game(self.evaluator.game_name, outcome)
 
             # Track results
             if outcome > 0:
@@ -159,6 +174,11 @@ class LearningRunner:
                 progress_callback(snapshot, results)
 
         results.final_weights = list(self.evaluator.weights)
+
+        # Let effort allocator learn from this training batch
+        if self.effort_allocator:
+            self.effort_allocator.learn_from_history()
+
         return results
 
     def _play_and_trace(self, opponent) -> tuple[float, int, list[dict]]:
@@ -171,8 +191,12 @@ class LearningRunner:
         num_moves = 0
         max_moves = 200
 
-        # Create reasoner with current evaluator
-        reasoner = Reasoner(self.engine, max_depth=self.max_depth, eval_fn=self.evaluator)
+        # Create reasoner with current evaluator and metacognition
+        reasoner = Reasoner(
+            self.engine, max_depth=self.max_depth, eval_fn=self.evaluator,
+            effort_allocator=self.effort_allocator,
+            confidence_tracker=self.confidence_tracker,
+        )
 
         for _ in range(max_moves):
             result = self.engine.check_terminal(state)

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import TrainingDashboard from './TrainingDashboard'
 import './App.css'
 
-const API = 'http://localhost:8000/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 const GAME_LABELS = {
   tictactoe: 'Tic-Tac-Toe',
@@ -102,6 +102,7 @@ function App() {
   const [selectedGame, setSelectedGame] = useState('tictactoe')
   const [mode, setMode] = useState('play') // 'play' or 'train'
   const [aiLastMove, setAiLastMove] = useState(null) // highlight AI's last move
+  const [aiThinking, setAiThinking] = useState(null) // confidence + effort info from last AI move
   const [showRulesModal, setShowRulesModal] = useState(true) // show rules on game start
 
   useEffect(() => {
@@ -157,6 +158,10 @@ function App() {
         setGameState(aiData.state)
         if (aiData.ai_move) {
           setAiLastMove(aiData.ai_move)
+          setAiThinking({
+            confidence: aiData.ai_confidence,
+            effort: aiData.ai_effort,
+          })
           setTimeout(() => setAiLastMove(null), 2500)
         }
       }
@@ -184,7 +189,7 @@ function App() {
       </header>
 
       {mode === 'train' ? (
-        <TrainingDashboard games={games} />
+        <TrainingDashboard games={games} initialGame={selectedGame} />
       ) : !sessionId ? (
         <div className="menu">
           <h2>Select a game</h2>
@@ -240,6 +245,18 @@ function App() {
               <button className="rules-btn" onClick={() => setShowRulesModal(true)}>?</button>
             </div>
             <GameInfo state={gameState} aiLastMove={aiLastMove} loading={loading} />
+            {aiThinking?.confidence && (
+              <div className="ai-thinking-bar">
+                <span className="ai-thinking-label">AI confidence:</span>
+                <div className="ai-confidence-meter">
+                  <div className="ai-confidence-fill" style={{ width: `${aiThinking.confidence.calibrated * 100}%` }} />
+                </div>
+                <span className="ai-thinking-level">{aiThinking.confidence.level}</span>
+                {aiThinking.effort && (
+                  <span className="ai-thinking-effort">depth {aiThinking.effort.depth_used}</span>
+                )}
+              </div>
+            )}
           </div>
           {showRulesModal && (
             <RulesModal gameType={selectedGame} onClose={() => setShowRulesModal(false)} />

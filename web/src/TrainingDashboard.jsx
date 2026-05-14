@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const API = 'http://localhost:8000/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 function TrainExplainer() {
   const [open, setOpen] = useState(true)
@@ -45,7 +45,7 @@ const GAME_LABELS = {
   chutes_and_ladders: 'Chutes & Ladders',
 }
 
-export default function TrainingDashboard({ games }) {
+export default function TrainingDashboard({ games, initialGame }) {
   // Smart defaults per game: low depth so the system starts weak
   // and the learned evaluation actually drives improvement
   const DEFAULTS = {
@@ -55,11 +55,13 @@ export default function TrainingDashboard({ games }) {
     reversi:      { games: 30, depth: 1 },
   }
 
-  const [selectedGame, setSelectedGame] = useState('tictactoe')
+  const initGame = initialGame || 'tictactoe'
+  const initDefaults = DEFAULTS[initGame] || { games: 40, depth: 1 }
+  const [selectedGame, setSelectedGame] = useState(initGame)
   const [trainingId, setTrainingId] = useState(null)
   const [status, setStatus] = useState(null)
-  const [numGames, setNumGames] = useState(DEFAULTS.tictactoe.games)
-  const [depth, setDepth] = useState(DEFAULTS.tictactoe.depth)
+  const [numGames, setNumGames] = useState(initDefaults.games)
+  const [depth, setDepth] = useState(initDefaults.depth)
   const [fresh, setFresh] = useState(true)
   const [memories, setMemories] = useState([])
   const pollRef = useRef(null)
@@ -173,7 +175,13 @@ export default function TrainingDashboard({ games }) {
       {status && (
         <div className="train-results">
           <LearningCurve snapshots={status.snapshots} totalGames={status.total_games} />
+          {status.self_assessment && (
+            <SelfAssessmentPanel assessment={status.self_assessment} />
+          )}
           <WeightInspector weights={status.weights} generation={status.generation} />
+          {status.effort_stats && status.confidence_stats && (
+            <MetacognitionPanel effort={status.effort_stats} confidence={status.confidence_stats} />
+          )}
         </div>
       )}
 
@@ -319,6 +327,93 @@ function WeightInspector({ weights, generation }) {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+function SelfAssessmentPanel({ assessment }) {
+  if (!assessment) return null
+
+  const levelColors = {
+    strong: '#4aba5a',
+    competent: 'var(--accent)',
+    developing: '#d4a656',
+    beginner: '#c66a4e',
+    untrained: 'var(--ink-faint)',
+  }
+
+  return (
+    <div className="self-assessment-panel">
+      <h3>Self-Assessment</h3>
+      <div className="assessment-content">
+        <div className="assessment-level" style={{ color: levelColors[assessment.skill_level] || 'var(--ink)' }}>
+          {assessment.skill_level}
+          {assessment.trend && assessment.trend !== 'unknown' && (
+            <span className="assessment-trend">
+              {assessment.trend === 'improving' ? ' \u2197' : assessment.trend === 'declining' ? ' \u2198' : ' \u2192'}
+              {' '}{assessment.trend}
+            </span>
+          )}
+        </div>
+        <p className="assessment-desc">{assessment.description}</p>
+        <div className="assessment-stats">
+          <span>Win rate: {(assessment.win_rate * 100).toFixed(0)}%</span>
+          <span>Recent: {(assessment.recent_win_rate * 100).toFixed(0)}%</span>
+          <span>Games: {assessment.games_played}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MetacognitionPanel({ effort, confidence }) {
+  return (
+    <div className="metacognition-panel">
+      <h3>How it thinks</h3>
+      <div className="metacog-grid">
+        <div className="metacog-card">
+          <div className="metacog-card-title">Effort Allocation</div>
+          <div className="metacog-card-value">{effort.total_decisions} decisions</div>
+          <div className="metacog-card-detail">
+            {effort.learned_adjustments > 0
+              ? `Learned ${effort.learned_adjustments} depth adjustments`
+              : 'Using heuristic depth selection'}
+          </div>
+          <p className="metacog-card-explain">
+            The system decides how deeply to search each position — thinking
+            harder when there are few options or the game is near its end,
+            and staying efficient when the choice is obvious.
+          </p>
+        </div>
+        <div className="metacog-card">
+          <div className="metacog-card-title">Decision Confidence</div>
+          <div className="metacog-card-value">{confidence.total_moves_scored} moves scored</div>
+          <div className="metacog-card-detail">
+            {confidence.calibration_buckets > 0
+              ? `${confidence.calibration_buckets} calibration buckets`
+              : 'Building calibration data'}
+          </div>
+          <p className="metacog-card-explain">
+            Each move gets a confidence score — how sure the system is that
+            it found the best move. Over time, these scores are calibrated
+            so "80% confident" actually means correct ~80% of the time.
+          </p>
+          {confidence.calibration?.length > 0 && (
+            <div className="calibration-table">
+              <div className="calibration-header">
+                <span>Predicted</span><span>Actual</span><span>Count</span>
+              </div>
+              {confidence.calibration.map((c, i) => (
+                <div key={i} className="calibration-row">
+                  <span>{(c.predicted * 100).toFixed(0)}%</span>
+                  <span>{(c.actual * 100).toFixed(0)}%</span>
+                  <span>{c.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

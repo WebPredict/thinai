@@ -92,10 +92,11 @@ class TestLearningTTT:
 
 class TestLearningC4:
     def test_c4_learning(self, c4_engine):
-        """Connect Four learner should achieve reasonable win rate."""
+        """Connect Four learner should achieve reasonable win rate against random."""
         random.seed(42)
         evaluator = LearnableEval("Connect Four")
         runner = LearningRunner(c4_engine, evaluator, max_depth=3)
-        results = runner.train(20)
+        opponent = RandomOpponent(c4_engine)
+        results = runner.train(20, opponent=opponent)
 
         assert results.win_rate >= 0.4, f"C4 win rate too low: {results.win_rate:.0%}"

@@ -69,6 +69,15 @@ header h1 {
   font-weight: 300;
   font-size: 2.6rem;
   letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.app-logo {
+  display: inline-flex;
+  align-items: center;
+  transform: translateY(1px);
 }
 
 header em {
@@ -926,6 +935,8 @@ header em {
 
 .train-explainer-body {
   padding: 0 1.5rem 1.25rem;
+  max-height: 160px;
+  overflow-y: auto;
 }
 
 .train-explainer-body p {
@@ -958,7 +969,13 @@ header em {
   color: var(--ink-dim);
 }
 
-.train-params label { display: flex; align-items: center; gap: 0.5rem; }
+.train-params label { display: flex; align-items: center; gap: 0.5rem; position: relative; }
+
+.train-param-note {
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
 
 .train-params input {
   width: 60px;
@@ -970,6 +987,29 @@ header em {
   font-size: 0.8rem;
   border-radius: 3px;
   text-align: center;
+}
+
+.train-fresh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.train-fresh-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.train-fresh-hint {
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  font-style: italic;
 }
 
 .train-progress-info {

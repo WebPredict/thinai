@@ -60,6 +60,7 @@ export default function TrainingDashboard({ games }) {
   const [status, setStatus] = useState(null)
   const [numGames, setNumGames] = useState(DEFAULTS.tictactoe.games)
   const [depth, setDepth] = useState(DEFAULTS.tictactoe.depth)
+  const [fresh, setFresh] = useState(true)
   const [memories, setMemories] = useState([])
   const pollRef = useRef(null)
 
@@ -92,7 +93,7 @@ export default function TrainingDashboard({ games }) {
     const res = await fetch(`${API}/training/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game: selectedGame, num_games: numGames, depth }),
+      body: JSON.stringify({ game: selectedGame, num_games: numGames, depth, fresh }),
     })
     const data = await res.json()
     setTrainingId(data.training_id)
@@ -133,10 +134,20 @@ export default function TrainingDashboard({ games }) {
           <label>
             Games: <input type="number" value={numGames} onChange={e => setNumGames(+e.target.value)} min={5} max={200} />
           </label>
-          <label>
+          <label title="Moves ahead to search. In a future phase, the system will learn to manage this itself.">
             Depth: <input type="number" value={depth} onChange={e => setDepth(+e.target.value)} min={1} max={6} />
+            <span className="train-param-note">moves ahead</span>
           </label>
         </div>
+        <label className="train-fresh-toggle">
+          <input type="checkbox" checked={fresh} onChange={e => setFresh(e.target.checked)} />
+          <span>Start from scratch</span>
+          <span className="train-fresh-hint">
+            {fresh
+              ? '(zero knowledge — watch it learn)'
+              : '(continue from previously learned weights)'}
+          </span>
+        </label>
         <button
           className="start-btn"
           onClick={startTraining}
@@ -272,22 +283,19 @@ function WeightInspector({ weights, generation }) {
 
   return (
     <div className="weight-inspector">
-      <h3>Learned Weights <span className="gen-badge">gen {generation}</span></h3>
+      <h3>What it learned <span className="gen-badge">{generation} games played</span></h3>
 
       <div className="weight-explainer">
         <p>
-          The AI evaluates positions using hand-crafted <strong>features</strong> — observable
-          properties of the game state like "do I control the center?" or "how many pieces ahead am I?"
+          These weights were discovered during the training session above. The system started
+          at zero and adjusted each weight after every game — reinforcing features present in
+          wins, penalizing features present in losses. The result is the AI's learned understanding
+          of what matters in this game.
         </p>
         <p>
-          Each feature has a <strong>weight</strong> the system learns through play. After each
-          game, weights are nudged: features present in winning positions get stronger (gold),
-          features present in losing positions get weaker (blue). Over many games, the system
-          discovers which features actually matter for winning.
-        </p>
-        <p>
-          Higher weight = the AI cares more about that feature when choosing moves. The weights
-          below were learned from <strong>{generation} training games</strong> against a competent opponent.
+          <strong>Higher weight</strong> = the AI prioritizes that feature when choosing moves.
+          For example, in Reversi, the system typically learns that corner control matters far
+          more than raw disc count — matching what experienced human players know.
         </p>
       </div>
 

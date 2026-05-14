@@ -112,6 +112,7 @@ class TrainingRequest(BaseModel):
     game: str
     num_games: int = 50
     depth: int = 3
+    fresh: bool = False
 
 
 # --- Game Endpoints ---
@@ -285,7 +286,9 @@ def start_training(req: TrainingRequest):
     game_name = engine.meta["name"]
 
     # Load existing weights or start fresh
-    evaluator = _memory_store.load(game_name)
+    evaluator = None
+    if not req.fresh:
+        evaluator = _memory_store.load(game_name)
     if evaluator is None:
         evaluator = LearnableEval(game_name)
 

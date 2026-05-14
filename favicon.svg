@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <circle cx="16" cy="16" r="14" fill="#d4a656"/>
-  <text x="16" y="22" text-anchor="middle" font-family="Georgia, serif" font-size="18" font-weight="400" fill="#0e0c0a">t</text>
+  <circle cx="16" cy="16" r="15" fill="#d4a656"/>
+  <rect x="9" y="9" width="14" height="14" rx="1" fill="none" stroke="#0e0c0a" stroke-width="1.5" transform="rotate(45 16 16)"/>
+  <circle cx="16" cy="16" r="3.5" fill="#0e0c0a" opacity="0.3"/>
 </svg>

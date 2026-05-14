@@ -174,7 +174,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-top">
-          <h1>Thin<em>ai</em></h1>
+          <h1><span className="app-logo"><svg viewBox="0 0 14 14" width="18" height="18"><circle cx="7" cy="7" r="6.5" fill="#d4a656"/><rect x="4" y="4" width="6" height="6" rx="0.5" fill="none" stroke="#0e0c0a" strokeWidth="0.7" transform="rotate(45 7 7)"/><circle cx="7" cy="7" r="1.5" fill="#0e0c0a" opacity="0.3"/></svg></span>Thin<em>ai</em></h1>
           <a href="/landing.html" className="about-link">About the research</a>
         </div>
         <div className="mode-toggle">

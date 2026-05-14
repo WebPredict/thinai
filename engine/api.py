@@ -349,21 +349,18 @@ def start_training(request: Request, req: TrainingRequest):
     }
     _training_runs[training_id] = run_state
 
-    # Metacognition components for this training run
-    from engine.metacognition.effort import EffortAllocator
+    # Metacognition components for training
+    # No effort allocator — training uses fixed depth for predictable speed
     from engine.metacognition.confidence import DecisionConfidenceTracker
     from engine.metacognition.self_assessment import SelfAssessor
-    effort_alloc = EffortAllocator(min_depth=1, max_depth=max(req.depth + 1, 4))
     conf_tracker = DecisionConfidenceTracker()
     self_assessor = SelfAssessor()
-    run_state["effort_allocator"] = effort_alloc
     run_state["confidence_tracker"] = conf_tracker
     run_state["self_assessor"] = self_assessor
 
     def _run_training():
         runner = LearningRunner(
             engine, evaluator, max_depth=req.depth,
-            effort_allocator=effort_alloc,
             confidence_tracker=conf_tracker,
             self_assessor=self_assessor,
         )

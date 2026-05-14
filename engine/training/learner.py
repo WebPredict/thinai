@@ -113,6 +113,30 @@ class LearningRunner:
         self.confidence_tracker = confidence_tracker
         self.self_assessor = self_assessor
 
+    def _training_depth(self, game_index: int, total_games: int,
+                         recent_win_rate: float) -> int:
+        """Progressive depth: explore fast early, deepen only if needed.
+
+        Like a kid learning: first games are quick and sloppy (build
+        intuitions). Only think harder if current depth isn't enough.
+        If already winning comfortably, don't waste time going deeper.
+        """
+        progress = game_index / max(total_games - 1, 1)
+
+        # Always start shallow — exploration phase
+        if progress < 0.25:
+            return max(1, self.max_depth - 1)
+
+        # If already winning well, stay at current depth — no need to overthink
+        if recent_win_rate >= 0.7:
+            return self.max_depth
+
+        # Struggling — try thinking deeper in later games
+        if progress > 0.5 and recent_win_rate < 0.4:
+            return min(self.max_depth + 1, 6)
+
+        return self.max_depth
+
     def train(
         self,
         num_games: int,
@@ -120,9 +144,6 @@ class LearningRunner:
         progress_callback: Optional[Callable] = None,
     ) -> LearningResults:
         """Run training games, updating weights after each."""
-        if opponent is None:
-            opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
-
         results = LearningResults(
             game_name=self.evaluator.game_name,
             total_games=num_games,
@@ -132,8 +153,20 @@ class LearningRunner:
         recent_outcomes = []
 
         for i in range(num_games):
+            # Progressive depth — fast exploration early, deepen only if needed
+            recent_wr = (sum(1 for o in recent_outcomes[-10:] if o > 0)
+                         / max(len(recent_outcomes[-10:]), 1)) if recent_outcomes else 0.0
+            current_depth = self._training_depth(i, num_games, recent_wr)
+
+            # Opponent matches current depth
+            current_opponent = opponent or ReasonerOpponent(
+                self.engine, max_depth=current_depth
+            )
+
             start = time.monotonic()
-            outcome, num_moves, trace = self._play_and_trace(opponent)
+            outcome, num_moves, trace = self._play_and_trace(
+                current_opponent, depth_override=current_depth
+            )
             duration = (time.monotonic() - start) * 1000
 
             # Update weights
@@ -181,7 +214,7 @@ class LearningRunner:
 
         return results
 
-    def _play_and_trace(self, opponent) -> tuple[float, int, list[dict]]:
+    def _play_and_trace(self, opponent, depth_override=None) -> tuple[float, int, list[dict]]:
         """Play one game, collecting feature traces for the learner's positions.
 
         Returns: (outcome, num_moves, trace)
@@ -191,9 +224,9 @@ class LearningRunner:
         num_moves = 0
         max_moves = 200
 
-        # Create reasoner with current evaluator and metacognition
+        depth = depth_override or self.max_depth
         reasoner = Reasoner(
-            self.engine, max_depth=self.max_depth, eval_fn=self.evaluator,
+            self.engine, max_depth=depth, eval_fn=self.evaluator,
             effort_allocator=self.effort_allocator,
             confidence_tracker=self.confidence_tracker,
         )

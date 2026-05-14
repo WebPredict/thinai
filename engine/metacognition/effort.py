@@ -83,7 +83,11 @@ class EffortAllocator:
         )
 
     def recommend(self, state: GameState, engine, evaluator=None) -> EffortDecision:
-        """Recommend search depth for this position."""
+        """Recommend search depth for this position.
+
+        Key principle: like a smart kid, balance thinking quality against
+        time cost. Don't spend 30 seconds on one move in a casual game.
+        """
         self.total_decisions += 1
         analysis = self.analyze_position(state, engine)
 
@@ -94,11 +98,20 @@ class EffortAllocator:
         adj = self._get_adjustment(analysis)
         depth = int(round(depth + adj))
 
-        # Clamp
+        # Clamp to range
         depth = max(self.min_depth, min(self.max_depth, depth))
 
-        # Node budget scales with depth
-        max_nodes = 500 * (3 ** depth)
+        # Cost check: estimate nodes = branching_factor ^ depth
+        # If estimated cost is too high, reduce depth until affordable
+        max_affordable_nodes = 5000  # keep moves under ~1 second
+        bf = max(analysis.branching_factor, 2)
+        while depth > self.min_depth:
+            estimated_nodes = bf ** depth
+            if estimated_nodes <= max_affordable_nodes:
+                break
+            depth -= 1
+
+        max_nodes = min(max_affordable_nodes, 500 * (3 ** depth))
 
         reason = self._explain(analysis, depth)
         return EffortDecision(depth=depth, max_nodes=max_nodes, reason=reason)

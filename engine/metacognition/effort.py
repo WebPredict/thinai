@@ -124,9 +124,9 @@ class EffortAllocator:
         # Few moves available → position is constrained, search deeper
         # Many moves → broader search is expensive, stay shallow
         if bf <= 3:
-            base = 4.0  # few choices: think carefully
-        elif bf <= 8:
-            base = 3.0  # moderate: balanced
+            base = 5.0  # few choices: think carefully
+        elif bf <= 10:
+            base = 4.0  # moderate: think ahead
         elif bf <= 20:
             base = 2.0  # many choices: stay efficient
         else:

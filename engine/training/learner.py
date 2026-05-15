@@ -123,11 +123,16 @@ class LearningRunner:
 
         Mirrors how a kid learns:
         - First games: fast, near-random exploration (build intuitions)
-        - Later games: thoughtful play with learned evaluation
+        - Later games: use effort allocator to decide depth per position
         - Opponent is fixed at a consistent level throughout
         """
         if opponent is None:
             opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+
+        # Effort allocator for training — cost-aware, adapts depth per position
+        if not self.effort_allocator:
+            from engine.metacognition.effort import EffortAllocator
+            self.effort_allocator = EffortAllocator(min_depth=1, max_depth=self.max_depth)
 
         results = LearningResults(
             game_name=self.evaluator.game_name,
@@ -138,18 +143,8 @@ class LearningRunner:
         recent_outcomes = []
 
         for i in range(num_games):
-            # Phase 1 (first 30%): fast exploration — random or depth 0
-            # Phase 2 (rest): play with learned eval at target depth
-            progress = i / max(num_games - 1, 1)
-            if progress < 0.3:
-                depth_this_game = 0  # eval only, no search — very fast
-            else:
-                depth_this_game = self.max_depth
-
             start = time.monotonic()
-            outcome, num_moves, trace = self._play_and_trace(
-                opponent, depth_override=depth_this_game
-            )
+            outcome, num_moves, trace = self._play_and_trace(opponent)
             duration = (time.monotonic() - start) * 1000
 
             # Update weights
@@ -197,7 +192,7 @@ class LearningRunner:
 
         return results
 
-    def _play_and_trace(self, opponent, depth_override=None) -> tuple[float, int, list[dict]]:
+    def _play_and_trace(self, opponent) -> tuple[float, int, list[dict]]:
         """Play one game, collecting feature traces for the learner's positions.
 
         Returns: (outcome, num_moves, trace)
@@ -207,9 +202,8 @@ class LearningRunner:
         num_moves = 0
         max_moves = 200
 
-        depth = depth_override or self.max_depth
         reasoner = Reasoner(
-            self.engine, max_depth=depth, eval_fn=self.evaluator,
+            self.engine, max_depth=self.max_depth, eval_fn=self.evaluator,
             effort_allocator=self.effort_allocator,
             confidence_tracker=self.confidence_tracker,
         )

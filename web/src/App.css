@@ -675,6 +675,72 @@ header em {
   color: var(--accent);
 }
 
+/* Derived Features Panel */
+.derived-features-panel {
+  width: 100%;
+  border: 2px solid var(--accent-dim);
+  border-radius: 8px;
+  padding: 1.5rem;
+  background: rgba(212, 166, 86, 0.04);
+  margin-bottom: 1rem;
+}
+
+.derived-features-panel h3 {
+  font-family: 'Georgia', serif;
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+.derived-features-intro {
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.derived-features-intro strong {
+  color: var(--ink);
+}
+
+.derived-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.derived-feature-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+.derived-feature-name {
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--ink);
+  flex-shrink: 0;
+  min-width: 140px;
+}
+
+.derived-feature-desc {
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+}
+
+.derived-features-note {
+  font-family: 'Menlo', monospace;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
 /* Self-Assessment Panel */
 .self-assessment-panel {
   width: 100%;

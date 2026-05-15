@@ -23,11 +23,16 @@ class LearnableEval:
         features: Optional[list[FeatureSpec]] = None,
         weights: Optional[list[float]] = None,
         learning_rate: float = 0.15,
+        gdl: Optional[dict] = None,
     ):
         self.game_name = game_name
         self.features = features or get_features(game_name)
+        if not self.features and gdl:
+            # No hand-crafted features — auto-generate from GDL
+            from engine.reasoner.auto_features import generate_features
+            self.features = generate_features(gdl)
         if not self.features:
-            raise ValueError(f"No features registered for game: {game_name}")
+            raise ValueError(f"No features for game: {game_name}. Provide GDL for auto-generation.")
 
         if weights is not None:
             self.weights = list(weights)

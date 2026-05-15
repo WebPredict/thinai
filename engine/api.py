@@ -130,6 +130,29 @@ class TrainingRequest(BaseModel):
 
 # --- Game Endpoints ---
 
+@app.get("/api/game/{game_name}/features")
+def get_game_features(game_name: str):
+    """Show what features the system derives from a game's rules."""
+    engine = _load_engine(game_name)
+    from engine.reasoner.features import get_features
+    from engine.reasoner.auto_features import generate_features, describe_features
+
+    # Try hand-crafted first, fall back to auto-generated
+    hand_crafted = get_features(engine.meta["name"])
+    auto = generate_features(engine.gdl)
+
+    return {
+        "game_name": engine.meta["name"],
+        "hand_crafted_features": [
+            {"name": f.name, "description": f.description, "source": "hand-crafted"}
+            for f in hand_crafted
+        ],
+        "auto_features": describe_features(auto, engine.gdl),
+        "using": "hand-crafted" if hand_crafted else "auto-generated",
+        "total_features": len(hand_crafted or auto),
+    }
+
+
 @app.get("/api/games")
 @limiter.limit("60/minute")
 def list_games(request: Request):
@@ -360,7 +383,7 @@ def start_training(request: Request, req: TrainingRequest):
     if not req.fresh:
         evaluator = _memory_store.load(game_name)
     if evaluator is None:
-        evaluator = LearnableEval(game_name)
+        evaluator = LearnableEval(game_name, gdl=engine.gdl)
 
     run_state = {
         "status": "running",

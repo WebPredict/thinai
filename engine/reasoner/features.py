@@ -426,7 +426,9 @@ def _nim_single_pile_count(state: GameState, player: str) -> float:
 
 NIM_FEATURES = [
     FeatureSpec("total_stones", "Total stones remaining", _nim_total_stones),
-    FeatureSpec("xor_position", "Nim-sum advantage", _nim_xor_position),
+    # xor_position removed — it encodes the optimal strategy directly,
+    # which means the system doesn't need to learn anything. A kid
+    # wouldn't know the XOR trick; they'd notice simpler patterns.
     FeatureSpec("pile_balance", "Pile size variance", _nim_pile_balance),
     FeatureSpec("single_pile_count", "Piles with exactly 1 stone", _nim_single_pile_count),
 ]

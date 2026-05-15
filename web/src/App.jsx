@@ -130,7 +130,7 @@ function App() {
         body: JSON.stringify({
           game: selectedGame,
           ai_player: 'player2',
-          ai_depth: selectedGame === 'tictactoe' ? 9 : selectedGame === 'reversi' ? 3 : 4,
+          ai_depth: {tictactoe: 6, connect_four: 4, mancala: 3, reversi: 2, nim: 4, chutes_and_ladders: 1}[selectedGame] || 3,
         }),
       })
       const data = await res.json()

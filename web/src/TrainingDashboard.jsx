@@ -93,7 +93,19 @@ export default function TrainingDashboard({ games, initialGame }) {
     return () => clearInterval(pollRef.current)
   }, [trainingId])
 
+  const [derivedFeatures, setDerivedFeatures] = useState(null)
+
   const startTraining = async () => {
+    // Step 1: Show what features the system derived
+    try {
+      const featRes = await fetch(`${API}/game/${selectedGame}/features`)
+      const featData = await featRes.json()
+      setDerivedFeatures(featData)
+    } catch (e) {
+      setDerivedFeatures(null)
+    }
+
+    // Step 2: Start training
     const res = await fetch(`${API}/training/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -173,6 +185,33 @@ export default function TrainingDashboard({ games, initialGame }) {
           </div>
         )}
       </div>
+
+      {derivedFeatures && (
+        <div className="derived-features-panel">
+          <h3>What I'm paying attention to</h3>
+          <p className="derived-features-intro">
+            Before training, the system examines the game rules and identifies observable
+            properties of the board it can track. These become the <strong>features</strong> whose
+            importance it will learn through play.
+          </p>
+          <div className="derived-features-list">
+            {(derivedFeatures.hand_crafted_features.length > 0
+              ? derivedFeatures.hand_crafted_features
+              : derivedFeatures.auto_features
+            ).map((f, i) => (
+              <div key={i} className="derived-feature-item">
+                <span className="derived-feature-name">{f.name}</span>
+                <span className="derived-feature-desc">{f.description}</span>
+              </div>
+            ))}
+          </div>
+          <div className="derived-features-note">
+            {derivedFeatures.using === 'auto-generated'
+              ? 'These features were auto-generated from the game structure — no hand-crafted knowledge.'
+              : `${derivedFeatures.total_features} features identified for ${derivedFeatures.game_name}.`}
+          </div>
+        </div>
+      )}
 
       {status && (
         <div className="train-results">

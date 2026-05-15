@@ -128,6 +128,39 @@ class TrainingRequest(BaseModel):
     fresh: bool = False
 
 
+class ParseRequest(BaseModel):
+    text: str
+
+
+# --- Parse Endpoint ---
+
+@app.post("/api/parse")
+@limiter.limit("20/minute")
+def parse_rules(request: Request, req: ParseRequest):
+    """Parse plain English game description into GDL."""
+    try:
+        from engine.parser.natural import parse_natural
+        gdl = parse_natural(req.text)
+
+        # Validate the generated GDL
+        errors = []
+        if not gdl.get("rules"):
+            errors.append("Could not identify any move rules from your description.")
+        if not gdl.get("end_conditions"):
+            errors.append("Could not identify win/draw conditions.")
+        if not gdl.get("board"):
+            errors.append("Could not identify a board structure.")
+        if not gdl.get("pieces"):
+            errors.append("Could not identify any game pieces.")
+
+        if errors:
+            return {"gdl": gdl, "error": " ".join(errors), "warnings": errors}
+
+        return {"gdl": gdl, "error": None}
+    except Exception as e:
+        return {"gdl": None, "error": f"Parser error: {str(e)}"}
+
+
 # --- Game Endpoints ---
 
 @app.get("/api/game/{game_name}/features")

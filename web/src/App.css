@@ -28,7 +28,7 @@ body {
 }
 
 .app {
-  max-width: 800px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem;
   display: flex;
@@ -251,12 +251,38 @@ header em {
 /* Teach teaser */
 .teach-teaser {
   width: 100%;
-  max-width: 540px;
+  max-width: 900px;
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+}
+
+.teach-workspace {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.teach-input-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.teach-result-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (max-width: 700px) {
+  .teach-workspace {
+    grid-template-columns: 1fr;
+  }
 }
 
 .teach-teaser-divider {
@@ -329,40 +355,166 @@ header em {
 
 .teach-input {
   width: 100%;
-  padding: 0.9rem 1rem;
+  padding: 1rem 1.2rem;
   background: var(--bg-raised);
-  border: 1px solid var(--rule-bright);
-  color: var(--ink-faint);
+  border: 2px solid var(--rule-bright);
+  color: var(--ink);
   font-family: 'Georgia', serif;
-  font-size: 1rem;
+  font-size: 1.05rem;
   border-radius: 6px;
   resize: vertical;
-  line-height: 1.5;
+  line-height: 1.6;
+}
+
+.teach-input:focus {
+  outline: none;
+  border-color: var(--accent-dim);
 }
 
 .teach-input::placeholder {
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   font-style: italic;
 }
 
-.teach-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .teach-btn {
-  padding: 0.8rem 2.5rem;
-  background: var(--bg-raised);
-  border: 2px solid var(--ink-faint);
-  color: var(--ink-dim);
+  padding: 0.85rem 2.5rem;
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
   font-family: 'Menlo', monospace;
   font-size: 1rem;
-  cursor: not-allowed;
+  font-weight: 600;
+  cursor: pointer;
   border-radius: 6px;
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  transition: opacity 0.15s;
+}
+
+.teach-btn:hover { opacity: 0.9; }
+.teach-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.parse-result {
+  width: 100%;
+  background: var(--bg-raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.parse-result-header {
+  font-family: 'Menlo', monospace;
+  font-size: 0.95rem;
+  color: #4aba5a;
+  margin-bottom: 0.75rem;
+}
+
+.parse-result-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+  margin-bottom: 0.75rem;
+}
+
+.parse-result-summary strong {
+  color: var(--ink);
+}
+
+.parse-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+.parse-understood {
+  color: #4aba5a;
+  padding: 0.4rem 0.6rem;
+  background: rgba(74, 186, 90, 0.08);
+  border: 1px solid rgba(74, 186, 90, 0.2);
+  border-radius: 4px;
+}
+
+.parse-not-understood {
+  color: #e05050;
+  font-weight: 600;
+  padding: 0.4rem 0.6rem;
+  background: rgba(224, 80, 80, 0.1);
+  border: 1px solid rgba(224, 80, 80, 0.25);
+  border-radius: 4px;
+}
+
+.parse-info strong {
+  font-weight: 600;
+}
+
+.parse-result-details {
+  margin-bottom: 1rem;
+}
+
+.parse-result-details summary {
+  font-family: 'Menlo', monospace;
+  font-size: 0.8rem;
+  color: var(--accent);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.parse-result-details summary:hover { opacity: 0.8; }
+
+.parse-result pre {
+  font-family: 'Menlo', monospace;
+  font-size: 0.7rem;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+}
+
+.teach-btn-learn {
+  margin-top: 0.5rem;
+  background: var(--bg-raised);
+  border: 2px solid var(--ink-faint);
+  color: var(--ink-dim);
   opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.teach-btn-learn:hover { opacity: 0.7; }
+
+.parse-placeholder {
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--rule-bright);
+  border-radius: 6px;
+  line-height: 1.6;
+}
+
+.parse-error {
+  color: var(--warn);
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  padding: 0.75rem;
+  background: rgba(198, 106, 78, 0.1);
+  border: 1px solid rgba(198, 106, 78, 0.3);
+  border-radius: 6px;
 }
 
 .coming-soon-badge {

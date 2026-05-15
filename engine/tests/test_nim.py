@@ -130,18 +130,11 @@ class TestNimFeatures:
     def test_features_registered(self):
         from engine.reasoner.features import get_features
         features = get_features("Nim")
-        assert len(features) == 4
+        assert len(features) == 3  # xor_position removed (was cheating)
         names = [f.name for f in features]
-        assert "xor_position" in names
         assert "total_stones" in names
-
-    def test_xor_initial(self, state):
-        """Initial position 3,4,5: XOR = 3^4^5 = 2 (non-zero = winning for player to move)."""
-        from engine.reasoner.features import get_features
-        features = get_features("Nim")
-        xor_feat = next(f for f in features if f.name == "xor_position")
-        val = xor_feat.extract(state, "player1")
-        assert val == 1.0  # non-zero XOR, player1's turn = winning
+        assert "pile_balance" in names
+        assert "single_pile_count" in names
 
     def test_total_stones_initial(self, state):
         from engine.reasoner.features import get_features

@@ -110,6 +110,34 @@ function App() {
   const [showRulesModal, setShowRulesModal] = useState(true) // show rules on game start
   const [showGdlModal, setShowGdlModal] = useState(false)
   const [gdlData, setGdlData] = useState(null)
+  const [teachInput, setTeachInput] = useState('')
+  const [parseResult, setParseResult] = useState(null)
+  const [parseError, setParseError] = useState(null)
+  const [parsing, setParsing] = useState(false)
+
+  const handleParse = async () => {
+    if (!teachInput.trim()) return
+    setParsing(true)
+    setParseResult(null)
+    setParseError(null)
+    try {
+      const res = await fetch(`${API}/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: teachInput }),
+      })
+      const data = await res.json()
+      if (data.gdl) {
+        setParseResult(data.gdl)
+      }
+      if (data.error) {
+        setParseError(data.error)
+      }
+    } catch (e) {
+      setParseError('Failed to connect to the parser. Is the backend running?')
+    }
+    setParsing(false)
+  }
 
   useEffect(() => {
     if (showGdlModal && selectedGame) {
@@ -297,15 +325,73 @@ function App() {
                 is full with no winner, it's a draw."
               </div>
             </div>
-            <textarea
-              className="teach-input"
-              placeholder="Describe your game's rules in plain English..."
-              rows={4}
-              disabled
-            />
-            <button className="teach-btn" disabled>
-              Add Game <span className="coming-soon-badge">Coming Soon</span>
-            </button>
+            <div className="teach-workspace">
+              <div className="teach-input-col">
+                <textarea
+                  className="teach-input"
+                  placeholder="Describe your game's rules in plain English. For example: Two players take turns placing marks on a 3x3 grid. Get 3 in a row to win. If all squares are filled, it's a draw."
+                  rows={8}
+                  value={teachInput}
+                  onChange={e => setTeachInput(e.target.value)}
+                />
+                <button
+                  className="teach-btn"
+                  onClick={handleParse}
+                  disabled={!teachInput.trim() || parsing}
+                >
+                  {parsing ? 'Translating...' : 'Translate to Game Description'}
+                </button>
+              </div>
+
+              <div className="teach-result-col">
+                {parseResult && (
+                  <div className="parse-result">
+                    <div className="parse-result-header">Generated Game Definition</div>
+                    <div className="parse-result-summary">
+                      <span><strong>Name:</strong> {parseResult.meta?.name}</span>
+                      <span><strong>Board:</strong> {parseResult.board?.type === 'grid'
+                        ? `${parseResult.board.grid.rows}×${parseResult.board.grid.cols} grid`
+                        : parseResult.board?.type === 'track'
+                          ? `${parseResult.board.track.length}-space track`
+                          : 'unknown'}</span>
+                      <span><strong>Rules:</strong> {parseResult.rules?.length || 0} move type{parseResult.rules?.length !== 1 ? 's' : ''}</span>
+                      <span><strong>Win conditions:</strong> {parseResult.end_conditions?.filter(c => c.type === 'win').length || 0}</span>
+                    </div>
+                    {parseResult._parse_info && (
+                      <div className="parse-info">
+                        {parseResult._parse_info.understood?.length > 0 && (
+                          <div className="parse-understood">
+                            <strong>Understood:</strong> {parseResult._parse_info.understood.join(', ')}
+                          </div>
+                        )}
+                        {parseResult._parse_info.not_understood?.length > 0 && (
+                          <div className="parse-not-understood">
+                            <strong>Not understood:</strong> {parseResult._parse_info.not_understood.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <details className="parse-result-details">
+                      <summary>View full GDL</summary>
+                      <pre>{JSON.stringify(parseResult, null, 2)}</pre>
+                    </details>
+                    <button className="teach-btn teach-btn-learn" disabled>
+                      Learn This Game <span className="coming-soon-badge">Coming Soon</span>
+                    </button>
+                  </div>
+                )}
+                {parseError && (
+                  <div className="parse-error">
+                    <strong>Could not parse:</strong> {parseError}
+                  </div>
+                )}
+                {!parseResult && !parseError && (
+                  <div className="parse-placeholder">
+                    Describe your game on the left and click "Translate" to see the generated game definition here.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       ) : (

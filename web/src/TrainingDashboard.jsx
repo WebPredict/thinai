@@ -215,7 +215,18 @@ export default function TrainingDashboard({ games, initialGame }) {
 
       {status && (
         <div className="train-results">
-          <LearningCurve snapshots={status.snapshots} totalGames={status.total_games} />
+          <LearningCurve snapshots={status.snapshots} totalGames={status.total_games}
+            wins={status.results?.wins} losses={status.results?.losses} draws={status.results?.draws} />
+          {status.results?.stopped_early && (
+            <div className="training-stopped-early">
+              {status.results.stop_reason}
+            </div>
+          )}
+          {status.status === 'complete' && status.results?.final_depth > 0 && (
+            <div className="training-depth-report">
+              Search depth settled at: <strong>{status.results.final_depth} moves ahead</strong>
+            </div>
+          )}
           {status.self_assessment && (
             <SelfAssessmentPanel assessment={status.self_assessment} />
           )}
@@ -246,7 +257,7 @@ export default function TrainingDashboard({ games, initialGame }) {
   )
 }
 
-function LearningCurve({ snapshots, totalGames }) {
+function LearningCurve({ snapshots, totalGames, wins, losses, draws }) {
   if (!snapshots || snapshots.length === 0) return null
 
   const width = 480
@@ -274,7 +285,16 @@ function LearningCurve({ snapshots, totalGames }) {
 
   return (
     <div className="learning-curve">
-      <h3>Win Rate</h3>
+      <h3>
+        Win Rate
+        {wins != null && (
+          <span className="wdl-breakdown">
+            <span className="wdl-wins">{wins}W</span>
+            {draws > 0 && <span className="wdl-draws">{draws}D</span>}
+            <span className="wdl-losses">{losses}L</span>
+          </span>
+        )}
+      </h3>
       <svg viewBox={`0 0 ${width} ${height}`} className="curve-svg">
         {/* Grid lines */}
         {[0, 0.25, 0.5, 0.75, 1].map(v => (

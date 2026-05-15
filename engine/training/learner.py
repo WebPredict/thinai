@@ -40,6 +40,9 @@ class LearningResults:
     snapshots: list[LearningSnapshot] = field(default_factory=list)
     final_weights: list[float] = field(default_factory=list)
     feature_names: list[str] = field(default_factory=list)
+    stopped_early: bool = False
+    stop_reason: str = ""
+    final_depth: int = 0
 
     @property
     def win_rate(self) -> float:
@@ -80,6 +83,9 @@ class LearningResults:
             "win_rate_curve": self.win_rate_curve(),
             "feature_names": self.feature_names,
             "final_weights": self.final_weights,
+            "stopped_early": self.stopped_early,
+            "stop_reason": self.stop_reason,
+            "final_depth": self.final_depth,
             "snapshots": [
                 {
                     "game": s.game_number,
@@ -169,7 +175,8 @@ class LearningRunner:
 
             recent_outcomes.append(outcome)
             window = recent_outcomes[-10:]
-            rolling_wr = sum(1 for o in window if o > 0) / len(window)
+            # Count wins as 1, draws as 0.5 (holding your own is good)
+            rolling_wr = sum(1 if o > 0 else 0.5 if o == 0 else 0 for o in window) / len(window)
 
             snapshot = LearningSnapshot(
                 game_number=i + 1,
@@ -184,7 +191,20 @@ class LearningRunner:
             if progress_callback:
                 progress_callback(snapshot, results)
 
+            # Early stopping: consistent dominance (not just a lucky streak)
+            # Need 90%+ rolling win rate AND 5 wins in a row
+            if (len(recent_outcomes) >= 10
+                    and rolling_wr >= 0.9
+                    and all(o > 0 for o in recent_outcomes[-5:])):
+                results.stopped_early = True
+                results.stop_reason = f"Mastery achieved — {rolling_wr:.0%} win rate, won last 5"
+                results.total_games = i + 1
+                break
+
         results.final_weights = list(self.evaluator.weights)
+        results.final_depth = getattr(self.effort_allocator, 'total_decisions', 0) and \
+            self.effort_allocator.recommend(self.engine.initial_state(), self.engine).depth \
+            if self.effort_allocator else self.max_depth
 
         # Let effort allocator learn from this training batch
         if self.effort_allocator:

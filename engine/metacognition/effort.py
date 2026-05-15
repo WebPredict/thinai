@@ -103,7 +103,7 @@ class EffortAllocator:
 
         # Cost check: estimate nodes = branching_factor ^ depth
         # If estimated cost is too high, reduce depth until affordable
-        max_affordable_nodes = 5000  # keep moves under ~1 second
+        max_affordable_nodes = 10000  # keep moves under ~1 second
         bf = max(analysis.branching_factor, 2)
         while depth > self.min_depth:
             estimated_nodes = bf ** depth

@@ -675,6 +675,30 @@ header em {
   color: var(--accent);
 }
 
+/* Training status messages */
+.training-stopped-early {
+  text-align: center;
+  font-family: 'Menlo', monospace;
+  font-size: 0.95rem;
+  color: #4aba5a;
+  padding: 0.75rem;
+  background: rgba(74, 186, 90, 0.08);
+  border: 1px solid rgba(74, 186, 90, 0.25);
+  border-radius: 6px;
+}
+
+.training-depth-report {
+  text-align: center;
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+  padding: 0.5rem;
+}
+
+.training-depth-report strong {
+  color: var(--accent);
+}
+
 /* Derived Features Panel */
 .derived-features-panel {
   width: 100%;
@@ -1303,6 +1327,18 @@ header em {
   font-weight: 400;
   letter-spacing: 0.05em;
 }
+
+.wdl-breakdown {
+  margin-left: 1rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  display: inline-flex;
+  gap: 0.6rem;
+}
+
+.wdl-wins { color: var(--accent); }
+.wdl-draws { color: var(--ink-dim); }
+.wdl-losses { color: var(--p2-color); }
 
 .curve-svg {
   width: 100%;

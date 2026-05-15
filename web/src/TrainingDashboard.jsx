@@ -45,7 +45,7 @@ const GAME_LABELS = {
   chutes_and_ladders: 'Chutes & Ladders',
 }
 
-export default function TrainingDashboard({ games, initialGame }) {
+export default function TrainingDashboard({ games, initialGame, onBack }) {
   // Smart defaults per game: low depth so the system starts weak
   // and the learned evaluation actually drives improvement
   const DEFAULTS = {
@@ -123,6 +123,11 @@ export default function TrainingDashboard({ games, initialGame }) {
 
   return (
     <div className="training-dashboard">
+      {onBack && (
+        <button className="action-btn" onClick={onBack} style={{ alignSelf: 'flex-start' }}>
+          &larr; Back to Games
+        </button>
+      )}
       <h2>Train the AI</h2>
 
       <TrainExplainer />

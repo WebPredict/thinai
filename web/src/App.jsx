@@ -103,7 +103,8 @@ function App() {
   const [gameState, setGameState] = useState(null)
   const [loading, setLoading] = useState(false)
   const [selectedGame, setSelectedGame] = useState('reversi')
-  const [mode, setMode] = useState('play') // 'play' or 'train'
+  const [mode, setMode] = useState('menu') // 'menu', 'play', or 'train'
+  const [learnedGames, setLearnedGames] = useState({})
   const [aiLastMove, setAiLastMove] = useState(null) // highlight AI's last move
   const [aiThinking, setAiThinking] = useState(null) // confidence + effort info from last AI move
   const [showRulesModal, setShowRulesModal] = useState(true) // show rules on game start
@@ -118,6 +119,20 @@ function App() {
         .catch(() => setGdlData(null))
     }
   }, [showGdlModal, selectedGame])
+
+  // Fetch which games have been trained
+  const refreshLearned = () => {
+    fetch(`${API}/memory/games`)
+      .then(r => r.json())
+      .then(d => {
+        const map = {}
+        for (const m of (d.games || [])) map[m.game_name] = m
+        setLearnedGames(map)
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => { refreshLearned() }, [mode])
 
   useEffect(() => {
     fetch(`${API}/games`)
@@ -195,6 +210,9 @@ function App() {
   const isC4 = selectedGame === 'connect_four'
   const isTTT = selectedGame === 'tictactoe'
 
+  const selectedLabel = GAME_LABELS[selectedGame] || selectedGame
+  const isLearned = learnedGames[selectedLabel]
+
   return (
     <div className="app">
       <header>
@@ -202,35 +220,48 @@ function App() {
           <h1><span className="app-logo"><svg viewBox="0 0 14 14" width="18" height="18"><circle cx="7" cy="7" r="6.5" fill="#d4a656"/><rect x="4" y="4" width="6" height="6" rx="0.5" fill="none" stroke="#0e0c0a" strokeWidth="0.7" transform="rotate(45 7 7)"/><circle cx="7" cy="7" r="1.5" fill="#0e0c0a" opacity="0.3"/></svg></span>Thin<em>ai</em></h1>
           <a href="/" className="about-link">About the research</a>
         </div>
-        <div className="mode-toggle">
-          <button className={mode === 'play' ? 'active' : ''} onClick={() => setMode('play')}>Play</button>
-          <button className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')}>Train</button>
-        </div>
       </header>
 
       {mode === 'train' ? (
-        <TrainingDashboard games={games} initialGame={selectedGame} />
-      ) : !sessionId ? (
+        <TrainingDashboard games={games} initialGame={selectedGame} onBack={() => setMode('menu')} />
+      ) : mode === 'menu' || !sessionId ? (
         <div className="menu">
           <h2>Select a game</h2>
           <div className="game-select">
-            {games.map(g => (
-              <button
-                key={g}
-                className={selectedGame === g ? 'active' : ''}
-                onClick={() => setSelectedGame(g)}
-              >
-                {GAME_LABELS[g] || g}
-              </button>
-            ))}
+            {games.map(g => {
+              const label = GAME_LABELS[g] || g
+              const trained = learnedGames[label]
+              return (
+                <button
+                  key={g}
+                  className={`${selectedGame === g ? 'active' : ''} ${trained ? 'trained' : ''}`}
+                  onClick={() => setSelectedGame(g)}
+                >
+                  {label}
+                  {trained && <span className="trained-badge" title={`${trained.generation} games trained`}>&#10003;</span>}
+                </button>
+              )
+            })}
           </div>
-          <button className="start-btn" onClick={startGame} disabled={loading}>
-            {loading ? 'Starting...' : 'Play vs AI'}
-          </button>
-          <p className="play-hint">
-            Uses learned weights if you've trained this game, otherwise starts untrained. Train first for a stronger opponent!
+
+          <div className="menu-actions">
+            <button className="action-btn action-btn-primary" onClick={() => { setMode('train') }}>
+              {isLearned ? 'Learn More' : 'Learn Game'}
+            </button>
+            <button className="action-btn" onClick={() => { setMode('play'); startGame() }} disabled={loading}>
+              {loading ? 'Starting...' : 'Play vs ThinAI'}
+            </button>
+          </div>
+
+          {isLearned && (
+            <div className="learned-status">
+              {selectedLabel}: trained on {isLearned.generation} games
+            </div>
+          )}
+
+          <div className="menu-links">
             <button className="view-gdl-btn" onClick={() => setShowGdlModal(true)}>View game rules (GDL)</button>
-          </p>
+          </div>
 
           {showGdlModal && gdlData && (
             <div className="rules-overlay" onClick={() => setShowGdlModal(false)}>
@@ -341,8 +372,13 @@ function App() {
               </span>
             </div>
           )}
+          {!isLearned && (
+            <div className="untrained-warning">
+              Note: ThinAI has not trained on this game yet. Train it first for a stronger opponent!
+            </div>
+          )}
           <div className="game-actions">
-            <button className="action-btn" onClick={() => { setSessionId(null); setGameState(null) }}>
+            <button className="action-btn" onClick={() => { setSessionId(null); setGameState(null); setMode('menu') }}>
               &larr; Back to Games
             </button>
             <button className="action-btn action-btn-primary" onClick={startGame}>

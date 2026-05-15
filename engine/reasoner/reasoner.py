@@ -7,6 +7,7 @@ Minimax with alpha-beta pruning. Designed for basic competency
 from __future__ import annotations
 import math
 import random
+import time
 from typing import Optional
 
 from engine.engine import GameEngine
@@ -17,16 +18,20 @@ class Reasoner:
     """Minimax reasoner with alpha-beta pruning."""
 
     def __init__(self, engine: GameEngine, max_depth: int = 6, eval_fn=None,
-                 effort_allocator=None, confidence_tracker=None):
+                 effort_allocator=None, confidence_tracker=None,
+                 time_limit: float = 4.0):
         self.engine = engine
         self.max_depth = max_depth
         self.eval_fn = eval_fn or default_eval
         self.effort_allocator = effort_allocator
         self.confidence_tracker = confidence_tracker
+        self.time_limit = time_limit  # hard cap in seconds
         self.nodes_searched = 0
         self.last_confidence = None  # MoveConfidence from most recent move
         self.last_depth_used = 0
         self.last_effort_reason = ""
+        self._search_start = 0.0
+        self._timed_out = False
 
     def choose_move(self, state: GameState) -> Optional[Move]:
         """Choose the best move for the current player."""
@@ -45,6 +50,8 @@ class Reasoner:
         self.last_depth_used = depth
 
         self.nodes_searched = 0
+        self._search_start = time.monotonic()
+        self._timed_out = False
         best_move = None
         best_score = -math.inf
         second_score = -math.inf
@@ -57,6 +64,13 @@ class Reasoner:
         moves = self._order_moves(moves, state)
 
         for move in moves:
+            # Time check — return best move found so far if over limit
+            if time.monotonic() - self._search_start > self.time_limit:
+                self._timed_out = True
+                if best_move is None:
+                    best_move = move  # at least pick something
+                break
+
             new_state = self.engine.apply_move(state, move)
             score = -self._negamax(new_state, depth - 1, -beta, -alpha)
             if score > best_score:
@@ -80,6 +94,12 @@ class Reasoner:
     def _negamax(self, state: GameState, depth: int, alpha: float, beta: float) -> float:
         """Negamax with alpha-beta pruning."""
         self.nodes_searched += 1
+
+        # Time check — abort if over limit
+        if self._timed_out or (self.nodes_searched % 200 == 0 and
+                                time.monotonic() - self._search_start > self.time_limit):
+            self._timed_out = True
+            return self.eval_fn(state, state.current_player, self.engine)
 
         # Terminal check
         result = self.engine.check_terminal(state)

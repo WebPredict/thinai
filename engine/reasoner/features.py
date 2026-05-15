@@ -473,6 +473,60 @@ CL_FEATURES = [
 # ============================================================
 # Feature Registry
 # ============================================================
+# Go Fish features
+# ============================================================
+
+def _gofish_near_sets(state: GameState, player: str) -> float:
+    """How many ranks do I hold 3 of? (One card away from a set.)"""
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.get_zone(f"hand_{suffix}")
+    if not hand:
+        return 0.0
+    from collections import Counter
+    ranks = Counter(c.rank for c in hand.cards)
+    triples = sum(1 for count in ranks.values() if count >= 3)
+    return triples / 4.0
+
+
+def _gofish_pairs(state: GameState, player: str) -> float:
+    """How many ranks do I hold 2 of? (Good targets to ask for.)"""
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.get_zone(f"hand_{suffix}")
+    if not hand:
+        return 0.0
+    from collections import Counter
+    ranks = Counter(c.rank for c in hand.cards)
+    pairs = sum(1 for count in ranks.values() if count >= 2)
+    return pairs / 6.0
+
+
+def _gofish_hand_size(state: GameState, player: str) -> float:
+    """Cards in hand — more options = better."""
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.get_zone(f"hand_{suffix}")
+    return (hand.size / 15.0) if hand else 0.0
+
+
+def _gofish_set_lead(state: GameState, player: str) -> float:
+    """My completed sets minus opponent's."""
+    opp = "p2" if player == "player1" else "p1"
+    my_suffix = "p1" if player == "player1" else "p2"
+    my_sets = state.get_zone(f"sets_{my_suffix}")
+    opp_sets = state.get_zone(f"sets_{opp}")
+    my_count = (my_sets.size // 4) if my_sets else 0
+    opp_count = (opp_sets.size // 4) if opp_sets else 0
+    return (my_count - opp_count) / 7.0
+
+
+GOFISH_FEATURES = [
+    FeatureSpec("near_sets", "Ranks where I hold 3 cards (one away from set)", _gofish_near_sets),
+    FeatureSpec("pairs", "Ranks where I hold 2 cards (good ask targets)", _gofish_pairs),
+    FeatureSpec("hand_size", "Cards in hand (more options)", _gofish_hand_size),
+    FeatureSpec("set_lead", "My sets minus opponent's sets", _gofish_set_lead),
+]
+
+
+# ============================================================
 
 FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Tic-Tac-Toe": TTT_FEATURES,
@@ -481,6 +535,7 @@ FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Reversi": REVERSI_FEATURES,
     "Nim": NIM_FEATURES,
     "Chutes and Ladders": CL_FEATURES,
+    "Go Fish": GOFISH_FEATURES,
 }
 
 

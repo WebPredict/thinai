@@ -99,19 +99,21 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
     if result:
         game_result = {"type": result.result_type, "winner": result.winner}
 
-    # Serialize card zones if present
+    # Serialize card zones if present (player1 perspective for play mode)
     card_zones = None
     if state.card_zones:
         card_zones = {}
         for name, zone in state.card_zones.items():
+            # Player1 (human) can see: all-visible zones + their own hand
+            can_see = (zone.visible_to == "all" or
+                       (zone.visible_to == "owner" and zone.owner == "player1"))
             card_zones[name] = {
                 "name": zone.name,
                 "size": zone.size,
                 "owner": zone.owner,
                 "visible_to": zone.visible_to,
-                # Only send visible card details
                 "cards": [{"rank": c.rank, "suit": c.suit, "id": c.id} for c in zone.cards]
-                    if zone.visible_to == "all" else [],
+                    if can_see else [],
             }
 
     return {
@@ -121,7 +123,8 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
         "track_length": getattr(board, "length", None),
         "spaces": spaces,
         "card_zones": card_zones,
-        "state_vars": dict(state.state_vars) if state.state_vars else None,
+        "state_vars": {k: v for k, v in state.state_vars.items()
+                       if isinstance(v, (str, int, float, bool, type(None)))} if state.state_vars else None,
         "current_player": state.current_player,
         "turn_number": state.turn_number,
         "legal_moves": legal_moves,
@@ -256,11 +259,15 @@ def new_game(request: Request, req: NewGameRequest):
         "correction_handler": CorrectionHandler(engine.gdl),
     }
 
-    return {
+    import json
+    state_dict = _state_to_dict(state, engine)
+    # Ensure all values are JSON-serializable
+    response = {
         "session_id": session_id,
-        "state": _state_to_dict(state, engine),
+        "state": json.loads(json.dumps(state_dict, default=str)),
         "using_learned": eval_fn is not None,
     }
+    return response
 
 
 @app.post("/api/game/{session_id}/move")

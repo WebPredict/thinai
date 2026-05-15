@@ -1504,6 +1504,22 @@ header em {
   text-align: center;
 }
 
+.train-action-buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.train-action-buttons .start-btn {
+  margin-top: 0;
+}
+
+.train-action-buttons .action-btn {
+  padding: 0.9rem 2rem;
+  font-size: 1.05rem;
+}
+
 .train-fresh-toggle {
   display: flex;
   align-items: center;
@@ -2024,6 +2040,156 @@ header em {
   font-size: 0.9rem;
   color: var(--ink-dim);
   margin-top: 0.75rem;
+}
+
+
+/* === Go Fish === */
+
+.gofish-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 700px;
+}
+
+.gofish-info-bar {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+}
+
+.gofish-score {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.gofish-score-you { color: var(--accent); }
+.gofish-score-ai { color: var(--p2-color); }
+.gofish-pond { color: var(--ink-faint); }
+
+.gofish-opponent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.gofish-opp-label {
+  font-family: 'Menlo', monospace;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+
+.gofish-card-backs {
+  display: flex;
+  gap: -8px;
+}
+
+.gofish-card-back {
+  width: 36px;
+  height: 52px;
+  background: linear-gradient(135deg, #2050a0, #183878);
+  border: 1px solid #4080d0;
+  border-radius: 4px;
+  margin-left: -8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.gofish-card-back:first-child { margin-left: 0; }
+
+.gofish-more {
+  font-family: 'Menlo', monospace;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  align-self: center;
+  margin-left: 0.5rem;
+}
+
+.gofish-result {
+  font-family: 'Menlo', monospace;
+  font-size: 0.95rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.gofish-hit {
+  color: #4aba5a;
+  background: rgba(74, 186, 90, 0.1);
+  border: 1px solid rgba(74, 186, 90, 0.25);
+}
+
+.gofish-miss {
+  color: var(--p2-color);
+  background: rgba(138, 180, 214, 0.1);
+  border: 1px solid rgba(138, 180, 214, 0.2);
+}
+
+.gofish-my-hand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.gofish-hand-label {
+  font-family: 'Menlo', monospace;
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+}
+
+.gofish-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.gofish-card {
+  width: 52px;
+  height: 74px;
+  background: #faf5eb;
+  border: 1px solid #d0c8b8;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  gap: 2px;
+}
+
+.gofish-card:hover:not(.disabled) {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(212, 166, 86, 0.3);
+  border-color: var(--accent);
+}
+
+.gofish-card.disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.gofish-card.red { color: #c83030; }
+.gofish-card.black { color: #1a1a2e; }
+
+.gofish-card-rank {
+  font-family: 'Georgia', serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.gofish-card-suit {
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 

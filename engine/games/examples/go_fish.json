@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "name": "Go Fish",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if extra_turn: same_player else: next_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "pond", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "sets_p1", "owner": "player1", "visible_to": "all" },
+      { "name": "sets_p2", "owner": "player2", "visible_to": "all" }
+    ]
+  },
+
+  "cards": {
+    "deck": "standard52",
+    "deck_zone": "pond"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "last_ask_rank", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_ask_player", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_result", "type": "string", "scope": "global", "initial": "" },
+    { "name": "extra_turn", "type": "bool", "scope": "global", "initial": false }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "pond" },
+    { "action": "deal", "from": "pond", "to": "hand_p1", "count": 7 },
+    { "action": "deal", "from": "pond", "to": "hand_p2", "count": 7 }
+  ],
+
+  "rules": [
+    {
+      "name": "ask_for_rank",
+      "action": "ask",
+      "params": [
+        {
+          "name": "rank",
+          "select": "card_rank"
+        }
+      ],
+      "conditions": [
+        "has_rank_in_hand(current_player, rank)"
+      ],
+      "effects": [
+        "go_fish_ask(rank)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "go_fish_game_over()",
+      "score": "count_sets(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "On your turn, ask the opponent for a rank you hold. If they have any, they give all. If not, you 'Go Fish' (draw from pond). Complete sets of 4 are laid down automatically.",
+    "extra_turn": "If you get cards from the opponent, or draw the rank you asked for, you go again.",
+    "go_fish_ask": "Built-in: handles the ask/give/draw logic, checks for completed sets."
+  }
+}

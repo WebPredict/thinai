@@ -228,6 +228,33 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             return compare_cards(za.peek(), zb.peek())
         return 0
 
+    # Go Fish built-ins
+    if name == "has_rank_in_hand":
+        player = args[0]
+        rank = args[1]
+        return _has_rank_in_hand(ctx.state, player, rank)
+
+    if name == "hand_has_any_cards":
+        player = args[0]
+        return _hand_has_any_cards(ctx.state, player)
+
+    if name == "count_sets":
+        player = args[0]
+        suffix = "p1" if player == "player1" else "p2"
+        zone = ctx.state.get_zone(f"sets_{suffix}")
+        return (zone.size // 4) if zone else 0
+
+    if name == "all_sets_done":
+        if not ctx.state.card_zones:
+            return False
+        sets_p1 = ctx.state.get_zone("sets_p1")
+        sets_p2 = ctx.state.get_zone("sets_p2")
+        total = (sets_p1.size if sets_p1 else 0) + (sets_p2.size if sets_p2 else 0)
+        return total >= 52  # all 13 sets of 4
+
+    if name == "go_fish_game_over":
+        return _go_fish_game_over(ctx.state)
+
     # Chutes and Ladders built-ins
     if name == "chutes_and_ladders_winner":
         gdl = ctx.bindings.get("_gdl")
@@ -537,6 +564,11 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "card_move":
         args = [evaluate(a, ctx) for a in node.args]
         _card_move(ctx.state, args[0], args[1], int(args[2]) if len(args) > 2 else 1)
+        return
+
+    if name == "go_fish_ask":
+        args = [evaluate(a, ctx) for a in node.args]
+        _go_fish_ask(ctx.state, args[0])
         return
 
     if name == "chutes_and_ladders_move":
@@ -883,3 +915,151 @@ def _card_move(state: GameState, from_zone: str, to_zone: str, count: int = 1):
             card = source.draw()
             if card:
                 dest.add(card)
+
+
+# --- Go Fish built-ins ---
+
+def _has_rank_in_hand(state: GameState, player: str, rank: str) -> bool:
+    """Check if player has any cards of the given rank in their hand."""
+    if not state.card_zones:
+        return False
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    if not hand:
+        return False
+    return any(c.rank == rank for c in hand.cards)
+
+
+def _hand_has_any_cards(state: GameState, player: str) -> bool:
+    """Check if player has any cards in hand."""
+    if not state.card_zones:
+        return False
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    return hand is not None and not hand.is_empty
+
+
+def _go_fish_ask(state: GameState, rank: str):
+    """Execute a Go Fish ask: ask opponent for a rank.
+
+    If opponent has cards of that rank, they give ALL to current player.
+    If not, current player draws from the pond.
+    After receiving cards, check for completed sets of 4.
+    """
+    if not state.card_zones:
+        return
+
+    cp = state.current_player
+    opp = "player2" if cp == "player1" else "player1"
+    cp_suffix = "p1" if cp == "player1" else "p2"
+    opp_suffix = "p2" if cp == "player1" else "p1"
+
+    my_hand = state.card_zones.get(f"hand_{cp_suffix}")
+    opp_hand = state.card_zones.get(f"hand_{opp_suffix}")
+    pond = state.card_zones.get("pond")
+
+    if not my_hand or not opp_hand:
+        return
+
+    # Store what was asked for UI
+    state.state_vars["last_ask_rank"] = rank
+    state.state_vars["last_ask_player"] = cp
+
+    # Check if opponent has the rank
+    matching = [c for c in opp_hand.cards if c.rank == rank]
+
+    if matching:
+        # Opponent gives all matching cards
+        for card in matching:
+            opp_hand.remove(card)
+            my_hand.add(card)
+        state.state_vars["last_result"] = f"got {len(matching)} {rank}(s)"
+        state.state_vars["extra_turn"] = True
+    else:
+        # Go Fish — draw from pond
+        state.state_vars["extra_turn"] = False
+        if pond and not pond.is_empty:
+            drawn = pond.draw()
+            if drawn:
+                my_hand.add(drawn)
+                state.state_vars["last_result"] = f"Go Fish! Drew a card"
+                # If drawn card matches asked rank, get another turn
+                if drawn.rank == rank:
+                    state.state_vars["extra_turn"] = True
+                    state.state_vars["last_result"] = f"Go Fish! Drew the {rank}!"
+            else:
+                state.state_vars["last_result"] = "Go Fish! Pond is empty"
+        else:
+            state.state_vars["last_result"] = "Go Fish! Pond is empty"
+
+    # Check for completed sets of 4
+    _check_go_fish_sets(state, cp_suffix)
+
+    # If opponent's hand is empty and pond has cards, they draw
+    if opp_hand.is_empty and pond and not pond.is_empty:
+        drawn = pond.draw()
+        if drawn:
+            opp_hand.add(drawn)
+
+
+def _go_fish_game_over(state: GameState) -> bool:
+    """Go Fish ends when:
+    1. All 13 sets are completed, OR
+    2. A player has no cards and can't draw (pond empty), OR
+    3. Both hands are empty
+
+    Before declaring game over, try to draw from pond for empty-handed player.
+    """
+    if not state.card_zones:
+        return False
+
+    sets_p1 = state.get_zone("sets_p1")
+    sets_p2 = state.get_zone("sets_p2")
+    hand_p1 = state.get_zone("hand_p1")
+    hand_p2 = state.get_zone("hand_p2")
+    pond = state.get_zone("pond")
+
+    total_sets = (sets_p1.size if sets_p1 else 0) + (sets_p2.size if sets_p2 else 0)
+    if total_sets >= 52:
+        return True
+
+    # If a player's hand is empty, try to draw from pond
+    if hand_p1 and hand_p1.is_empty and pond and not pond.is_empty:
+        card = pond.draw()
+        if card:
+            hand_p1.add(card)
+    if hand_p2 and hand_p2.is_empty and pond and not pond.is_empty:
+        card = pond.draw()
+        if card:
+            hand_p2.add(card)
+
+    # Game over if both hands empty, or one hand empty and pond empty
+    p1_empty = hand_p1.is_empty if hand_p1 else True
+    p2_empty = hand_p2.is_empty if hand_p2 else True
+    pond_empty = pond.is_empty if pond else True
+
+    if p1_empty and p2_empty:
+        return True
+    if (p1_empty or p2_empty) and pond_empty:
+        return True
+
+    return False
+
+
+def _check_go_fish_sets(state: GameState, player_suffix: str):
+    """Check if player has 4 of any rank — if so, move to sets zone."""
+    hand = state.card_zones.get(f"hand_{player_suffix}")
+    sets_zone = state.card_zones.get(f"sets_{player_suffix}")
+
+    if not hand or not sets_zone:
+        return
+
+    from engine.gdl.cards import RANKS
+    for rank in RANKS:
+        matching = [c for c in hand.cards if c.rank == rank]
+        if len(matching) >= 4:
+            # Complete set! Move all 4 to sets zone
+            for card in matching[:4]:
+                hand.remove(card)
+                sets_zone.add(card)
+            state.state_vars[f"last_set_{player_suffix}"] = rank

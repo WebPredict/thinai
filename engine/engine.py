@@ -270,6 +270,11 @@ class GameEngine:
             parts = [int(x.strip()) for x in inner.split(",")]
             yield from range(parts[0], parts[1] + 1)
 
+        elif select == "card_rank":
+            # Yield all 13 standard card ranks (used in Go Fish)
+            from engine.gdl.cards import RANKS
+            yield from RANKS
+
         else:
             # Unknown selector type
             pass

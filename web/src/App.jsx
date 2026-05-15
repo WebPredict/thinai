@@ -5,7 +5,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'mancala', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'mancala', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const GAME_LABELS = {
   tictactoe: 'Tic-Tac-Toe',
@@ -15,6 +15,7 @@ const GAME_LABELS = {
   nim: 'Nim',
   chutes_and_ladders: 'Chutes & Ladders',
   war: 'War',
+  go_fish: 'Go Fish',
 }
 
 const GAME_RULES = {
@@ -74,6 +75,19 @@ const GAME_RULES = {
       'Land on a green ladder space to climb up to a higher square.',
       'Land on a red chute space to slide down to a lower square.',
       'First player to reach space 25 wins.',
+    ],
+  },
+  go_fish: {
+    title: 'How to play Go Fish',
+    intro: 'Collect sets of 4 matching cards by asking your opponent for ranks you hold.',
+    rules: [
+      'Each player starts with 7 cards. The rest form the "pond" (draw pile).',
+      'On your turn, ask the opponent for a rank you hold (e.g., "Do you have any 7s?").',
+      'If they have any, they give ALL cards of that rank to you. You go again!',
+      'If they don\'t, they say "Go Fish" \u2014 you draw from the pond.',
+      'If the drawn card matches what you asked for, you get another turn.',
+      'When you collect all 4 of a rank, it becomes a completed set.',
+      'The game ends when all 13 sets are complete. Most sets wins.',
     ],
   },
   war: {
@@ -263,7 +277,7 @@ function App() {
       </header>
 
       {mode === 'train' ? (
-        <TrainingDashboard games={games} initialGame={selectedGame} onBack={() => setMode('menu')} />
+        <TrainingDashboard games={games} initialGame={selectedGame} onBack={() => { setMode('play'); startGame() }} />
       ) : mode === 'menu' || !sessionId ? (
         <div className="menu">
           <h2>Select a game</h2>
@@ -439,6 +453,12 @@ function App() {
             />
           ) : selectedGame === 'nim' ? (
             <NimBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'go_fish' ? (
+            <GoFishBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
@@ -894,6 +914,81 @@ function NimBoard({ state, onMove, disabled }) {
         })}
       </div>
       <div className="nim-hint">Click a pile, then choose how many to take</div>
+    </div>
+  )
+}
+
+function GoFishBoard({ state, onMove, disabled }) {
+  if (!state) return null
+
+  const zones = state.card_zones || {}
+  const vars = state.state_vars || {}
+  const myHand = zones.hand_p1?.cards || []
+  const oppHandSize = zones.hand_p2?.size || 0
+  const pondSize = zones.pond?.size || 0
+  const mySets = (zones.sets_p1?.size || 0) / 4
+  const oppSets = (zones.sets_p2?.size || 0) / 4
+  const lastResult = vars.last_result || ''
+  const lastAskRank = vars.last_ask_rank || ''
+  const lastAskPlayer = vars.last_ask_player || ''
+  const isMyTurn = state.current_player === 'player1'
+
+  // Group hand by rank for display
+  const rankCounts = {}
+  myHand.forEach(c => {
+    rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1
+  })
+
+  const handleAsk = (rank) => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.params.rank === rank)
+    if (move) onMove(move.rule, move.params)
+  }
+
+  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
+
+  return (
+    <div className="gofish-board">
+      <div className="gofish-info-bar">
+        <div className="gofish-score">
+          <span className="gofish-score-you">Your sets: <strong>{Math.floor(mySets)}</strong></span>
+          <span className="gofish-score-ai">AI sets: <strong>{Math.floor(oppSets)}</strong></span>
+        </div>
+        <div className="gofish-pond">Pond: {pondSize} cards</div>
+      </div>
+
+      <div className="gofish-opponent">
+        <div className="gofish-opp-label">AI's hand</div>
+        <div className="gofish-card-backs">
+          {Array.from({ length: Math.min(oppHandSize, 10) }).map((_, i) => (
+            <div key={i} className="gofish-card-back" />
+          ))}
+          {oppHandSize > 10 && <span className="gofish-more">+{oppHandSize - 10}</span>}
+        </div>
+      </div>
+
+      {lastResult && (
+        <div className={`gofish-result ${lastResult.includes('Go Fish') ? 'gofish-miss' : 'gofish-hit'}`}>
+          {lastAskPlayer === 'player1' ? 'You' : 'AI'} asked for {lastAskRank}s — {lastResult}
+        </div>
+      )}
+
+      <div className="gofish-my-hand">
+        <div className="gofish-hand-label">Your hand — tap a rank to ask for it</div>
+        <div className="gofish-cards">
+          {myHand.map((card, i) => (
+            <button
+              key={card.id}
+              className={`gofish-card ${disabled || !isMyTurn ? 'disabled' : ''} ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}
+              onClick={() => handleAsk(card.rank)}
+              disabled={disabled || !isMyTurn}
+            >
+              <span className="gofish-card-rank">{card.rank}</span>
+              <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

@@ -169,13 +169,24 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
               : '(continue from previously learned weights)'}
           </span>
         </label>
-        <button
-          className="start-btn"
-          onClick={startTraining}
-          disabled={trainingId && status?.status === 'running'}
-        >
-          {status?.status === 'running' ? `Training... ${status.games_played}/${status.total_games}` : 'Start Training'}
-        </button>
+        <div className="train-action-buttons">
+          <button
+            className="start-btn"
+            onClick={startTraining}
+            disabled={trainingId && status?.status === 'running'}
+          >
+            {status?.status === 'running'
+              ? `Training... ${status.games_played}/${status.total_games}`
+              : status?.status === 'complete'
+                ? 'Retrain'
+                : 'Start Training'}
+          </button>
+          {status?.status === 'complete' && onBack && (
+            <button className="action-btn" onClick={onBack}>
+              Play vs ThinAI &rarr;
+            </button>
+          )}
+        </div>
         {status?.status === 'running' && status.snapshots?.length > 0 && (
           <div className="train-progress-info">
             {(() => {

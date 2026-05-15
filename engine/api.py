@@ -123,7 +123,8 @@ class MoveRequest(BaseModel):
 class TrainingRequest(BaseModel):
     game: str
     num_games: int = 50
-    depth: int = 3
+    depth: Optional[int] = None
+    think_time: Optional[int] = None  # seconds per move — converted to depth
     fresh: bool = False
 
 
@@ -329,6 +330,31 @@ def start_training(request: Request, req: TrainingRequest):
     engine = _load_engine(req.game)
     game_name = engine.meta["name"]
 
+    # Convert think_time to depth
+    if req.depth is not None:
+        depth = req.depth
+    elif req.think_time is not None:
+        # Use board size as proxy for average branching factor
+        # (initial position is misleading — mid-game is often wider)
+        initial = engine.initial_state()
+        board = initial.board
+        if hasattr(board, 'rows'):
+            avg_bf = max(board.rows * board.cols // 4, 5)  # grid games
+        elif hasattr(board, 'length'):
+            avg_bf = max(board.length, 3)  # track games
+        else:
+            avg_bf = 8
+        depth = 1
+        while depth < 3:  # cap at 3 for training speed
+            # Estimate time per move: nodes * cost_per_node * moves_per_game
+            nodes_per_move = avg_bf ** (depth + 1)
+            time_per_move = nodes_per_move * 0.003
+            if time_per_move > req.think_time:
+                break
+            depth += 1
+    else:
+        depth = 1
+
     # Load existing weights or start fresh
     evaluator = None
     if not req.fresh:
@@ -341,7 +367,7 @@ def start_training(request: Request, req: TrainingRequest):
         "game": req.game,
         "game_name": game_name,
         "num_games": req.num_games,
-        "depth": req.depth,
+        "depth": depth,
         "games_played": 0,
         "results": None,
         "snapshots": [],
@@ -360,7 +386,7 @@ def start_training(request: Request, req: TrainingRequest):
 
     def _run_training():
         runner = LearningRunner(
-            engine, evaluator, max_depth=req.depth,
+            engine, evaluator, max_depth=depth,
             confidence_tracker=conf_tracker,
             self_assessor=self_assessor,
         )

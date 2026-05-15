@@ -216,6 +216,7 @@ function App() {
           <button className="start-btn" onClick={startGame} disabled={loading}>
             {loading ? 'Starting...' : 'Play vs AI'}
           </button>
+          <p className="play-hint">Uses learned weights if you've trained this game, otherwise starts untrained. Train first for a stronger opponent!</p>
 
           <div className="teach-teaser">
             <div className="teach-teaser-divider">

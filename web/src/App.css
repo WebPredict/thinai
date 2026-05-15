@@ -160,6 +160,15 @@ header em {
 .start-btn:hover { opacity: 0.9; }
 .start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.play-hint {
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  text-align: center;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
 /* Teach teaser */
 .teach-teaser {
   width: 100%;
@@ -176,7 +185,7 @@ header em {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin: 0.5rem 0;
+  margin: 1.5rem 0 0.5rem;
 }
 
 .teach-teaser-divider::before,
@@ -184,14 +193,14 @@ header em {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--rule-bright);
+  background: var(--ink-faint);
 }
 
 .teach-teaser-divider span {
   font-family: 'Georgia', serif;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-style: italic;
-  color: var(--ink-faint);
+  color: var(--ink-dim);
 }
 
 .teach-teaser h3 {

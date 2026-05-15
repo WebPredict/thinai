@@ -70,8 +70,15 @@ class LearnableEval:
                 adjustment = self.learning_rate * outcome * f_val * move_weight
                 self.weights[i] += adjustment
 
-        # Decay learning rate slowly
-        self.learning_rate = max(0.01, self.learning_rate * 0.995)
+        # Adaptive learning rate decay:
+        # Wins → decay faster (we're on the right track, stabilize)
+        # Losses → decay slower (still exploring, keep adjusting)
+        if outcome > 0:
+            self.learning_rate = max(0.01, self.learning_rate * 0.97)
+        elif outcome < 0:
+            self.learning_rate = max(0.01, self.learning_rate * 0.995)
+        else:
+            self.learning_rate = max(0.01, self.learning_rate * 0.99)
 
         # Record snapshot
         self.history.append({

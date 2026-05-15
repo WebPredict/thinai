@@ -113,37 +113,22 @@ class LearningRunner:
         self.confidence_tracker = confidence_tracker
         self.self_assessor = self_assessor
 
-    def _training_depth(self, game_index: int, total_games: int,
-                         recent_win_rate: float) -> int:
-        """Progressive depth: explore fast early, deepen only if needed.
-
-        Like a kid learning: first games are quick and sloppy (build
-        intuitions). Only think harder if current depth isn't enough.
-        If already winning comfortably, don't waste time going deeper.
-        """
-        progress = game_index / max(total_games - 1, 1)
-
-        # Always start shallow — exploration phase
-        if progress < 0.25:
-            return max(1, self.max_depth - 1)
-
-        # If already winning well, stay at current depth — no need to overthink
-        if recent_win_rate >= 0.7:
-            return self.max_depth
-
-        # Struggling — try thinking deeper in later games
-        if progress > 0.5 and recent_win_rate < 0.4:
-            return min(self.max_depth + 1, 6)
-
-        return self.max_depth
-
     def train(
         self,
         num_games: int,
         opponent=None,
         progress_callback: Optional[Callable] = None,
     ) -> LearningResults:
-        """Run training games, updating weights after each."""
+        """Run training games, updating weights after each.
+
+        Mirrors how a kid learns:
+        - First games: fast, near-random exploration (build intuitions)
+        - Later games: thoughtful play with learned evaluation
+        - Opponent is fixed at a consistent level throughout
+        """
+        if opponent is None:
+            opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+
         results = LearningResults(
             game_name=self.evaluator.game_name,
             total_games=num_games,
@@ -153,19 +138,17 @@ class LearningRunner:
         recent_outcomes = []
 
         for i in range(num_games):
-            # Progressive depth — fast exploration early, deepen only if needed
-            recent_wr = (sum(1 for o in recent_outcomes[-10:] if o > 0)
-                         / max(len(recent_outcomes[-10:]), 1)) if recent_outcomes else 0.0
-            current_depth = self._training_depth(i, num_games, recent_wr)
-
-            # Opponent matches current depth
-            current_opponent = opponent or ReasonerOpponent(
-                self.engine, max_depth=current_depth
-            )
+            # Phase 1 (first 30%): fast exploration — random or depth 0
+            # Phase 2 (rest): play with learned eval at target depth
+            progress = i / max(num_games - 1, 1)
+            if progress < 0.3:
+                depth_this_game = 0  # eval only, no search — very fast
+            else:
+                depth_this_game = self.max_depth
 
             start = time.monotonic()
             outcome, num_moves, trace = self._play_and_trace(
-                current_opponent, depth_override=current_depth
+                opponent, depth_override=depth_this_game
             )
             duration = (time.monotonic() - start) * 1000
 

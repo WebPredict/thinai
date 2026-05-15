@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 function TrainExplainer() {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   return (
     <div className="train-explainer">
       <button className="train-explainer-toggle" onClick={() => setOpen(!open)}>
@@ -49,19 +49,21 @@ export default function TrainingDashboard({ games, initialGame }) {
   // Smart defaults per game: low depth so the system starts weak
   // and the learned evaluation actually drives improvement
   const DEFAULTS = {
-    tictactoe:    { games: 40, depth: 1 },
-    connect_four: { games: 40, depth: 1 },
-    mancala:      { games: 40, depth: 1 },
-    reversi:      { games: 30, depth: 1 },
+    tictactoe:    { games: 40, thinkTime: 1 },
+    connect_four: { games: 40, thinkTime: 2 },
+    mancala:      { games: 40, thinkTime: 2 },
+    reversi:      { games: 30, thinkTime: 2 },
+    nim:          { games: 40, thinkTime: 1 },
+    chutes_and_ladders: { games: 20, thinkTime: 1 },
   }
 
   const initGame = initialGame || 'tictactoe'
-  const initDefaults = DEFAULTS[initGame] || { games: 40, depth: 1 }
+  const initDefaults = DEFAULTS[initGame] || { games: 40, thinkTime: 2 }
   const [selectedGame, setSelectedGame] = useState(initGame)
   const [trainingId, setTrainingId] = useState(null)
   const [status, setStatus] = useState(null)
   const [numGames, setNumGames] = useState(initDefaults.games)
-  const [depth, setDepth] = useState(initDefaults.depth)
+  const [thinkTime, setThinkTime] = useState(initDefaults.thinkTime)
   const [fresh, setFresh] = useState(true)
   const [memories, setMemories] = useState([])
   const pollRef = useRef(null)
@@ -95,7 +97,7 @@ export default function TrainingDashboard({ games, initialGame }) {
     const res = await fetch(`${API}/training/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game: selectedGame, num_games: numGames, depth, fresh }),
+      body: JSON.stringify({ game: selectedGame, num_games: numGames, think_time: thinkTime, fresh }),
     })
     const data = await res.json()
     setTrainingId(data.training_id)
@@ -125,7 +127,7 @@ export default function TrainingDashboard({ games, initialGame }) {
                 setStatus(null)
                 const d = DEFAULTS[g] || { games: 40, depth: 1 }
                 setNumGames(d.games)
-                setDepth(d.depth)
+                setThinkTime(d.thinkTime)
               }}
             >
               {GAME_LABELS[g] || g}
@@ -136,9 +138,9 @@ export default function TrainingDashboard({ games, initialGame }) {
           <label>
             Games: <input type="number" value={numGames} onChange={e => setNumGames(+e.target.value)} min={5} max={200} />
           </label>
-          <label title="Moves ahead to search. In a future phase, the system will learn to manage this itself.">
-            Depth: <input type="number" value={depth} onChange={e => setDepth(+e.target.value)} min={1} max={6} />
-            <span className="train-param-note">moves ahead</span>
+          <label title="Maximum seconds per move during training">
+            Max think time: <input type="number" value={thinkTime} onChange={e => setThinkTime(+e.target.value)} min={1} max={10} />
+            <span className="train-param-note">sec/move</span>
           </label>
         </div>
         <label className="train-fresh-toggle">

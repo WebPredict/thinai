@@ -843,7 +843,7 @@
     <a href="#questions">Research</a>
     <a href="#benchmark">Benchmark</a>
     <a href="#notes">Notes</a>
-    <a href="/" class="nav-demo-link">Try the Demo</a>
+    <a href="/demo.html" class="nav-demo-link">Try the Demo</a>
   </div>
 </nav>
 
@@ -863,10 +863,10 @@
       </div>
       <div>
         <span>Status</span>
-        <strong>Phase 3 — corrections</strong>
+        <strong>Phase 5 — card games</strong>
       </div>
     </div>
-    <a href="/" class="hero-cta">Try the Demo — 6 games playable</a>
+    <a href="/demo.html" class="hero-cta">Try the Demo — 7 games playable</a>
   </div>
 
   <div class="hero-diagram">
@@ -1109,6 +1109,37 @@
   </div>
 </section>
 
+<section class="research" id="categories">
+  <div class="research-header">
+    <div class="section-label">§ IV.b — Game Categories</div>
+    <h2>Each category demands a <em>different kind</em> of intelligence.</h2>
+    <p>No single technique handles all of them. The research specifically targets games that force architectural diversity — a system that only masters one category has not demonstrated general learning.</p>
+  </div>
+
+  <div class="questions">
+    <div class="question">
+      <span class="q-num">Perfect information</span>
+      <h4>Everything is <em>visible.</em> Depth is the challenge.</h4>
+      <p>Chess, Reversi, Connect Four. Both players see the full board. The AI challenge is searching deeply enough to see tactical threats while evaluating positions accurately. Raw computation helps, but learned evaluation helps more.</p>
+    </div>
+    <div class="question">
+      <span class="q-num">Hidden information</span>
+      <h4>You can't search what you <em>can't see.</em></h4>
+      <p>Card games — poker, gin rummy, Go Fish. The opponent's hand is hidden. The system must reason about probability distributions, infer hidden state from observed behavior, and make decisions under genuine uncertainty. Minimax breaks here.</p>
+    </div>
+    <div class="question">
+      <span class="q-num">Stochastic</span>
+      <h4>Randomness changes <em>everything.</em></h4>
+      <p>Backgammon, Chutes & Ladders, dice games. Outcomes depend partly on chance. The AI must reason about expected values, manage risk, and adapt strategy to probability rather than certainty. Plans must be robust to bad luck.</p>
+    </div>
+    <div class="question">
+      <span class="q-num">Cooperative / Partnership</span>
+      <h4>Your partner knows things <em>you don't.</em></h4>
+      <p>Bridge, Spades, Euchre. You share a goal with a partner but can't communicate freely. The AI must model what its partner knows, signal through play, and coordinate strategy through limited information channels. The hardest category.</p>
+    </div>
+  </div>
+</section>
+
 <section class="principles" id="notes">
   <div class="principles-header">
     <div class="section-label">§ V — Principles</div>
@@ -1137,9 +1168,9 @@
   <div class="foot-inner">
     <div class="foot-quote">Intelligence is not a matter of how much you know, but how quickly you learn what you don't.</div>
     <div class="foot-status">
-      <div class="active"><span class="dot"></span>CURRENTLY · PHASE 3</div>
-      <div style="margin-top: 0.5rem; color: var(--ink-faint);">corrections · refinement</div>
-      <div style="margin-top: 0.35rem; color: var(--ink-faint); font-size: 0.75rem;">6 games · 287 tests · <a href="/" style="color: var(--accent); text-decoration: none;">live demo</a></div>
+      <div class="active"><span class="dot"></span>CURRENTLY · PHASE 5</div>
+      <div style="margin-top: 0.5rem; color: var(--ink-faint);">card games · hidden information</div>
+      <div style="margin-top: 0.35rem; color: var(--ink-faint); font-size: 0.75rem;">6 games · 317 tests · natural language parser · <a href="/demo.html" style="color: var(--accent); text-decoration: none;">live demo</a></div>
     </div>
   </div>
   <div class="copyright">

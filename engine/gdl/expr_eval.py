@@ -200,6 +200,34 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             return checker(args[0])
         return True  # default to true if not available
 
+    # Card game built-ins
+    if name == "zone_size":
+        zone_name = args[0]
+        zone = ctx.state.get_zone(zone_name)
+        return zone.size if zone else 0
+
+    if name == "zone_empty":
+        zone_name = args[0]
+        zone = ctx.state.get_zone(zone_name)
+        return zone.is_empty if zone else True
+
+    if name == "top_card_rank_value":
+        zone_name = args[0]
+        zone = ctx.state.get_zone(zone_name)
+        if zone and not zone.is_empty:
+            return zone.peek().value
+        return 0
+
+    if name == "compare_top_cards":
+        zone_a = args[0]
+        zone_b = args[1]
+        za = ctx.state.get_zone(zone_a)
+        zb = ctx.state.get_zone(zone_b)
+        if za and zb and not za.is_empty and not zb.is_empty:
+            from engine.gdl.cards import compare_cards
+            return compare_cards(za.peek(), zb.peek())
+        return 0
+
     # Chutes and Ladders built-ins
     if name == "chutes_and_ladders_winner":
         gdl = ctx.bindings.get("_gdl")
@@ -502,6 +530,15 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
         _remove_n(ctx.state, args[0], args[1])
         return
 
+    if name == "war_battle":
+        _war_battle(ctx.state)
+        return
+
+    if name == "card_move":
+        args = [evaluate(a, ctx) for a in node.args]
+        _card_move(ctx.state, args[0], args[1], int(args[2]) if len(args) > 2 else 1)
+        return
+
     if name == "chutes_and_ladders_move":
         args = [evaluate(a, ctx) for a in node.args]
         gdl = ctx.bindings.get("_gdl")
@@ -728,3 +765,121 @@ def _chutes_and_ladders_winner(state: GameState, gdl: dict = None) -> bool:
     if token_space is None:
         return False
     return token_space.index >= board_size
+
+
+# --- Card game built-ins ---
+
+def _war_battle(state: GameState):
+    """Execute one round of War: both players flip top card, higher wins both.
+
+    If tie, each places 3 face-down and flips a 4th (recursive war).
+    Winner collects all cards to bottom of their hand.
+    """
+    if not state.card_zones:
+        return
+
+    import random
+    from engine.gdl.cards import compare_cards
+
+    hand_p1 = state.card_zones.get("hand_p1")
+    hand_p2 = state.card_zones.get("hand_p2")
+    table = state.card_zones.get("table")
+
+    if not hand_p1 or not hand_p2 or not table:
+        return
+
+    if hand_p1.is_empty or hand_p2.is_empty:
+        return
+
+    # Both flip top card
+    card_p1 = hand_p1.draw()
+    card_p2 = hand_p2.draw()
+    table.add(card_p1)
+    table.add(card_p2)
+
+    # Store flipped cards in state vars for UI display
+    state.state_vars["last_p1_card"] = f"{card_p1.rank}{card_p1.symbol}"
+    state.state_vars["last_p2_card"] = f"{card_p2.rank}{card_p2.symbol}"
+
+    cmp = compare_cards(card_p1, card_p2)
+
+    if cmp > 0:
+        _collect_war_table(state, "p1")
+        state.state_vars["round_winner"] = "player1"
+    elif cmp < 0:
+        _collect_war_table(state, "p2")
+        state.state_vars["round_winner"] = "player2"
+    else:
+        # War! Place 3 face-down each, flip 4th
+        state.state_vars["round_winner"] = "war"
+        _resolve_war(state)
+
+
+def _resolve_war(state: GameState):
+    """Resolve a war tie-break."""
+    import random
+    from engine.gdl.cards import compare_cards
+
+    hand_p1 = state.card_zones["hand_p1"]
+    hand_p2 = state.card_zones["hand_p2"]
+    table = state.card_zones["table"]
+
+    # Place 3 face-down each
+    for _ in range(3):
+        if not hand_p1.is_empty:
+            table.add(hand_p1.draw())
+        if not hand_p2.is_empty:
+            table.add(hand_p2.draw())
+
+    if hand_p1.is_empty:
+        _collect_war_table(state, "p2")
+        state.state_vars["round_winner"] = "player2"
+        return
+    if hand_p2.is_empty:
+        _collect_war_table(state, "p1")
+        state.state_vars["round_winner"] = "player1"
+        return
+
+    # Flip 4th
+    card_p1 = hand_p1.draw()
+    card_p2 = hand_p2.draw()
+    table.add(card_p1)
+    table.add(card_p2)
+
+    state.state_vars["last_p1_card"] = f"{card_p1.rank}{card_p1.symbol}"
+    state.state_vars["last_p2_card"] = f"{card_p2.rank}{card_p2.symbol}"
+
+    cmp = compare_cards(card_p1, card_p2)
+    if cmp > 0:
+        _collect_war_table(state, "p1")
+        state.state_vars["round_winner"] = "player1"
+    elif cmp < 0:
+        _collect_war_table(state, "p2")
+        state.state_vars["round_winner"] = "player2"
+    else:
+        _resolve_war(state)  # Another tie
+
+
+def _collect_war_table(state: GameState, winner_suffix: str):
+    """Move all table cards to winner's hand (shuffled to bottom)."""
+    import random
+    table = state.card_zones["table"]
+    hand = state.card_zones[f"hand_{winner_suffix}"]
+    cards = list(table.cards)
+    random.shuffle(cards)
+    table.cards.clear()
+    for card in cards:
+        hand.add(card, to_top=False)
+
+
+def _card_move(state: GameState, from_zone: str, to_zone: str, count: int = 1):
+    """Move N cards from one zone to another."""
+    if not state.card_zones:
+        return
+    source = state.card_zones.get(from_zone)
+    dest = state.card_zones.get(to_zone)
+    if source and dest:
+        for _ in range(min(count, source.size)):
+            card = source.draw()
+            if card:
+                dest.add(card)

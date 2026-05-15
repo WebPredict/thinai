@@ -47,6 +47,8 @@ class GameState:
         self.players = players
         # Board contents: space → Piece or list[Piece] (for track/stacking)
         self.pieces: dict = {}
+        # Card zones (for card games)
+        self.card_zones: Optional[dict] = None  # zone_name → CardZone
         # State variables
         self.state_vars: dict[str, Any] = {}
         # Current player (1-indexed: "player1", "player2", ...)
@@ -138,6 +140,12 @@ class GameState:
             return "player2"
         return "player1"
 
+    def get_zone(self, zone_name: str):
+        """Get a card zone by name. Returns None if not a card game."""
+        if self.card_zones:
+            return self.card_zones.get(zone_name)
+        return None
+
     def copy(self) -> "GameState":
         """Create a deep copy for search."""
         new = GameState.__new__(GameState)
@@ -148,6 +156,20 @@ class GameState:
         for k, v in new.pieces.items():
             if isinstance(v, list):
                 new.pieces[k] = list(v)
+        # Deep copy card zones
+        if self.card_zones:
+            from engine.gdl.cards import CardZone
+            new.card_zones = {}
+            for name, zone in self.card_zones.items():
+                new_zone = CardZone(
+                    name=zone.name, owner=zone.owner,
+                    visible_to=zone.visible_to, ordered=zone.ordered,
+                    capacity=zone.capacity,
+                )
+                new_zone.cards = list(zone.cards)
+                new.card_zones[name] = new_zone
+        else:
+            new.card_zones = None
         new.state_vars = dict(self.state_vars)
         new.current_player = self.current_player
         new.turn_number = self.turn_number
@@ -174,6 +196,28 @@ def setup_initial_state(gdl: dict) -> GameState:
     """Create the initial game state from a GDL specification."""
     board = create_board(gdl["board"])
     state = GameState(board, players=gdl["meta"]["players"])
+
+    # Initialize card zones if this is a card game
+    if gdl["board"].get("type") == "card_zones":
+        from engine.gdl.cards import CardZone, create_standard_deck
+        state.card_zones = {}
+        for zone_spec in gdl["board"].get("zones", []):
+            zone = CardZone(
+                name=zone_spec["name"],
+                owner=zone_spec.get("owner"),
+                visible_to=zone_spec.get("visible_to", "all"),
+                ordered=zone_spec.get("ordered", False),
+                capacity=zone_spec.get("capacity"),
+            )
+            state.card_zones[zone_spec["name"]] = zone
+
+        # Create deck if specified
+        deck_type = gdl.get("cards", {}).get("deck", "standard52")
+        deck_zone_name = gdl.get("cards", {}).get("deck_zone", "deck")
+        if deck_zone_name in state.card_zones:
+            cards = create_standard_deck(deck_type)
+            for card in cards:
+                state.card_zones[deck_zone_name].add(card)
 
     # Initialize state variables
     for var in gdl.get("state_vars", []):
@@ -210,6 +254,35 @@ def _apply_setup_action(action: dict, state: GameState, gdl: dict):
 
     elif action_type == "set":
         state.state_vars[action["var"]] = action["value"]
+
+    elif action_type == "shuffle":
+        # Shuffle a card zone
+        if state.card_zones and action["zone"] in state.card_zones:
+            state.card_zones[action["zone"]].shuffle()
+
+    elif action_type == "deal":
+        # Deal cards from one zone to another
+        if state.card_zones:
+            from_zone = state.card_zones.get(action["from"])
+            to_zone = state.card_zones.get(action["to"])
+            count = action.get("count", 1)
+            if from_zone and to_zone:
+                for _ in range(min(count, from_zone.size)):
+                    card = from_zone.draw()
+                    if card:
+                        to_zone.add(card)
+
+    elif action_type == "reveal":
+        # Move top card(s) from one zone to another (face-up)
+        if state.card_zones:
+            from_zone = state.card_zones.get(action["from"])
+            to_zone = state.card_zones.get(action["to"])
+            count = action.get("count", 1)
+            if from_zone and to_zone:
+                for _ in range(min(count, from_zone.size)):
+                    card = from_zone.draw()
+                    if card:
+                        to_zone.add(card)
 
 
 def _parse_piece_ref(piece_str: str, gdl: dict) -> Piece:

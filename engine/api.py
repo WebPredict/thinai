@@ -64,8 +64,14 @@ def _load_engine(game_name: str) -> GameEngine:
 
 def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
     """Serialize game state for the frontend."""
+    from engine.gdl.board import CardBoard
     board = state.board
-    board_type = "grid" if hasattr(board, "rows") else "track"
+    if isinstance(board, CardBoard):
+        board_type = "card_zones"
+    elif hasattr(board, "rows"):
+        board_type = "grid"
+    else:
+        board_type = "track"
 
     spaces = {}
     for space_key, piece_or_list in state.pieces.items():
@@ -93,12 +99,29 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
     if result:
         game_result = {"type": result.result_type, "winner": result.winner}
 
+    # Serialize card zones if present
+    card_zones = None
+    if state.card_zones:
+        card_zones = {}
+        for name, zone in state.card_zones.items():
+            card_zones[name] = {
+                "name": zone.name,
+                "size": zone.size,
+                "owner": zone.owner,
+                "visible_to": zone.visible_to,
+                # Only send visible card details
+                "cards": [{"rank": c.rank, "suit": c.suit, "id": c.id} for c in zone.cards]
+                    if zone.visible_to == "all" else [],
+            }
+
     return {
         "board_type": board_type,
         "rows": getattr(board, "rows", None),
         "cols": getattr(board, "cols", None),
         "track_length": getattr(board, "length", None),
         "spaces": spaces,
+        "card_zones": card_zones,
+        "state_vars": dict(state.state_vars) if state.state_vars else None,
         "current_player": state.current_player,
         "turn_number": state.turn_number,
         "legal_moves": legal_moves,
@@ -216,9 +239,12 @@ def new_game(request: Request, req: NewGameRequest):
     # Try to load learned evaluator
     eval_fn = None
     if req.use_learned:
-        evaluator = _memory_store.load(engine.meta["name"])
-        if evaluator:
-            eval_fn = evaluator
+        try:
+            evaluator = _memory_store.load(engine.meta["name"])
+            if evaluator:
+                eval_fn = evaluator
+        except (ValueError, Exception):
+            pass  # No features for this game type (e.g., card games)
 
     _sessions[session_id] = {
         "engine": engine,

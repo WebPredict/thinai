@@ -5,7 +5,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'mancala', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'mancala', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const GAME_LABELS = {
   tictactoe: 'Tic-Tac-Toe',
@@ -14,6 +14,7 @@ const GAME_LABELS = {
   reversi: 'Reversi',
   nim: 'Nim',
   chutes_and_ladders: 'Chutes & Ladders',
+  war: 'War',
 }
 
 const GAME_RULES = {
@@ -73,6 +74,17 @@ const GAME_RULES = {
       'Land on a green ladder space to climb up to a higher square.',
       'Land on a red chute space to slide down to a lower square.',
       'First player to reach space 25 wins.',
+    ],
+  },
+  war: {
+    title: 'How to play War',
+    intro: 'A card game of luck! Each player flips their top card \u2014 higher rank wins.',
+    rules: [
+      'The deck is dealt evenly between two players.',
+      'Each round, both players flip their top card.',
+      'Higher rank wins both cards (Ace is highest).',
+      'On a tie: each player places 3 cards face-down, then flips a 4th. Higher 4th card wins all.',
+      'First player to collect all 52 cards wins.',
     ],
   },
 }
@@ -274,7 +286,7 @@ function App() {
 
           <div className="menu-actions">
             <button className="action-btn action-btn-primary" onClick={() => { setMode('train') }}>
-              {isLearned ? 'Learn More' : 'Learn Game'}
+              {isLearned ? 'Train ThinAI More' : 'Train ThinAI'}
             </button>
             <button className="action-btn" onClick={() => { setMode('play'); startGame() }} disabled={loading}>
               {loading ? 'Starting...' : 'Play vs ThinAI'}
@@ -427,6 +439,12 @@ function App() {
             />
           ) : selectedGame === 'nim' ? (
             <NimBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'war' ? (
+            <WarBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
@@ -876,6 +894,71 @@ function NimBoard({ state, onMove, disabled }) {
         })}
       </div>
       <div className="nim-hint">Click a pile, then choose how many to take</div>
+    </div>
+  )
+}
+
+function WarBoard({ state, onMove, disabled }) {
+  if (!state) return null
+
+  const zones = state.card_zones || {}
+  const vars = state.state_vars || {}
+  const p1Size = zones.hand_p1?.size || 0
+  const p2Size = zones.hand_p2?.size || 0
+  const lastP1 = vars.last_p1_card || ''
+  const lastP2 = vars.last_p2_card || ''
+  const roundWinner = vars.round_winner || ''
+
+  const handleBattle = () => {
+    if (disabled) return
+    const moves = state.legal_moves
+    if (moves && moves.length > 0) {
+      onMove(moves[0].rule, moves[0].params)
+    }
+  }
+
+  return (
+    <div className="war-board">
+      <div className="war-players">
+        <div className="war-player">
+          <div className="war-deck-pile war-p1-pile">
+            <span className="war-card-count">{p1Size}</span>
+          </div>
+          <div className="war-player-label">You</div>
+        </div>
+
+        <div className="war-center">
+          {lastP1 && lastP2 ? (
+            <div className="war-flipped">
+              <div className="war-card war-card-p1">{lastP1}</div>
+              <div className="war-vs">vs</div>
+              <div className="war-card war-card-p2">{lastP2}</div>
+            </div>
+          ) : (
+            <div className="war-prompt">Flip cards!</div>
+          )}
+          {roundWinner && (
+            <div className={`war-round-result ${roundWinner === 'war' ? 'war-tie' : ''}`}>
+              {roundWinner === 'player1' ? 'You win this round!' :
+               roundWinner === 'player2' ? 'AI wins this round!' :
+               roundWinner === 'war' ? 'WAR!' : ''}
+            </div>
+          )}
+        </div>
+
+        <div className="war-player">
+          <div className="war-deck-pile war-p2-pile">
+            <span className="war-card-count">{p2Size}</span>
+          </div>
+          <div className="war-player-label">AI</div>
+        </div>
+      </div>
+
+      {!state.game_result && (
+        <button className="war-flip-btn" onClick={handleBattle} disabled={disabled}>
+          Flip Cards
+        </button>
+      )}
     </div>
   )
 }

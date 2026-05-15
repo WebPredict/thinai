@@ -121,6 +121,35 @@ class TrackBoard:
         )
 
 
+@dataclass(frozen=True)
+class CardZoneSpace:
+    """A reference to a card zone (used as a 'space' in the engine)."""
+    zone_name: str
+
+    def __repr__(self):
+        return f"[{self.zone_name}]"
+
+
+class CardBoard:
+    """A board made of card zones — deck, hands, discard, table, etc."""
+
+    def __init__(self, zones: list[dict]):
+        self.zone_specs = zones
+        self._spaces = tuple(CardZoneSpace(z["name"]) for z in zones)
+
+    @property
+    def spaces(self) -> tuple[CardZoneSpace, ...]:
+        return self._spaces
+
+    def zone_names(self) -> list[str]:
+        return [z["name"] for z in self.zone_specs]
+
+    @classmethod
+    def from_gdl(cls, board_spec: dict) -> "CardBoard":
+        zones = board_spec.get("zones", [])
+        return cls(zones)
+
+
 def create_board(board_spec: dict):
     """Create the appropriate board type from a GDL board specification."""
     board_type = board_spec["type"]
@@ -128,5 +157,7 @@ def create_board(board_spec: dict):
         return GridBoard.from_gdl(board_spec)
     elif board_type == "track":
         return TrackBoard.from_gdl(board_spec)
+    elif board_type == "card_zones":
+        return CardBoard.from_gdl(board_spec)
     else:
         raise ValueError(f"Unsupported board type: {board_type}")

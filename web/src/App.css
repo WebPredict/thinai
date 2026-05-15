@@ -2027,6 +2027,138 @@ header em {
 }
 
 
+/* === War === */
+
+.war-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.war-players {
+  display: flex;
+  align-items: center;
+  gap: 3rem;
+}
+
+.war-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.war-deck-pile {
+  width: 90px;
+  height: 130px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+.war-p1-pile {
+  background: linear-gradient(135deg, #c83030, #a02020);
+  border: 2px solid #e04040;
+}
+
+.war-p2-pile {
+  background: linear-gradient(135deg, #2050a0, #183878);
+  border: 2px solid #4080d0;
+}
+
+.war-card-count {
+  font-family: 'Georgia', serif;
+  font-size: 2rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.war-player-label {
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+}
+
+.war-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 180px;
+}
+
+.war-flipped {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.war-card {
+  width: 70px;
+  height: 100px;
+  background: #faf5eb;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Georgia', serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid #d0c8b8;
+}
+
+.war-card-p1 { color: #c83030; }
+.war-card-p2 { color: #2050a0; }
+
+.war-vs {
+  font-family: 'Georgia', serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--ink-faint);
+}
+
+.war-prompt {
+  font-family: 'Georgia', serif;
+  font-size: 1.2rem;
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.war-round-result {
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.war-tie {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.war-flip-btn {
+  padding: 0.8rem 3rem;
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
+  font-family: 'Menlo', monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+  box-shadow: 0 3px 10px rgba(212, 166, 86, 0.3);
+}
+
+.war-flip-btn:hover { opacity: 0.9; }
+.war-flip-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+
 /* === Chutes and Ladders === */
 
 .cl-board-container {

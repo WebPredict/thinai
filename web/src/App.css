@@ -160,6 +160,48 @@ header em {
 .start-btn:hover { opacity: 0.9; }
 .start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.view-gdl-btn {
+  display: inline;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: 'Menlo', monospace;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  margin-left: 0.5rem;
+}
+
+.view-gdl-btn:hover { opacity: 0.8; }
+
+.gdl-modal {
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.gdl-modal-intro {
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.gdl-code {
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1rem;
+  font-family: 'Menlo', monospace;
+  font-size: 0.75rem;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
 .play-hint {
   font-family: 'Menlo', monospace;
   font-size: 0.85rem;

@@ -163,6 +163,16 @@ def list_games(request: Request):
     return {"games": sorted(games)}
 
 
+@app.get("/api/game/{game_name}/gdl")
+def get_game_gdl(game_name: str):
+    """Return the full GDL spec for a game — the rules the system learned from."""
+    engine = _load_engine(game_name)
+    return {
+        "game_name": engine.meta["name"],
+        "gdl": engine.gdl,
+    }
+
+
 @app.post("/api/game/new")
 @limiter.limit("30/minute")
 def new_game(request: Request, req: NewGameRequest):

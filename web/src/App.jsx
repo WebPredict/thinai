@@ -107,6 +107,17 @@ function App() {
   const [aiLastMove, setAiLastMove] = useState(null) // highlight AI's last move
   const [aiThinking, setAiThinking] = useState(null) // confidence + effort info from last AI move
   const [showRulesModal, setShowRulesModal] = useState(true) // show rules on game start
+  const [showGdlModal, setShowGdlModal] = useState(false)
+  const [gdlData, setGdlData] = useState(null)
+
+  useEffect(() => {
+    if (showGdlModal && selectedGame) {
+      fetch(`${API}/game/${selectedGame}/gdl`)
+        .then(r => r.json())
+        .then(setGdlData)
+        .catch(() => setGdlData(null))
+    }
+  }, [showGdlModal, selectedGame])
 
   useEffect(() => {
     fetch(`${API}/games`)
@@ -216,7 +227,26 @@ function App() {
           <button className="start-btn" onClick={startGame} disabled={loading}>
             {loading ? 'Starting...' : 'Play vs AI'}
           </button>
-          <p className="play-hint">Uses learned weights if you've trained this game, otherwise starts untrained. Train first for a stronger opponent!</p>
+          <p className="play-hint">
+            Uses learned weights if you've trained this game, otherwise starts untrained. Train first for a stronger opponent!
+            <button className="view-gdl-btn" onClick={() => setShowGdlModal(true)}>View game rules (GDL)</button>
+          </p>
+
+          {showGdlModal && gdlData && (
+            <div className="rules-overlay" onClick={() => setShowGdlModal(false)}>
+              <div className="rules-modal gdl-modal" onClick={e => e.stopPropagation()}>
+                <div className="rules-modal-header">
+                  <span className="rules-modal-title">{gdlData.game_name} — Game Definition</span>
+                  <button className="rules-modal-close" onClick={() => setShowGdlModal(false)}>&times;</button>
+                </div>
+                <p className="gdl-modal-intro">
+                  This is the structured rule specification the AI learns from. It defines the board,
+                  pieces, legal moves, and win conditions — everything the system needs to play.
+                </p>
+                <pre className="gdl-code">{JSON.stringify(gdlData.gdl, null, 2)}</pre>
+              </div>
+            </div>
+          )}
 
           <div className="teach-teaser">
             <div className="teach-teaser-divider">

@@ -518,6 +518,67 @@ def _gofish_set_lead(state: GameState, player: str) -> float:
     return (my_count - opp_count) / 7.0
 
 
+# ============================================================
+# Checkers features
+# ============================================================
+
+def _checkers_piece_advantage(state: GameState, player: str) -> float:
+    """My pieces minus opponent's pieces."""
+    opponent = state.opponent(player)
+    my_count = sum(1 for _, p in state.all_pieces() if p.owner == player)
+    opp_count = sum(1 for _, p in state.all_pieces() if p.owner == opponent)
+    return (my_count - opp_count) / 12.0
+
+
+def _checkers_king_count(state: GameState, player: str) -> float:
+    """My kings minus opponent's kings."""
+    opponent = state.opponent(player)
+    my_kings = sum(1 for _, p in state.all_pieces() if p.owner == player and p.name == "king")
+    opp_kings = sum(1 for _, p in state.all_pieces() if p.owner == opponent and p.name == "king")
+    return (my_kings - opp_kings) / 6.0
+
+
+def _checkers_advancement(state: GameState, player: str) -> float:
+    """How far forward my pieces are (closer to promotion)."""
+    if not isinstance(state.board, GridBoard):
+        return 0.0
+    total = 0.0
+    count = 0
+    for space, piece in state.all_pieces():
+        if piece.owner == player and piece.name == "man":
+            if player == "player1":
+                progress = (7 - space.row) / 7.0  # row 0 = promoted
+            else:
+                progress = space.row / 7.0  # row 7 = promoted
+            total += progress
+            count += 1
+    return total / max(count, 1)
+
+
+def _checkers_center_control(state: GameState, player: str) -> float:
+    """Pieces in the center 4x4 area vs opponent."""
+    if not isinstance(state.board, GridBoard):
+        return 0.0
+    opponent = state.opponent(player)
+    my_center = 0
+    opp_center = 0
+    for space, piece in state.all_pieces():
+        if 2 <= space.row <= 5 and 2 <= space.col <= 5:
+            if piece.owner == player:
+                my_center += 1
+            elif piece.owner == opponent:
+                opp_center += 1
+    return (my_center - opp_center) / 8.0
+
+
+CHECKERS_FEATURES = [
+    FeatureSpec("piece_advantage", "My pieces minus opponent's", _checkers_piece_advantage),
+    FeatureSpec("king_count", "My kings minus opponent's kings", _checkers_king_count),
+    FeatureSpec("advancement", "How close my pieces are to promotion", _checkers_advancement),
+    FeatureSpec("center_control", "Pieces in center area", _checkers_center_control),
+]
+
+
 GOFISH_FEATURES = [
     FeatureSpec("near_sets", "Ranks where I hold 3 cards (one away from set)", _gofish_near_sets),
     FeatureSpec("pairs", "Ranks where I hold 2 cards (good ask targets)", _gofish_pairs),
@@ -536,6 +597,7 @@ FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Nim": NIM_FEATURES,
     "Chutes and Ladders": CL_FEATURES,
     "Go Fish": GOFISH_FEATURES,
+    "Checkers": CHECKERS_FEATURES,
 }
 
 

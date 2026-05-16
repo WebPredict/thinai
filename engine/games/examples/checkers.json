@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "name": "Checkers",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "grid",
+    "grid": {
+      "rows": 8,
+      "cols": 8,
+      "topology": "rect8"
+    }
+  },
+
+  "pieces": [
+    {
+      "name": "man",
+      "owner": "each",
+      "display": "checker"
+    },
+    {
+      "name": "king",
+      "owner": "each",
+      "display": "checker_king"
+    }
+  ],
+
+  "state_vars": [
+    { "name": "must_jump_from", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_move_desc", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "checkers_setup" }
+  ],
+
+  "rules": [
+    {
+      "name": "move_piece",
+      "action": "move",
+      "params": [
+        { "name": "move_id", "select": "checkers_moves" }
+      ],
+      "conditions": [],
+      "effects": [
+        "checkers_execute(move_id)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "checkers_opponent_has_no_moves()"
+    },
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "checkers_stalemate()",
+      "score": "checkers_piece_count(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Standard 8x8 checkers (English draughts). Men move diagonally forward, kings move diagonally in any direction. Captures are mandatory. Multi-jumps allowed.",
+    "checkers_moves": "Built-in parameter selector that enumerates all legal moves (simple moves and jumps) for the current player.",
+    "checkers_execute": "Built-in effect that applies a move: moves piece, removes captured pieces, promotes to king if reaching last row.",
+    "must_jump_from": "If non-empty, the current player must continue jumping from this position (multi-jump)."
+  }
+}

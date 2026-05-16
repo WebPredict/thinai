@@ -23,10 +23,10 @@ class RandomOpponent:
 
 
 class ReasonerOpponent:
-    """Uses the minimax reasoner."""
+    """Uses the minimax reasoner with optional evaluation function."""
 
-    def __init__(self, engine: GameEngine, max_depth: int = 4):
-        self.reasoner = Reasoner(engine, max_depth=max_depth)
+    def __init__(self, engine: GameEngine, max_depth: int = 4, eval_fn=None):
+        self.reasoner = Reasoner(engine, max_depth=max_depth, eval_fn=eval_fn)
 
     def choose_move(self, state: GameState) -> Optional[Move]:
         return self.reasoner.choose_move(state)

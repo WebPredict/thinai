@@ -200,6 +200,18 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             return checker(args[0])
         return True  # default to true if not available
 
+    # Checkers built-ins
+    if name == "checkers_opponent_has_no_moves":
+        from engine.gdl.checkers import opponent_has_no_moves
+        return opponent_has_no_moves(ctx.state)
+
+    if name == "checkers_stalemate":
+        return ctx.state.state_vars.get("moves_since_capture", 0) >= 40
+
+    if name == "checkers_piece_count":
+        player = args[0]
+        return sum(1 for _, p in ctx.state.all_pieces() if p.owner == player)
+
     # Card game built-ins
     if name == "zone_size":
         zone_name = args[0]
@@ -569,6 +581,11 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "go_fish_ask":
         args = [evaluate(a, ctx) for a in node.args]
         _go_fish_ask(ctx.state, args[0])
+        return
+
+    if name == "checkers_execute":
+        args = [evaluate(a, ctx) for a in node.args]
+        _checkers_execute(ctx.state, int(args[0]))
         return
 
     if name == "chutes_and_ladders_move":
@@ -1063,3 +1080,13 @@ def _check_go_fish_sets(state: GameState, player_suffix: str):
                 hand.remove(card)
                 sets_zone.add(card)
             state.state_vars[f"last_set_{player_suffix}"] = rank
+
+
+# --- Checkers built-ins ---
+
+def _checkers_execute(state: GameState, move_id: int):
+    """Execute a checkers move by ID."""
+    from engine.gdl.checkers import get_all_moves, execute_move
+    moves = get_all_moves(state)
+    if move_id < len(moves):
+        execute_move(state, moves[move_id])

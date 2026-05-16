@@ -110,6 +110,7 @@ class LearningRunner:
         effort_allocator=None,
         confidence_tracker=None,
         self_assessor=None,
+        gdl: dict = None,
     ):
         self.engine = engine
         self.evaluator = evaluator
@@ -117,6 +118,7 @@ class LearningRunner:
         self.learner_player = learner_player
         self.effort_allocator = effort_allocator
         self.confidence_tracker = confidence_tracker
+        self._gdl = gdl
         self.self_assessor = self_assessor
 
     def train(

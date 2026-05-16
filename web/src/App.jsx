@@ -5,7 +5,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'mancala', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const GAME_LABELS = {
   tictactoe: 'Tic-Tac-Toe',
@@ -14,6 +14,7 @@ const GAME_LABELS = {
   reversi: 'Reversi',
   nim: 'Nim',
   chutes_and_ladders: 'Chutes & Ladders',
+  checkers: 'Checkers',
   war: 'War',
   go_fish: 'Go Fish',
 }
@@ -75,6 +76,17 @@ const GAME_RULES = {
       'Land on a green ladder space to climb up to a higher square.',
       'Land on a red chute space to slide down to a lower square.',
       'First player to reach space 25 wins.',
+    ],
+  },
+  checkers: {
+    title: 'How to play Checkers',
+    intro: 'Capture all of your opponent\'s pieces or block them so they can\'t move.',
+    rules: [
+      'Pieces move diagonally forward, one square at a time.',
+      'To capture, jump over an opponent\'s piece to an empty square beyond it.',
+      'If you can capture, you must. Multiple captures in one turn are allowed.',
+      'When a piece reaches the far row, it becomes a King and can move diagonally in any direction.',
+      'You win when your opponent has no pieces left or cannot make a move.',
     ],
   },
   go_fish: {
@@ -453,6 +465,12 @@ function App() {
             />
           ) : selectedGame === 'nim' ? (
             <NimBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'checkers' ? (
+            <CheckersBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
@@ -914,6 +932,107 @@ function NimBoard({ state, onMove, disabled }) {
         })}
       </div>
       <div className="nim-hint">Click a pile, then choose how many to take</div>
+    </div>
+  )
+}
+
+function CheckersBoard({ state, onMove, disabled }) {
+  const [selectedPiece, setSelectedPiece] = useState(null)
+
+  if (!state || state.board_type !== 'grid') return null
+
+  const { rows, cols, spaces, legal_moves } = state
+  const moveOptions = legal_moves || []
+
+  // Build lookup: which pieces can move, and where can they go
+  const movesFromPiece = {}  // "r,c" -> [{move, to: "r,c"}]
+  const movablePieces = new Set()
+  for (const m of moveOptions) {
+    if (m.from && m.to) {
+      const fromKey = `${m.from.row},${m.from.col}`
+      const toKey = `${m.to.row},${m.to.col}`
+      movablePieces.add(fromKey)
+      if (!movesFromPiece[fromKey]) movesFromPiece[fromKey] = []
+      movesFromPiece[fromKey].push({ move: m, toKey })
+    }
+  }
+
+  // Valid destinations for selected piece
+  const validDestinations = new Set()
+  if (selectedPiece && movesFromPiece[selectedPiece]) {
+    for (const { toKey } of movesFromPiece[selectedPiece]) {
+      validDestinations.add(toKey)
+    }
+  }
+
+  const handleCellClick = (row, col) => {
+    if (disabled) return
+    const key = `${row},${col}`
+    const piece = spaces[key]
+
+    // Clicking a movable piece: select it
+    if (movablePieces.has(key)) {
+      setSelectedPiece(selectedPiece === key ? null : key)
+      return
+    }
+
+    // Clicking a valid destination: make the move
+    if (selectedPiece && validDestinations.has(key)) {
+      const moveEntry = movesFromPiece[selectedPiece].find(m => m.toKey === key)
+      if (moveEntry) {
+        onMove(moveEntry.move.rule, moveEntry.move.params)
+        setSelectedPiece(null)
+      }
+      return
+    }
+
+    // Clicking anything else: deselect
+    setSelectedPiece(null)
+  }
+
+  return (
+    <div className="checkers-container">
+      <div className="checkers-you-label">You are <span className="checkers-red-dot" /> Red</div>
+      <div className="checkers-board">
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="checkers-row">
+            {Array.from({ length: cols }).map((_, c) => {
+              const key = `${r},${c}`
+              const piece = spaces[key]
+              const isDark = (r + c) % 2 === 1
+              const isSelected = selectedPiece === key
+              const isMovable = movablePieces.has(key) && !disabled
+              const isDestination = validDestinations.has(key)
+
+              return (
+                <div
+                  key={c}
+                  className={[
+                    'checkers-cell',
+                    isDark ? 'dark' : 'light',
+                    isSelected ? 'selected' : '',
+                    isMovable ? 'movable' : '',
+                    isDestination ? 'destination' : '',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => handleCellClick(r, c)}
+                >
+                  {piece && (
+                    <div className={`checkers-piece ${piece.owner === 'player1' ? 'red' : 'black'} ${piece.name === 'king' ? 'king' : ''}`}>
+                      {piece.name === 'king' && <span className="checkers-crown">&#9813;</span>}
+                    </div>
+                  )}
+                  {isDestination && <div className="checkers-dest-dot" />}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+      {!disabled && moveOptions.length > 0 && (
+        <div className="checkers-hint">
+          {selectedPiece ? 'Click a highlighted square to move there' : 'Click one of your red pieces to move it'}
+        </div>
+      )}
     </div>
   )
 }

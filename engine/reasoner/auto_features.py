@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from engine.gdl.state import GameState, Piece
-from engine.gdl.board import GridBoard, GridSpace, TrackBoard, TrackSpace
+from engine.gdl.board import GridBoard, GridSpace, TrackBoard, TrackSpace, CardBoard
 from engine.reasoner.features import FeatureSpec
 
 
@@ -28,25 +28,26 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
     board_spec = gdl.get("board", {})
     board_type = board_spec.get("type", "")
 
-    # === Universal features (work for every game) ===
+    # === Universal features (board games only — not card games) ===
 
-    features.append(FeatureSpec(
-        "my_piece_count",
-        "Number of my pieces on the board",
-        _my_piece_count,
-    ))
+    if board_type != "card_zones":
+        features.append(FeatureSpec(
+            "my_piece_count",
+            "Number of my pieces on the board",
+            _my_piece_count,
+        ))
 
-    features.append(FeatureSpec(
-        "piece_advantage",
-        "My pieces minus opponent's pieces",
-        _piece_advantage,
-    ))
+        features.append(FeatureSpec(
+            "piece_advantage",
+            "My pieces minus opponent's pieces",
+            _piece_advantage,
+        ))
 
-    features.append(FeatureSpec(
-        "mobility",
-        "How many moves I have available",
-        _mobility,
-    ))
+        features.append(FeatureSpec(
+            "mobility",
+            "How many moves I have available",
+            _mobility,
+        ))
 
     # === Grid-specific features ===
 
@@ -111,7 +112,72 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
             _total_pieces_track,
         ))
 
-    # === Derived from state variables ===
+    # === Card game features ===
+
+    if board_type == "card_zones":
+        zones = board_spec.get("zones", [])
+
+        # Find hand zones (visible_to: "owner")
+        hand_zones = [z for z in zones if z.get("visible_to") == "owner"]
+        if hand_zones:
+            features.append(FeatureSpec(
+                "hand_size",
+                "Cards in my hand (more options = better)",
+                _card_hand_size,
+            ))
+
+            features.append(FeatureSpec(
+                "hand_size_advantage",
+                "My hand size minus opponent's",
+                _card_hand_size_advantage,
+            ))
+
+            features.append(FeatureSpec(
+                "rank_concentration",
+                "Most cards of same rank in hand (pairs/triples)",
+                _card_rank_concentration,
+            ))
+
+            features.append(FeatureSpec(
+                "near_complete_sets",
+                "Ranks where I hold 3+ cards (one away from a set)",
+                _card_near_complete_sets,
+            ))
+
+            features.append(FeatureSpec(
+                "pairs_held",
+                "Number of ranks with 2+ cards (good ask targets)",
+                _card_pairs_held,
+            ))
+
+        # Find score/set zones (visible_to: "all" with owner)
+        score_zones = [z for z in zones if z.get("visible_to") == "all" and z.get("owner")]
+        if len(score_zones) >= 2:
+            features.append(FeatureSpec(
+                "score_lead",
+                "My score zone size minus opponent's",
+                _card_score_lead,
+            ))
+
+            features.append(FeatureSpec(
+                "singletons",
+                "Ranks with only 1 card (hard to complete)",
+                _card_singletons,
+            ))
+
+        # Find draw pile zones (visible_to: "none", no owner)
+        draw_zones = [z for z in zones if z.get("visible_to") == "none" and not z.get("owner")]
+        if draw_zones:
+            features.append(FeatureSpec(
+                "draw_pile_remaining",
+                "Cards left in draw pile (game progress)",
+                _card_draw_pile_remaining,
+            ))
+
+        # Don't add state var features for card games — they're transient
+        return features
+
+    # === Derived from state variables (board games only) ===
 
     for var in gdl.get("state_vars", []):
         var_name = var["name"]
@@ -178,50 +244,68 @@ def _mobility(state: GameState, player: str) -> float:
 
 
 def _center_control(state: GameState, player: str) -> float:
-    """Pieces near the center of the board."""
+    """My centrality minus opponent's centrality."""
     if not isinstance(state.board, GridBoard):
         return 0.0
     board = state.board
+    opponent = state.opponent(player)
     cx, cy = board.cols / 2, board.rows / 2
-    max_dist = (cx ** 2 + cy ** 2) ** 0.5
-    score = 0.0
-    count = 0
+    max_dist = max((cx ** 2 + cy ** 2) ** 0.5, 1)
+    my_score = 0.0
+    opp_score = 0.0
+    my_count = 0
+    opp_count = 0
     for space, piece in state.all_pieces():
+        centrality = 1.0 - (((space.col - cx) ** 2 + (space.row - cy) ** 2) ** 0.5) / max_dist
         if piece.owner == player:
-            dist = ((space.col - cx) ** 2 + (space.row - cy) ** 2) ** 0.5
-            score += 1.0 - (dist / max_dist)
-            count += 1
-    return score / max(count, 1)
+            my_score += centrality
+            my_count += 1
+        elif piece.owner == opponent:
+            opp_score += centrality
+            opp_count += 1
+    my_avg = my_score / max(my_count, 1)
+    opp_avg = opp_score / max(opp_count, 1)
+    return my_avg - opp_avg
 
 
 def _edge_presence(state: GameState, player: str) -> float:
-    """Fraction of my pieces on board edges."""
+    """My edge pieces minus opponent's edge pieces."""
     if not isinstance(state.board, GridBoard):
         return 0.0
     board = state.board
-    edge_count = 0
-    total = 0
+    opponent = state.opponent(player)
+    my_edges = 0
+    opp_edges = 0
     for space, piece in state.all_pieces():
-        if piece.owner == player:
-            total += 1
-            if space.row == 0 or space.row == board.rows - 1 or \
-               space.col == 0 or space.col == board.cols - 1:
-                edge_count += 1
-    return edge_count / max(total, 1)
+        if space.row == 0 or space.row == board.rows - 1 or \
+           space.col == 0 or space.col == board.cols - 1:
+            if piece.owner == player:
+                my_edges += 1
+            elif piece.owner == opponent:
+                opp_edges += 1
+    total_edge = 2 * (board.rows + board.cols) - 4
+    return (my_edges - opp_edges) / max(total_edge, 1)
 
 
 def _corner_presence(state: GameState, player: str) -> float:
-    """How many corners I occupy."""
+    """My corners minus opponent's corners."""
     if not isinstance(state.board, GridBoard):
         return 0.0
     board = state.board
+    opponent = state.opponent(player)
     corners = [
         GridSpace(0, 0), GridSpace(0, board.cols - 1),
         GridSpace(board.rows - 1, 0), GridSpace(board.rows - 1, board.cols - 1),
     ]
-    count = sum(1 for c in corners
-                if state.get_piece(c) and state.get_piece(c).owner == player)
-    return count / 4.0
+    score = 0
+    for c in corners:
+        piece = state.get_piece(c)
+        if piece:
+            if piece.owner == player:
+                score += 1
+            elif piece.owner == opponent:
+                score -= 1
+    return score / 4.0
 
 
 def _spread(state: GameState, player: str) -> float:
@@ -313,3 +397,103 @@ def _make_state_var_feature(var_name: str):
             return float(val) / 10.0  # rough normalization
         return 0.0
     return _extract
+
+
+# === Card game feature implementations ===
+
+def _get_my_hand(state: GameState, player: str):
+    """Get the hand zone for a player."""
+    if not state.card_zones:
+        return None
+    suffix = "p1" if player == "player1" else "p2"
+    return state.get_zone(f"hand_{suffix}")
+
+
+def _get_opp_hand(state: GameState, player: str):
+    """Get the opponent's hand zone."""
+    if not state.card_zones:
+        return None
+    suffix = "p2" if player == "player1" else "p1"
+    return state.get_zone(f"hand_{suffix}")
+
+
+def _card_hand_size(state: GameState, player: str) -> float:
+    hand = _get_my_hand(state, player)
+    return (hand.size / 15.0) if hand else 0.0
+
+
+def _card_hand_size_advantage(state: GameState, player: str) -> float:
+    my_hand = _get_my_hand(state, player)
+    opp_hand = _get_opp_hand(state, player)
+    my_size = my_hand.size if my_hand else 0
+    opp_size = opp_hand.size if opp_hand else 0
+    return (my_size - opp_size) / 15.0
+
+
+def _card_rank_concentration(state: GameState, player: str) -> float:
+    """Highest count of any single rank in hand."""
+    hand = _get_my_hand(state, player)
+    if not hand or hand.is_empty:
+        return 0.0
+    from collections import Counter
+    ranks = Counter(c.rank for c in hand.cards)
+    return max(ranks.values()) / 4.0
+
+
+def _card_near_complete_sets(state: GameState, player: str) -> float:
+    """Count of ranks with 3+ cards (one away from completing a set)."""
+    hand = _get_my_hand(state, player)
+    if not hand or hand.is_empty:
+        return 0.0
+    from collections import Counter
+    ranks = Counter(c.rank for c in hand.cards)
+    return sum(1 for c in ranks.values() if c >= 3) / 4.0
+
+
+def _card_pairs_held(state: GameState, player: str) -> float:
+    """Count of ranks with 2+ cards (good targets to ask/trade for)."""
+    hand = _get_my_hand(state, player)
+    if not hand or hand.is_empty:
+        return 0.0
+    from collections import Counter
+    ranks = Counter(c.rank for c in hand.cards)
+    return sum(1 for c in ranks.values() if c >= 2) / 6.0
+
+
+def _card_singletons(state: GameState, player: str) -> float:
+    """Ranks with only 1 card — spread thin, hard to complete sets."""
+    hand = _get_my_hand(state, player)
+    if not hand or hand.is_empty:
+        return 0.0
+    from collections import Counter
+    ranks = Counter(c.rank for c in hand.cards)
+    singles = sum(1 for c in ranks.values() if c == 1)
+    return singles / 8.0  # normalize
+
+
+def _card_score_lead(state: GameState, player: str) -> float:
+    """Score zone advantage: my completed items minus opponent's."""
+    if not state.card_zones:
+        return 0.0
+    my_suffix = "p1" if player == "player1" else "p2"
+    opp_suffix = "p2" if player == "player1" else "p1"
+    # Look for sets/score zones
+    my_score = 0
+    opp_score = 0
+    for name, zone in state.card_zones.items():
+        if "sets" in name or "score" in name or "won" in name:
+            if my_suffix in name:
+                my_score = zone.size
+            elif opp_suffix in name:
+                opp_score = zone.size
+    return (my_score - opp_score) / 20.0
+
+
+def _card_draw_pile_remaining(state: GameState, player: str) -> float:
+    """Cards remaining in draw pile (game progress indicator)."""
+    if not state.card_zones:
+        return 0.0
+    for name, zone in state.card_zones.items():
+        if name in ("deck", "pond", "draw_pile", "stock"):
+            return zone.size / 52.0
+    return 0.0

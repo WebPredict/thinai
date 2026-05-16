@@ -255,6 +255,10 @@ def _apply_setup_action(action: dict, state: GameState, gdl: dict):
     elif action_type == "set":
         state.state_vars[action["var"]] = action["value"]
 
+    elif action_type == "checkers_setup":
+        from engine.gdl.checkers import setup_checkers
+        setup_checkers(state)
+
     elif action_type == "shuffle":
         # Shuffle a card zone
         if state.card_zones and action["zone"] in state.card_zones:

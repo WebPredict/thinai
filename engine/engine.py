@@ -271,9 +271,14 @@ class GameEngine:
             yield from range(parts[0], parts[1] + 1)
 
         elif select == "card_rank":
-            # Yield all 13 standard card ranks (used in Go Fish)
             from engine.gdl.cards import RANKS
             yield from RANKS
+
+        elif select == "checkers_moves":
+            from engine.gdl.checkers import get_all_moves
+            moves = get_all_moves(state)
+            for m in moves:
+                yield m.move_id
 
         else:
             # Unknown selector type

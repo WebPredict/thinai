@@ -43,6 +43,9 @@ const GAME_LABELS = {
   reversi: 'Reversi',
   nim: 'Nim',
   chutes_and_ladders: 'Chutes & Ladders',
+  checkers: 'Checkers',
+  go_fish: 'Go Fish',
+  war: 'War',
 }
 
 export default function TrainingDashboard({ games, initialGame, onBack }) {

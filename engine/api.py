@@ -84,6 +84,12 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
     legal_moves = []
     result = engine.check_terminal(state)
     if result is None:
+        # For checkers, include move details (from/to coordinates)
+        checkers_move_details = None
+        if engine.meta.get("name") == "Checkers":
+            from engine.gdl.checkers import get_all_moves
+            checkers_move_details = get_all_moves(state)
+
         for m in engine.legal_moves(state):
             move_dict = {"rule": m.rule_name, "params": {}}
             for k, v in m.params.items():
@@ -93,6 +99,16 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
                     move_dict["params"][k] = {"index": v.index}
                 else:
                     move_dict["params"][k] = v
+
+            # Add checkers move details
+            if checkers_move_details:
+                move_id = m.params.get("move_id", 0)
+                if isinstance(move_id, int) and move_id < len(checkers_move_details):
+                    cm = checkers_move_details[move_id]
+                    move_dict["from"] = {"row": cm.steps[0][0].row, "col": cm.steps[0][0].col}
+                    move_dict["to"] = {"row": cm.steps[-1][1].row, "col": cm.steps[-1][1].col}
+                    move_dict["is_jump"] = cm.is_jump
+
             legal_moves.append(move_dict)
 
     game_result = None
@@ -488,6 +504,7 @@ def start_training(request: Request, req: TrainingRequest):
             engine, evaluator, max_depth=depth,
             confidence_tracker=conf_tracker,
             self_assessor=self_assessor,
+            gdl=engine.gdl,
         )
 
         def on_progress(snapshot, results):

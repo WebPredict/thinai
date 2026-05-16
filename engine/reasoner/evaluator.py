@@ -37,8 +37,12 @@ class LearnableEval:
         if weights is not None:
             self.weights = list(weights)
         else:
-            # Small random initial weights to break symmetry
-            self.weights = [random.uniform(-0.05, 0.05) for _ in self.features]
+            # Use auto-priors if GDL available, otherwise small random
+            if gdl:
+                from engine.reasoner.auto_priors import generate_priors
+                self.weights = generate_priors(self.features, gdl)
+            else:
+                self.weights = [random.uniform(-0.05, 0.05) for _ in self.features]
 
         self.learning_rate = learning_rate
         self.generation = 0

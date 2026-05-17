@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThinAI — Research Notes</title>
+<style>
+  :root {
+    --bg: #0e0c0a;
+    --bg-raised: #16130f;
+    --ink: #e8dfd1;
+    --ink-dim: #b0a48e;
+    --ink-faint: #7a6e5c;
+    --accent: #d4a656;
+    --rule: #26221c;
+    --mono: 'Menlo', 'Consolas', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Georgia', serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem 5rem;
+  }
+  nav {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    margin-bottom: 3rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  nav a {
+    color: var(--ink-dim);
+    text-decoration: none;
+    margin-right: 1.5rem;
+  }
+  nav a:hover { color: var(--accent); }
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 300;
+    margin-bottom: 0.5rem;
+  }
+  h1 em { color: var(--accent); font-style: italic; }
+  .subtitle {
+    color: var(--ink-dim);
+    font-size: 1rem;
+    margin-bottom: 3rem;
+  }
+  h2 {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+  p { margin-bottom: 1rem; color: var(--ink); }
+  ul {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+  }
+  li {
+    margin-bottom: 0.4rem;
+    color: var(--ink);
+  }
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--bg-raised);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .status {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border-radius: 3px;
+    margin-left: 0.5rem;
+  }
+  .done { background: rgba(60,160,80,0.15); color: #5cba6e; border: 1px solid rgba(60,160,80,0.3); }
+  .partial { background: rgba(212,166,86,0.15); color: var(--accent); border: 1px solid rgba(212,166,86,0.3); }
+  .todo { background: rgba(180,60,40,0.1); color: #d05040; border: 1px solid rgba(200,80,60,0.25); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+  }
+  .updated {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    margin-bottom: 2rem;
+  }
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+  }
+  footer a { color: var(--ink-dim); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<nav>
+  <a href="/">Home</a>
+  <a href="/demo.html">Demo</a>
+  <a href="/notes.html" style="color: var(--accent);">Notes</a>
+</nav>
+
+<h1>Thin <em>ai</em> &mdash; Research Notes</h1>
+<p class="subtitle">A plain-language log of what's been built, what works, what doesn't, and what's next.</p>
+<div class="updated">Last updated: May 2026</div>
+
+<h2>What ThinAI Is</h2>
+<p>ThinAI is a system that learns to play arbitrary turn-based games from a natural-language description of the rules. It runs entirely on a single laptop — no cloud APIs, no pre-trained models, no GPU clusters. The system parses game rules into a structured format, generates evaluation features automatically, and learns through self-play.</p>
+
+<p>The core question: <em>can classical AI techniques (search, evaluation learning, structured representation) match or exceed what neural approaches do for game learning — at a fraction of the compute?</em></p>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong>Natural language parser</strong> — converts plain English game descriptions into a Game Description Language (GDL) JSON format</li>
+  <li><strong>Game engine</strong> — loads any GDL spec and handles legal moves, state transitions, and win/draw detection</li>
+  <li><strong>Auto-feature discovery</strong> — analyzes GDL structure to generate evaluation features without game-specific knowledge</li>
+  <li><strong>Auto-priors ("intuition")</strong> — derives initial weight biases from rule structure (e.g., "line-based wins suggest lines matter")</li>
+  <li><strong>Minimax search</strong> with alpha-beta pruning — looks ahead N moves using learned evaluation weights</li>
+  <li><strong>Sampling-based search</strong> — for card games with hidden information, samples possible opponent hands</li>
+  <li><strong>Adaptive effort allocation</strong> — adjusts search depth per position based on branching factor and node budget</li>
+  <li><strong>Self-play training</strong> — learns feature weights through win/loss reinforcement over ~40 games</li>
+</ul>
+
+<h2>Games Implemented</h2>
+<table>
+  <tr><th>Game</th><th>Type</th><th>Status</th><th>Notes</th></tr>
+  <tr><td>Tic-Tac-Toe</td><td>Grid</td><td><span class="status done">works</span></td><td>Plays perfectly (solved game)</td></tr>
+  <tr><td>Connect Four</td><td>Grid</td><td><span class="status done">works</span></td><td>Learns to block threats, control center</td></tr>
+  <tr><td>Reversi</td><td>Grid</td><td><span class="status done">works</span></td><td>Learns corner control, edge play</td></tr>
+  <tr><td>Mancala</td><td>Track</td><td><span class="status done">works</span></td><td>Learns capture and extra-turn strategies</td></tr>
+  <tr><td>Checkers</td><td>Grid</td><td><span class="status done">works</span></td><td>Full rules: jumps, kings, mandatory capture</td></tr>
+  <tr><td>Nim</td><td>Track</td><td><span class="status done">works</span></td><td>Mathematical game, limited learning signal</td></tr>
+  <tr><td>Chutes & Ladders</td><td>Track</td><td><span class="status done">works</span></td><td>Pure chance — no strategy to learn</td></tr>
+  <tr><td>War</td><td>Card</td><td><span class="status done">works</span></td><td>Pure chance — validates card infrastructure</td></tr>
+  <tr><td>Go Fish</td><td>Card</td><td><span class="status partial">noisy</span></td><td>High luck variance; training curves unstable</td></tr>
+  <tr><td>Crazy Eights</td><td>Card</td><td><span class="status done">works</span></td><td>Learns suit/rank matching</td></tr>
+  <tr><td>Blackjack</td><td>Card</td><td><span class="status done">works</span></td><td>Learns hit/stand thresholds</td></tr>
+  <tr><td>Uno</td><td>Card</td><td><span class="status done">works</span></td><td>Action cards (skip, reverse, draw) working</td></tr>
+  <tr><td>Gin Rummy</td><td>Card</td><td><span class="status partial">new</span></td><td>Meld detection, deadwood scoring, knock mechanics</td></tr>
+  <tr><td>Five-Card Draw</td><td>Card</td><td><span class="status partial">new</span></td><td>Hand ranking, discard/draw, showdown</td></tr>
+</table>
+
+<h2>What Works Well</h2>
+<ul>
+  <li><strong>Board games:</strong> The system consistently learns to play Connect Four, Reversi, Checkers, and Mancala at a reasonable level within 40 training games. It blocks threats, controls key positions, and improves over time.</li>
+  <li><strong>Novel game parsing:</strong> The end-to-end loop works — paste a plain English description like "5x5 grid, 4 in a row wins" and the system parses it, generates features, trains, and lets you play. No game-specific code needed.</li>
+  <li><strong>Auto-features:</strong> The system can generate reasonable evaluation features from the GDL structure alone, without hand-crafted knowledge. This is key for novel games.</li>
+  <li><strong>Speed:</strong> Training 40 games takes 10-60 seconds on a laptop. Playing a move takes under 1 second. No GPU needed.</li>
+  <li><strong>Card infrastructure:</strong> 7 card games work with hidden hands, melds, action cards, and multi-phase turns.</li>
+</ul>
+
+<h2>What Needs Work</h2>
+<ul>
+  <li><strong>Card game training:</strong> Card games with high luck variance (Go Fish especially) show noisy training curves. The learner and opponent share features, creating a ceiling around 50%. Better opponent selection or more training games may help.</li>
+  <li><strong>Belief-state reasoning:</strong> The sampling-based search is implemented but its impact on play quality is not yet measured. The AI doesn't yet track what the opponent's plays reveal about their hand.</li>
+  <li><strong>Opponent modeling:</strong> The opponent model infrastructure exists but isn't actively used during play. Integrating it with the sampling reasoner could improve card game performance.</li>
+  <li><strong>Novel card games:</strong> The parser can describe card games but the engine can't execute arbitrary card game rules from parsed descriptions yet. Only grid-based novel games work end-to-end.</li>
+  <li><strong>Search depth vs evaluation quality:</strong> The system currently relies on depth 4-5 search to play competently. A smarter evaluation function could achieve the same quality at depth 2-3, matching how humans actually think.</li>
+</ul>
+
+<h2>Phase Status</h2>
+<table>
+  <tr><th>Phase</th><th>Description</th><th>Status</th></tr>
+  <tr><td>0</td><td>Foundations — GDL design, stack, initial games</td><td><span class="status done">done</span></td></tr>
+  <tr><td>1</td><td>Core learning — minimax, features, self-play training</td><td><span class="status done">done</span></td></tr>
+  <tr><td>2</td><td>More games — Nim, Chutes & Ladders, benchmarks</td><td><span class="status done">done</span></td></tr>
+  <tr><td>3</td><td>Corrections — rule revision, error detection</td><td><span class="status done">done</span></td></tr>
+  <tr><td>4</td><td>Metacognition — adaptive search, confidence, self-assessment</td><td><span class="status done">done</span></td></tr>
+  <tr><td>5</td><td>Card games — hidden information, 7 card games, sampling search</td><td><span class="status partial">~80%</span></td></tr>
+  <tr><td>6</td><td>Harder games — chess-level complexity, stress testing</td><td><span class="status todo">not started</span></td></tr>
+  <tr><td>7</td><td>Visualization — game-specific UIs, demo infrastructure</td><td><span class="status partial">started</span></td></tr>
+  <tr><td>8</td><td>Writing — documentation, research notes, landing page</td><td><span class="status partial">started</span></td></tr>
+</table>
+
+<h2>Key Numbers</h2>
+<ul>
+  <li><strong>14</strong> playable games</li>
+  <li><strong>336</strong> automated tests (including 20 AI competency tests)</li>
+  <li><strong>~8,000</strong> lines of engine code</li>
+  <li><strong>40</strong> training games to reach competence (board games)</li>
+  <li><strong>< 1 second</strong> per AI move</li>
+  <li><strong>1,500 / 5,000</strong> max nodes per move (card / board games)</li>
+  <li><strong>0</strong> GPUs required</li>
+</ul>
+
+<h2>Game Categories and Coverage</h2>
+
+<p>Turn-based games fall into several structural categories. ThinAI's architecture can handle some natively and others with extensions. Here's where we are and where we're headed:</p>
+
+<table>
+  <tr><th>Category</th><th>Examples</th><th>Status</th><th>Coverage</th></tr>
+  <tr><td><strong>Placement</strong> — place pieces on a grid</td><td>Tic-Tac-Toe, Connect Four, Go, Gomoku</td><td><span class="status done">works</span></td><td>Handles any N-in-a-row or territory game</td></tr>
+  <tr><td><strong>Flipping/Flanking</strong> — capture by surrounding</td><td>Reversi, Othello</td><td><span class="status done">works</span></td><td>Fully supported</td></tr>
+  <tr><td><strong>Movement/Capture</strong> — move pieces, capture opponents</td><td>Checkers, Chess, Shogi</td><td><span class="status partial">partial</span></td><td>Checkers works; chess-level complexity is Phase 6</td></tr>
+  <tr><td><strong>Sowing/Mancala</strong> — distribute tokens around a track</td><td>Mancala, Oware, Kalah</td><td><span class="status done">works</span></td><td>Standard mancala variants supported</td></tr>
+  <tr><td><strong>Nim-like</strong> — remove items from piles</td><td>Nim, Wythoff's, Sprouts</td><td><span class="status done">works</span></td><td>Any take-away game</td></tr>
+  <tr><td><strong>Matching/Shedding</strong> — match cards, empty your hand</td><td>Crazy Eights, Uno, Rummy</td><td><span class="status done">works</span></td><td>Color/rank matching, action cards, melds</td></tr>
+  <tr><td><strong>Collecting</strong> — gather sets of cards</td><td>Go Fish, Rummy, Canasta</td><td><span class="status done">works</span></td><td>Set detection, asking, drawing</td></tr>
+  <tr><td><strong>Comparing</strong> — compare hands for best rank</td><td>Poker, Blackjack, War</td><td><span class="status done">works</span></td><td>Hand ranking, hit/stand, draw/discard</td></tr>
+  <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Spades, Bridge</td><td><span class="status todo">planned</span></td><td>Needs trick/round structure and trump suits</td></tr>
+  <tr><td><strong>Auction/Bidding</strong> — bid resources for advantage</td><td>Bridge (bidding), Power Grid</td><td><span class="status todo">planned</span></td><td>Needs economic modeling</td></tr>
+  <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes & Ladders, Backgammon, Parcheesi</td><td><span class="status partial">partial</span></td><td>Simple races work; backgammon needs dice + bearing off</td></tr>
+  <tr><td><strong>Territory</strong> — control areas of the board</td><td>Go, Hex, Blokus</td><td><span class="status todo">planned</span></td><td>Needs area-counting evaluation</td></tr>
+  <tr><td><strong>Word/Tile</strong> — form words or patterns with tiles</td><td>Scrabble, Bananagrams</td><td><span class="status todo">planned</span></td><td>Needs dictionary lookup, tile scoring</td></tr>
+  <tr><td><strong>Partnership</strong> — teams of players cooperate</td><td>Bridge, Tichu, Euchre</td><td><span class="status todo">planned</span></td><td>Needs multi-agent cooperation model</td></tr>
+</table>
+
+<h3>Estimated coverage of popular games</h3>
+<p>Of the ~50 most commonly played tabletop/card games worldwide, ThinAI's current architecture can represent roughly <strong>60-70%</strong> with its existing game types (grid placement, card matching, shedding, collecting, comparing, movement). Adding trick-taking and territory mechanics would push this to <strong>~80%</strong>. The remaining 20% require auction/bidding, real-time elements, or complex partnership dynamics that are outside the current scope.</p>
+
+<p>The natural language parser can already handle novel grid-based games end-to-end. Extending it to fully support card game descriptions from English is a near-term goal.</p>
+
+<h2>Technical Decisions</h2>
+<h3>Why not neural networks?</h3>
+<p>Neural approaches (AlphaZero, MuZero) need millions of training games and significant compute per game. They learn one game at a time and don't transfer. ThinAI's structured approach learns from rules, not just from playing, and transfers features across games via the GDL abstraction. The tradeoff: less raw playing strength, but vastly more sample-efficient and interpretable.</p>
+
+<h3>Why minimax instead of MCTS?</h3>
+<p>Minimax with alpha-beta pruning is simpler, more predictable, and works well with learned evaluation functions. MCTS would be better for very high branching factor games (Go), but none of our current games require it. The evaluation function is the learning target — depth is just how far ahead we look.</p>
+
+<h3>Why JSON for GDL?</h3>
+<p>Machine-parseable, human-readable, and web-friendly. The parser converts English to JSON, the engine loads JSON, the frontend displays JSON. One format throughout. The tradeoff: JSON can't express truly arbitrary game logic — complex conditions need built-in functions.</p>
+
+<footer>
+  <p>Built by <a href="https://www.highdesertapps.com/">Jeff Sanchez</a> with <a href="https://claude.ai">Claude</a> &middot; <a href="https://github.com/WebPredict/thinai">GitHub</a></p>
+</footer>
+
+</div>
+</body>
+</html>

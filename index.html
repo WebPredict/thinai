@@ -183,7 +183,7 @@
   }
 
   .tier-status.upcoming {
-    color: var(--ink-faint);
+    color: var(--ink-dim);
     background: transparent;
     border: 1px solid var(--rule-bright);
   }
@@ -254,7 +254,7 @@
     gap: 2.5rem;
     font-family: var(--mono);
     font-size: 0.85rem;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
     animation: fadeUp 1.2s ease 0.6s backwards;
   }
 
@@ -297,7 +297,7 @@
     font-size: 0.85rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
     margin-bottom: 1.5rem;
   }
 
@@ -395,7 +395,7 @@
 
   .contrast-col.them h3 em {
     font-style: italic;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
   }
 
   .contrast-col.us h3 em {
@@ -427,7 +427,7 @@
     content: '—';
     position: absolute;
     left: 0;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
     font-family: var(--mono);
   }
 
@@ -588,7 +588,7 @@
     border-bottom: 1px solid var(--rule);
     font-family: var(--mono);
     font-size: 0.8rem;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
@@ -622,7 +622,7 @@
   .tier-budget {
     font-family: var(--mono);
     font-size: 0.85rem;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
   }
 
   /* PRINCIPLES */
@@ -754,7 +754,7 @@
     justify-content: space-between;
     font-family: var(--mono);
     font-size: 0.8rem;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
     letter-spacing: 0.05em;
   }
 
@@ -801,11 +801,45 @@
     .foot-status { text-align: left; }
   }
 
+  /* Hamburger menu */
+  .hamburger {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+  }
+  .hamburger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--ink-dim);
+    margin: 5px 0;
+    transition: all 0.2s;
+  }
+  .hamburger.open span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
   /* Responsive - mobile */
   @media (max-width: 600px) {
     nav { padding: 0.875rem 1rem; }
     .logo { font-size: 1.2rem; }
-    .nav-links { gap: 0.875rem; font-size: 0.7rem; }
+    .hamburger { display: block; }
+    .nav-links {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      flex-direction: column;
+      background: rgba(14, 12, 10, 0.95);
+      backdrop-filter: blur(12px);
+      padding: 1rem 1.5rem;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .nav-links.open { display: flex; }
     .hero, .manifesto, .contrast, .research, .principles {
       padding-left: 1.125rem;
       padding-right: 1.125rem;
@@ -838,11 +872,15 @@
 
 <nav>
   <div class="logo"><span class="logo-mark"><svg viewBox="0 0 14 14" width="14" height="14"><circle cx="7" cy="7" r="6.5" fill="#d4a656"/><rect x="4" y="4" width="6" height="6" rx="0.5" fill="none" stroke="#0e0c0a" stroke-width="0.7" transform="rotate(45 7 7)"/><circle cx="7" cy="7" r="1.5" fill="#0e0c0a" opacity="0.3"/></svg></span>Thin<em>ai</em></div>
+  <button class="hamburger" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+    <span></span><span></span><span></span>
+  </button>
   <div class="nav-links">
     <a href="#approach">Approach</a>
     <a href="#questions">Research</a>
     <a href="#benchmark">Benchmark</a>
-    <a href="#notes">Notes</a>
+    <a href="#notes">Principles</a>
+    <a href="/notes.html">Notes</a>
     <a href="/demo.html" class="nav-demo-link">Try the Demo</a>
   </div>
 </nav>

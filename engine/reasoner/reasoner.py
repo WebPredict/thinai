@@ -39,6 +39,12 @@ class Reasoner:
         if not moves:
             return None
 
+        # For card games with hidden info, use sampling-based search
+        if state.card_zones and any(
+            z.visible_to == "owner" for z in state.card_zones.values()
+        ):
+            return self._choose_move_sampled(state, moves)
+
         # Determine search depth — adaptive or fixed
         if self.effort_allocator:
             decision = self.effort_allocator.recommend(state, self.engine, self.eval_fn)
@@ -90,6 +96,29 @@ class Reasoner:
             )
 
         return best_move
+
+    def _choose_move_sampled(self, state, moves):
+        """Choose a move for hidden-info games via belief sampling."""
+        from engine.reasoner.sampler import SamplingReasoner
+
+        sampler = SamplingReasoner(
+            self.engine,
+            eval_fn=self.eval_fn,
+            max_depth=1,
+            num_samples=20,
+        )
+        move = sampler.choose_move(state)
+        self.nodes_searched = sampler.nodes_searched
+        self.last_depth_used = sampler.last_depth_used
+        self.last_effort_reason = f"sampled {sampler.num_samples} worlds"
+
+        # Score confidence (simple: based on score spread)
+        if self.confidence_tracker and move:
+            self.last_confidence = self.confidence_tracker.score_move(
+                0, None, 1, len(moves)
+            )
+
+        return move
 
     def _negamax(self, state: GameState, depth: int, alpha: float, beta: float) -> float:
         """Negamax with alpha-beta pruning."""

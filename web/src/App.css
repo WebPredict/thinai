@@ -486,15 +486,102 @@ header em {
 }
 
 .teach-btn-learn {
-  margin-top: 0.5rem;
-  background: var(--bg-raised);
-  border: 2px solid var(--ink-faint);
-  color: var(--ink-dim);
-  opacity: 0.7;
-  cursor: not-allowed;
+  margin-top: 1.5rem;
+  width: 100%;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 0.9rem 2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Menlo', monospace;
+  letter-spacing: 0.5px;
+  transition: all 0.15s;
 }
 
-.teach-btn-learn:hover { opacity: 0.7; }
+.teach-btn-learn:hover {
+  background: #e0b560;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(212, 166, 86, 0.4);
+}
+
+/* Parse result banners */
+.parse-success-banner {
+  margin-top: 1.5rem;
+  padding: 1.2rem 1.5rem;
+  background: rgba(40, 120, 60, 0.15);
+  border: 1px solid rgba(60, 160, 80, 0.4);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: center;
+}
+
+.parse-success-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(60, 160, 80, 0.25);
+  color: #5cba6e;
+  font-size: 1.3rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.parse-success-text {
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.parse-success-text strong {
+  color: #5cba6e;
+}
+
+.parse-fail-banner {
+  margin-top: 1.5rem;
+  padding: 1.2rem 1.5rem;
+  background: rgba(180, 60, 40, 0.12);
+  border: 1px solid rgba(200, 80, 60, 0.35);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.parse-fail-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  background: rgba(200, 80, 60, 0.25);
+  color: #d05040;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.parse-fail-text {
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.parse-fail-text strong {
+  color: #d05040;
+}
 
 .parse-placeholder {
   font-family: 'Menlo', monospace;

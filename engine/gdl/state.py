@@ -286,6 +286,15 @@ def _apply_setup_action(action: dict, state: GameState, gdl: dict):
                 for _ in range(min(count, from_zone.size)):
                     card = from_zone.draw()
                     if card:
+                        # For Uno: if first discard is an action card, reshuffle
+                        action_ranks = {"Skip", "Reverse", "Draw2", "Wild", "WildDraw4"}
+                        attempts = 0
+                        while card.rank in action_ranks and attempts < 20:
+                            from_zone.add(card)
+                            import random
+                            random.shuffle(from_zone.cards)
+                            card = from_zone.draw()
+                            attempts += 1
                         to_zone.add(card)
 
 

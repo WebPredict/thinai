@@ -209,12 +209,14 @@ function App() {
   const [parseResult, setParseResult] = useState(null)
   const [parseError, setParseError] = useState(null)
   const [parsing, setParsing] = useState(false)
+  const [parsedGameId, setParsedGameId] = useState(null)
 
   const handleParse = async () => {
     if (!teachInput.trim()) return
     setParsing(true)
     setParseResult(null)
     setParseError(null)
+    setParsedGameId(null)
     try {
       const res = await fetch(`${API}/parse`, {
         method: 'POST',
@@ -224,6 +226,10 @@ function App() {
       const data = await res.json()
       if (data.gdl) {
         setParseResult(data.gdl)
+      }
+      if (data.game_id) {
+        setParsedGameId(data.game_id)
+        refreshGames() // Add new game to the list
       }
       if (data.error) {
         setParseError(data.error)
@@ -257,18 +263,21 @@ function App() {
 
   useEffect(() => { refreshLearned() }, [mode])
 
-  useEffect(() => {
+  const refreshGames = () => {
     fetch(`${API}/games`)
       .then(r => r.json())
       .then(d => {
-        const sorted = [...d.games].sort((a, b) => {
+        const all = [...d.games, ...(d.custom_games || [])]
+        const sorted = all.sort((a, b) => {
           const ai = GAME_ORDER.indexOf(a), bi = GAME_ORDER.indexOf(b)
           return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
         })
         setGames(sorted)
       })
       .catch(() => setGames(GAME_ORDER))
-  }, [])
+  }
+
+  useEffect(() => { refreshGames() }, [])
 
   const startGame = useCallback(async () => {
     setLoading(true)
@@ -494,9 +503,6 @@ function App() {
                       <summary>View full GDL</summary>
                       <pre>{JSON.stringify(parseResult, null, 2)}</pre>
                     </details>
-                    <button className="teach-btn teach-btn-learn" disabled>
-                      Learn This Game <span className="coming-soon-badge">Coming Soon</span>
-                    </button>
                   </div>
                 )}
                 {parseError && (
@@ -511,6 +517,29 @@ function App() {
                 )}
               </div>
             </div>
+            {parseResult && !parseError && (
+              <div className="parse-success-banner">
+                <div className="parse-success-icon">&#10003;</div>
+                <div className="parse-success-text">
+                  <strong>Ready to learn!</strong> ThinAI understood your game rules — {parseResult.rules?.length || 0} move type{parseResult.rules?.length !== 1 ? 's' : ''}, {parseResult.end_conditions?.length || 0} end condition{parseResult.end_conditions?.length !== 1 ? 's' : ''}, on a {parseResult.board?.type === 'grid' ? `${parseResult.board.grid.rows}×${parseResult.board.grid.cols} grid` : parseResult.board?.type || 'board'}.
+                </div>
+                <button className="teach-btn teach-btn-learn" onClick={() => {
+                  const gid = parsedGameId || parseResult.meta?.name?.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'custom_game'
+                  setSelectedGame(gid)
+                  setMode('train')
+                }}>
+                  Train ThinAI on This Game
+                </button>
+              </div>
+            )}
+            {parseError && (
+              <div className="parse-fail-banner">
+                <div className="parse-fail-icon">!</div>
+                <div className="parse-fail-text">
+                  <strong>Not enough to learn from.</strong> {parseError}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : (

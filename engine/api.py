@@ -49,6 +49,8 @@ app.add_middleware(
 # --- State ---
 
 EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), "games", "examples")
+CUSTOM_DIR = os.path.join(os.path.dirname(__file__), "games", "custom")
+os.makedirs(CUSTOM_DIR, exist_ok=True)
 _sessions: dict[str, dict] = {}
 _training_runs: dict[str, dict] = {}
 _memory_store = MemoryStore()
@@ -56,7 +58,10 @@ _training_counter = 0
 
 
 def _load_engine(game_name: str) -> GameEngine:
+    # Check examples first, then custom games
     path = os.path.join(EXAMPLES_DIR, f"{game_name}.json")
+    if not os.path.exists(path):
+        path = os.path.join(CUSTOM_DIR, f"{game_name}.json")
     if not os.path.exists(path):
         raise HTTPException(404, f"Game not found: {game_name}")
     return GameEngine.from_file(path)
@@ -183,9 +188,10 @@ class ParseRequest(BaseModel):
 @app.post("/api/parse")
 @limiter.limit("20/minute")
 def parse_rules(request: Request, req: ParseRequest):
-    """Parse plain English game description into GDL."""
+    """Parse plain English game description into GDL and register as playable game."""
     try:
         from engine.parser.natural import parse_natural
+        import re
         gdl = parse_natural(req.text)
 
         # Validate the generated GDL
@@ -202,7 +208,17 @@ def parse_rules(request: Request, req: ParseRequest):
         if errors:
             return {"gdl": gdl, "error": " ".join(errors), "warnings": errors}
 
-        return {"gdl": gdl, "error": None}
+        # Save to custom games directory so it becomes playable
+        game_name = gdl.get("meta", {}).get("name", "custom_game")
+        # Sanitize to filesystem-safe name
+        safe_name = re.sub(r'[^a-z0-9_]', '_', game_name.lower()).strip('_')
+        if not safe_name:
+            safe_name = "custom_game"
+        path = os.path.join(CUSTOM_DIR, f"{safe_name}.json")
+        with open(path, "w") as f:
+            json.dump(gdl, f, indent=2)
+
+        return {"gdl": gdl, "error": None, "game_id": safe_name}
     except Exception as e:
         return {"gdl": None, "error": f"Parser error: {str(e)}"}
 
@@ -246,7 +262,15 @@ def list_games(request: Request):
     for f in os.listdir(EXAMPLES_DIR):
         if f.endswith(".json"):
             games.append(f.replace(".json", ""))
-    return {"games": sorted(games)}
+    # Include custom/parsed games
+    custom = []
+    if os.path.exists(CUSTOM_DIR):
+        for f in os.listdir(CUSTOM_DIR):
+            if f.endswith(".json"):
+                name = f.replace(".json", "")
+                if name not in games:
+                    custom.append(name)
+    return {"games": sorted(games), "custom_games": sorted(custom)}
 
 
 @app.get("/api/game/{game_name}/gdl")

@@ -203,6 +203,9 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
     # Uno built-ins
     if name == "uno_must_draw":
         return _uno_must_draw(ctx.state)
+    if name == "uno_opponent_skipped":
+        action = ctx.state.state_vars.get("last_action", "")
+        return action in ("skip", "reverse", "draw2", "wild_draw4")
 
     # Blackjack built-ins
     if name == "blackjack_can_hit":
@@ -1373,6 +1376,9 @@ def _uno_play(state: GameState, card_id: int):
     if not state.card_zones:
         return
 
+    # Clear previous action (turn rule already read it)
+    state.state_vars["last_action"] = ""
+
     suffix = "p1" if state.current_player == "player1" else "p2"
     opp_suffix = "p2" if suffix == "p1" else "p1"
     hand = state.card_zones.get(f"hand_{suffix}")
@@ -1401,12 +1407,14 @@ def _uno_play(state: GameState, card_id: int):
     if card.rank == "Skip":
         state.state_vars["last_play"] = f"Skip {color_sym}"
         state.state_vars["last_action"] = "skip"
-        # Skip is handled by extra turn for current player (opponent skipped)
+
+    elif card.rank == "Reverse":
+        state.state_vars["last_play"] = f"Reverse {color_sym}"
+        state.state_vars["last_action"] = "reverse"  # In 2-player, acts like Skip
 
     elif card.rank == "Draw2":
         state.state_vars["last_play"] = f"Draw Two {color_sym}"
         state.state_vars["last_action"] = "draw2"
-        # Opponent draws 2
         if opp_hand and deck:
             for _ in range(min(2, deck.size)):
                 c = deck.draw()
@@ -1414,7 +1422,6 @@ def _uno_play(state: GameState, card_id: int):
                     opp_hand.add(c)
 
     elif card.rank == "Wild" or card.rank == "WildDraw4":
-        # Choose most common color in hand
         from collections import Counter
         if hand.cards:
             colors = Counter(c.suit for c in hand.cards if c.suit != "wild")
@@ -1431,9 +1438,10 @@ def _uno_play(state: GameState, card_id: int):
                 if c:
                     opp_hand.add(c)
             state.state_vars["last_play"] = "Wild Draw Four!"
+            state.state_vars["last_action"] = "wild_draw4"
         else:
             state.state_vars["last_play"] = f"Wild → {state.state_vars['active_color']}"
-        state.state_vars["last_action"] = "wild"
+            state.state_vars["last_action"] = "wild"
 
     else:
         state.state_vars["last_play"] = f"{card.rank} {color_sym}"
@@ -1445,6 +1453,8 @@ def _uno_draw(state: GameState):
     """Draw a card in Uno."""
     if not state.card_zones:
         return
+    # Clear previous action (turn rule already read it)
+    state.state_vars["last_action"] = ""
     suffix = "p1" if state.current_player == "player1" else "p2"
     hand = state.card_zones.get(f"hand_{suffix}")
     deck = state.card_zones.get("deck")

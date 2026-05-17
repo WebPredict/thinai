@@ -2,7 +2,8 @@
   "meta": {
     "name": "Uno",
     "players": 2,
-    "turn_order": "alternating",
+    "turn_order": "conditional",
+    "turn_rule": "if uno_opponent_skipped(): same_player else: next_player",
     "version": "1.0"
   },
 

@@ -239,7 +239,8 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
     if name == "gin_rummy_round_over":
         return ctx.state.state_vars.get("round_over", False)
     if name == "gin_rummy_score":
-        suffix = "p1" if args[0] == "player1" or (not args[0] or args[0] == "current_player") and ctx.state.current_player == "player1" else "p2"
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        suffix = "p1" if player == "player1" else "p2"
         hand = ctx.state.card_zones.get(f"hand_{suffix}")
         if not hand:
             return 0
@@ -261,14 +262,15 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
     if name == "poker_round_over":
         return ctx.state.state_vars.get("round_over", False)
     if name == "poker_hand_score":
-        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        suffix = "p1" if player == "player1" else "p2"
+        reveal = ctx.state.card_zones.get(f"reveal_{suffix}")
+        if reveal and reveal.cards:
+            return _poker_hand_score(reveal.cards)
         hand = ctx.state.card_zones.get(f"hand_{suffix}")
-        if not hand or not hand.cards:
-            reveal = ctx.state.card_zones.get(f"reveal_{suffix}")
-            if reveal and reveal.cards:
-                return _poker_hand_score(reveal.cards)
-            return 0
-        return _poker_hand_score(hand.cards)
+        if hand and hand.cards:
+            return _poker_hand_score(hand.cards)
+        return 0
 
     # Blackjack built-ins
     if name == "blackjack_can_hit":

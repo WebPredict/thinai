@@ -1802,10 +1802,50 @@ function GinRummyBoard({ state, onMove, disabled }) {
   // Sort hand by suit then rank for readability
   const RANK_ORDER = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
   const SUIT_ORDER = ['hearts','diamonds','clubs','spades']
+  const CARD_VALUES = { A:1, '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, J:10, Q:10, K:10 }
   const sortedHand = [...myHand].sort((a, b) => {
     const si = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit)
     return si !== 0 ? si : RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank)
   })
+
+  // Find melds and deadwood for display
+  const meldCardIds = new Set()
+  const findMelds = (cards) => {
+    const melds = []
+    // Sets: 3+ of same rank
+    const byRank = {}
+    cards.forEach(c => { (byRank[c.rank] = byRank[c.rank] || []).push(c) })
+    Object.values(byRank).forEach(group => { if (group.length >= 3) melds.push(group.slice(0, Math.min(group.length, 4))) })
+    // Runs: 3+ sequential same suit
+    const bySuit = {}
+    cards.forEach(c => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c) })
+    Object.values(bySuit).forEach(group => {
+      const sorted = [...group].sort((a, b) => RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank))
+      let run = [sorted[0]]
+      for (let i = 1; i < sorted.length; i++) {
+        if (RANK_ORDER.indexOf(sorted[i].rank) === RANK_ORDER.indexOf(run[run.length-1].rank) + 1) {
+          run.push(sorted[i])
+        } else {
+          if (run.length >= 3) melds.push([...run])
+          run = [sorted[i]]
+        }
+      }
+      if (run.length >= 3) melds.push([...run])
+    })
+    // Greedy non-overlapping (good enough for display)
+    const used = new Set()
+    const best = []
+    melds.sort((a, b) => b.length - a.length)
+    melds.forEach(m => {
+      if (m.every(c => !used.has(c.id))) {
+        best.push(m)
+        m.forEach(c => used.add(c.id))
+      }
+    })
+    return { melds: best, meldIds: used }
+  }
+  const { melds, meldIds } = findMelds(myHand)
+  const deadwood = myHand.filter(c => !meldIds.has(c.id)).reduce((s, c) => s + (CARD_VALUES[c.rank] || 0), 0)
 
   return (
     <div className="crazy8-board">
@@ -1836,14 +1876,23 @@ function GinRummyBoard({ state, onMove, disabled }) {
       </div>
 
       <div className="crazy8-my-hand">
-        <div className="crazy8-hand-label">Your hand ({myHand.length} cards)</div>
+        <div className="crazy8-hand-label">
+          Your hand ({myHand.length} cards) — Deadwood: {deadwood} {deadwood <= 10 && myHand.length >= 10 ? '(can knock!)' : ''} {deadwood === 0 && myHand.length >= 10 ? '🎉 GIN!' : ''}
+        </div>
+        {melds.length > 0 && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--ink-dim)', marginBottom: '0.3rem', fontFamily: 'Menlo, monospace' }}>
+            Melds: {melds.map((m, i) => m.map(c => `${c.rank}${SUIT_SYMBOLS[c.suit]}`).join(' ')).join(' | ')}
+          </div>
+        )}
         <div className="gofish-cards">
           {sortedHand.map((card) => {
             const canDiscard = discardableIds.has(card.id) && phase === 'discard'
+            const inMeld = meldIds.has(card.id)
             return (
               <button
                 key={card.id}
                 className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${!canDiscard ? 'disabled' : ''}`}
+                style={inMeld ? { borderColor: '#5cba6e', borderWidth: '2px', background: '#f0fff4' } : {}}
                 onClick={() => canDiscard && handleDiscard(card.id)}
                 disabled={disabled || !isMyTurn || !canDiscard}
               >
@@ -1853,15 +1902,26 @@ function GinRummyBoard({ state, onMove, disabled }) {
             )
           })}
         </div>
-        {canKnock && isMyTurn && phase === 'discard' && (
-          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-            {sortedHand.map(card => (
-              <button key={`knock-${card.id}`} className="crazy8-draw-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
-                onClick={() => handleKnock(card.id)}>
-                Knock (discard {card.rank}{SUIT_SYMBOLS[card.suit]})
-              </button>
-            ))}
-          </div>
+        {isMyTurn && phase === 'discard' && !roundOver && (
+          canKnock ? (
+            <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--accent)', marginBottom: '0.4rem', fontFamily: 'Menlo, monospace' }}>
+                Deadwood is {deadwood} — you can knock! Pick a card to discard:
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {sortedHand.filter(c => !meldIds.has(c.id)).slice(0, 4).map(card => (
+                  <button key={`knock-${card.id}`} className="crazy8-draw-btn"
+                    onClick={() => handleKnock(card.id)}>
+                    Knock (discard {card.rank}{SUIT_SYMBOLS[card.suit]})
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--ink-faint)', fontFamily: 'Menlo, monospace', textAlign: 'center' }}>
+              Knock requires deadwood ≤ 10 (currently {deadwood}). Discard a card to continue.
+            </div>
+          )
         )}
       </div>
     </div>

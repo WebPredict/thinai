@@ -135,7 +135,36 @@ class LearningRunner:
         - Opponent is fixed at a consistent level throughout
         """
         if opponent is None:
-            opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+            # For games where default_eval is meaningless (non-line games
+            # like checkers, card games), use features+priors opponent.
+            # For grid games with line-based wins, default_eval works well.
+            from engine.reasoner.features import get_features
+            use_feature_opponent = False
+            if self._gdl:
+                end_conds = str(self._gdl.get("end_conditions", []))
+                rules_str = str(self._gdl.get("rules", []))
+                has_line_win = "line_length" in end_conds
+                has_flank = "flank" in rules_str  # Reversi-style
+                # default_eval counts grid lines — good for line-win and flank games
+                # Everything else needs feature-based opponent
+                if not has_line_win and not has_flank:
+                    use_feature_opponent = True
+
+            if use_feature_opponent:
+                opp_features = get_features(self.evaluator.game_name)
+                if opp_features and self._gdl:
+                    opp_eval = LearnableEval(
+                        self.evaluator.game_name,
+                        features=opp_features,
+                        gdl=self._gdl,
+                    )
+                    opponent = ReasonerOpponent(
+                        self.engine, max_depth=self.max_depth, eval_fn=opp_eval,
+                    )
+                else:
+                    opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+            else:
+                opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
 
         # Effort allocator for training — cost-aware, adapts depth per position
         if not self.effort_allocator:

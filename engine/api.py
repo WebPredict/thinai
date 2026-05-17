@@ -216,6 +216,12 @@ def get_game_features(game_name: str):
     hand_crafted = get_features(engine.meta["name"])
     auto = generate_features(engine.gdl)
 
+    # Generate intuitive priors
+    from engine.reasoner.auto_priors import generate_priors, describe_priors
+    features = hand_crafted or auto
+    priors = generate_priors(features, engine.gdl)
+    prior_descriptions = describe_priors(features, priors, engine.gdl)
+
     return {
         "game_name": engine.meta["name"],
         "hand_crafted_features": [
@@ -225,6 +231,7 @@ def get_game_features(game_name: str):
         "auto_features": describe_features(auto, engine.gdl),
         "using": "hand-crafted" if hand_crafted else "auto-generated",
         "total_features": len(hand_crafted or auto),
+        "initial_intuitions": prior_descriptions,
     }
 
 

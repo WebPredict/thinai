@@ -229,6 +229,17 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
               ? 'These features were auto-generated from the game structure — no hand-crafted knowledge.'
               : `${derivedFeatures.total_features} features identified for ${derivedFeatures.game_name}.`}
           </div>
+          {derivedFeatures.initial_intuitions?.length > 0 && (
+            <div className="intuitions-panel">
+              <div className="intuitions-label">Starting intuitions (before any play):</div>
+              {derivedFeatures.initial_intuitions.map((p, i) => (
+                <div key={i} className="intuition-item">
+                  <span className="intuition-feature">{p.feature}</span>
+                  <span className="intuition-reason">{p.reason}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

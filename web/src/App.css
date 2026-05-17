@@ -996,6 +996,41 @@ header em {
   margin-top: 0.5rem;
 }
 
+.intuitions-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(212, 166, 86, 0.06);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.intuitions-label {
+  font-family: 'Menlo', monospace;
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.intuition-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+  align-items: baseline;
+}
+
+.intuition-feature {
+  font-family: 'Menlo', monospace;
+  color: var(--ink);
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.intuition-reason {
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
 /* Self-Assessment Panel */
 .self-assessment-panel {
   width: 100%;

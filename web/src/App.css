@@ -2220,6 +2220,43 @@ header em {
 /* (old move buttons removed — replaced with click-to-move) */
 
 
+/* === Blackjack === */
+
+.blackjack-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.blackjack-dealer, .blackjack-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.blackjack-label {
+  font-family: 'Menlo', monospace;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.blackjack-action {
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  color: var(--accent);
+  text-align: center;
+}
+
+.blackjack-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+
 /* === Crazy Eights === */
 
 .crazy8-board {
@@ -2319,6 +2356,42 @@ header em {
   border-color: var(--accent);
   box-shadow: 0 0 8px rgba(212, 166, 86, 0.3);
 }
+
+/* Uno color borders */
+.gofish-card.uno-red { border: 4px solid #d42020; color: #d42020; background: #fff0f0; }
+.gofish-card.uno-blue { border: 4px solid #1050cc; color: #1050cc; background: #f0f4ff; }
+.gofish-card.uno-green { border: 4px solid #18883a; color: #18883a; background: #f0fff4; }
+.gofish-card.uno-yellow { border: 4px solid #cc8800; color: #8a6a10; background: #fffcf0; }
+.gofish-card.uno-wild { border: 4px solid #333; background: linear-gradient(135deg, #d42020 25%, #1050cc 25%, #1050cc 50%, #18883a 50%, #18883a 75%, #cc8800 75%); color: white; }
+
+.gofish-card.uno-red .gofish-card-rank,
+.gofish-card.uno-blue .gofish-card-rank,
+.gofish-card.uno-green .gofish-card-rank,
+.gofish-card.uno-yellow .gofish-card-rank,
+.gofish-card.uno-wild .gofish-card-rank {
+  font-size: 0.8rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gofish-card.uno-red .gofish-card-suit,
+.gofish-card.uno-blue .gofish-card-suit,
+.gofish-card.uno-green .gofish-card-suit,
+.gofish-card.uno-yellow .gofish-card-suit,
+.gofish-card.uno-wild .gofish-card-suit {
+  display: none;
+}
+
+.crazy8-top-card.uno-red { border: 4px solid #d42020; color: #d42020; background: #fff0f0; }
+.crazy8-top-card.uno-blue { border: 4px solid #1050cc; color: #1050cc; background: #f0f4ff; }
+.crazy8-top-card.uno-green { border: 4px solid #18883a; color: #18883a; background: #f0fff4; }
+.crazy8-top-card.uno-yellow { border: 4px solid #cc8800; color: #8a6a10; background: #fffcf0; }
+.crazy8-top-card.uno-wild { border: 4px solid #333; background: linear-gradient(135deg, #d42020 25%, #1050cc 25%, #1050cc 50%, #18883a 50%, #18883a 75%, #cc8800 75%); color: white; }
 
 .crazy8-draw-btn {
   padding: 0.6rem 1.5rem;

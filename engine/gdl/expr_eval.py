@@ -200,6 +200,28 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             return checker(args[0])
         return True  # default to true if not available
 
+    # Uno built-ins
+    if name == "uno_must_draw":
+        return _uno_must_draw(ctx.state)
+
+    # Blackjack built-ins
+    if name == "blackjack_can_hit":
+        phase = ctx.state.state_vars.get("phase", "player")
+        if phase == "player":
+            return not ctx.state.state_vars.get("p1_standing") and not ctx.state.state_vars.get("p1_bust")
+        return False
+
+    if name == "blackjack_can_stand":
+        phase = ctx.state.state_vars.get("phase", "player")
+        return phase == "player" and not ctx.state.state_vars.get("p1_standing") and not ctx.state.state_vars.get("p1_bust")
+
+    if name == "blackjack_round_over":
+        return _blackjack_round_over(ctx.state)
+
+    if name == "blackjack_score":
+        player = args[0]
+        return _blackjack_score(ctx.state, player)
+
     # Crazy Eights built-ins
     if name == "crazy_eights_must_draw":
         return _crazy_eights_must_draw(ctx.state)
@@ -607,6 +629,23 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "checkers_execute":
         args = [evaluate(a, ctx) for a in node.args]
         _checkers_execute(ctx.state, int(args[0]))
+        return
+
+    if name == "uno_play":
+        args = [evaluate(a, ctx) for a in node.args]
+        _uno_play(ctx.state, int(args[0]))
+        return
+
+    if name == "uno_draw":
+        _uno_draw(ctx.state)
+        return
+
+    if name == "blackjack_hit":
+        _blackjack_hit(ctx.state)
+        return
+
+    if name == "blackjack_stand":
+        _blackjack_stand(ctx.state)
         return
 
     if name == "crazy_eights_play":
@@ -1208,3 +1247,210 @@ def _crazy_eights_draw(state: GameState):
         hand.add(card)
         state.state_vars["last_action"] = "draw"
         state.state_vars["last_play"] = "drew a card"
+
+
+# --- Blackjack built-ins ---
+
+def _blackjack_hand_value(cards) -> int:
+    """Calculate best hand value. Ace = 1 or 11."""
+    value = 0
+    aces = 0
+    for card in cards:
+        if card.rank in ('J', 'Q', 'K'):
+            value += 10
+        elif card.rank == 'A':
+            value += 11
+            aces += 1
+        else:
+            value += int(card.rank)
+    # Reduce aces from 11 to 1 if busting
+    while value > 21 and aces > 0:
+        value -= 10
+        aces -= 1
+    return value
+
+
+def _blackjack_hit(state: GameState):
+    """Player draws a card."""
+    if not state.card_zones:
+        return
+    deck = state.card_zones.get("deck")
+    hand = state.card_zones.get("hand_p1")
+    if not deck or not hand or deck.is_empty:
+        return
+    card = deck.draw()
+    if card:
+        hand.add(card)
+        value = _blackjack_hand_value(hand.cards)
+        state.state_vars["last_action"] = f"hit ({card.rank}{card.symbol}) — total {value}"
+        if value > 21:
+            state.state_vars["p1_bust"] = True
+            state.state_vars["last_action"] += " BUST!"
+            state.state_vars["phase"] = "done"
+            # Dealer reveals hole card
+            _blackjack_reveal_hole(state)
+
+
+def _blackjack_stand(state: GameState):
+    """Player stands — dealer plays."""
+    if not state.card_zones:
+        return
+    state.state_vars["p1_standing"] = True
+    state.state_vars["phase"] = "dealer"
+    state.state_vars["last_action"] = "stand"
+
+    # Reveal hole card
+    _blackjack_reveal_hole(state)
+
+    # Dealer plays by house rules: hit on 16 or below
+    dealer_hand = state.card_zones.get("hand_p2")
+    deck = state.card_zones.get("deck")
+    if dealer_hand and deck:
+        while _blackjack_hand_value(dealer_hand.cards) < 17 and not deck.is_empty:
+            card = deck.draw()
+            if card:
+                dealer_hand.add(card)
+        value = _blackjack_hand_value(dealer_hand.cards)
+        if value > 21:
+            state.state_vars["p2_bust"] = True
+    state.state_vars["phase"] = "done"
+
+
+def _blackjack_reveal_hole(state: GameState):
+    """Move hole card to dealer's visible hand."""
+    hole = state.card_zones.get("hole_card")
+    hand = state.card_zones.get("hand_p2")
+    if hole and hand and not hole.is_empty:
+        card = hole.draw()
+        if card:
+            hand.add(card)
+
+
+def _blackjack_round_over(state: GameState) -> bool:
+    """Check if the round is over."""
+    return state.state_vars.get("phase") == "done"
+
+
+def _blackjack_score(state: GameState, player: str) -> int:
+    """Score for comparison — higher is better, bust = 0."""
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    if not hand:
+        return 0
+    is_bust = state.state_vars.get(f"{suffix}_bust", False)
+    if is_bust:
+        return 0
+    return _blackjack_hand_value(hand.cards)
+
+
+# --- Uno built-ins ---
+
+def _uno_must_draw(state: GameState) -> bool:
+    """Check if current player has no playable cards."""
+    if not state.card_zones:
+        return False
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    deck = state.card_zones.get("deck")
+
+    if not hand or not discard or discard.is_empty:
+        return False
+    if deck and deck.is_empty:
+        return False
+
+    top = discard.peek()
+    active_color = state.state_vars.get("active_color", "") or top.suit
+
+    for card in hand.cards:
+        if card.suit == "wild" or card.suit == active_color or card.rank == top.rank:
+            return False
+    return True
+
+
+def _uno_play(state: GameState, card_id: int):
+    """Play an Uno card."""
+    if not state.card_zones:
+        return
+
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    opp_suffix = "p2" if suffix == "p1" else "p1"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    opp_hand = state.card_zones.get(f"hand_{opp_suffix}")
+    discard = state.card_zones.get("discard")
+    deck = state.card_zones.get("deck")
+
+    if not hand or not discard:
+        return
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    hand.remove(card)
+    discard.add(card)
+
+    # Handle action cards
+    from engine.gdl.cards import UNO_COLOR_SYMBOLS
+    color_sym = UNO_COLOR_SYMBOLS.get(card.suit, card.suit)
+
+    if card.rank == "Skip":
+        state.state_vars["last_play"] = f"Skip {color_sym}"
+        state.state_vars["last_action"] = "skip"
+        # Skip is handled by extra turn for current player (opponent skipped)
+
+    elif card.rank == "Draw2":
+        state.state_vars["last_play"] = f"Draw Two {color_sym}"
+        state.state_vars["last_action"] = "draw2"
+        # Opponent draws 2
+        if opp_hand and deck:
+            for _ in range(min(2, deck.size)):
+                c = deck.draw()
+                if c:
+                    opp_hand.add(c)
+
+    elif card.rank == "Wild" or card.rank == "WildDraw4":
+        # Choose most common color in hand
+        from collections import Counter
+        if hand.cards:
+            colors = Counter(c.suit for c in hand.cards if c.suit != "wild")
+            if colors:
+                state.state_vars["active_color"] = colors.most_common(1)[0][0]
+            else:
+                state.state_vars["active_color"] = "red"
+        else:
+            state.state_vars["active_color"] = "red"
+
+        if card.rank == "WildDraw4" and opp_hand and deck:
+            for _ in range(min(4, deck.size)):
+                c = deck.draw()
+                if c:
+                    opp_hand.add(c)
+            state.state_vars["last_play"] = "Wild Draw Four!"
+        else:
+            state.state_vars["last_play"] = f"Wild → {state.state_vars['active_color']}"
+        state.state_vars["last_action"] = "wild"
+
+    else:
+        state.state_vars["last_play"] = f"{card.rank} {color_sym}"
+        state.state_vars["last_action"] = "play"
+        state.state_vars["active_color"] = ""  # reset
+
+
+def _uno_draw(state: GameState):
+    """Draw a card in Uno."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    deck = state.card_zones.get("deck")
+    if hand and deck and not deck.is_empty:
+        card = deck.draw()
+        if card:
+            hand.add(card)
+    state.state_vars["last_action"] = "draw"
+    state.state_vars["last_play"] = "drew a card"

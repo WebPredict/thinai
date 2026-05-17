@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import TrainingDashboard from './TrainingDashboard'
 import './App.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'crazy_eights', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -17,6 +17,8 @@ const PLAYER_INDICATOR = {
   checkers: { label: 'Red', color: '#c83030' },
   go_fish: { label: 'Player 1', color: '#d4a656' },
   crazy_eights: { label: 'Player 1', color: '#d4a656' },
+  uno: { label: 'Player 1', color: '#d4a656' },
+  blackjack: { label: 'Player (vs Dealer)', color: '#d4a656' },
   war: { label: 'Player 1', color: '#d4a656' },
 }
 
@@ -29,6 +31,8 @@ const GAME_LABELS = {
   chutes_and_ladders: 'Chutes & Ladders',
   checkers: 'Checkers',
   crazy_eights: 'Crazy Eights',
+  uno: 'Uno',
+  blackjack: 'Blackjack',
   war: 'War',
   go_fish: 'Go Fish',
 }
@@ -115,6 +119,32 @@ const GAME_RULES = {
       'If the deck runs out, the player with fewer cards wins.',
     ],
   },
+  uno: {
+    title: 'How to play Uno',
+    intro: 'Match the top card by color or number. First to empty your hand wins!',
+    rules: [
+      'Each player starts with 7 cards. One card is flipped to start the discard pile.',
+      'Play a card matching the top of the discard by color or number.',
+      'Skip cards make the opponent lose their turn.',
+      'Draw Two cards force the opponent to draw 2 cards.',
+      'Wild cards match anything \u2014 choose the active color.',
+      'Wild Draw Four: wild + opponent draws 4 cards.',
+      'If you can\'t play, draw one card from the deck.',
+      'First player to play all their cards wins.',
+    ],
+  },
+  blackjack: {
+    title: 'How to play Blackjack',
+    intro: 'Get as close to 21 as possible without going over. Beat the dealer!',
+    rules: [
+      'You get 2 cards face up. The dealer gets 1 up and 1 face down.',
+      'Number cards = face value. Face cards (J, Q, K) = 10. Ace = 1 or 11.',
+      'Choose "Hit" to draw another card, or "Stand" to keep your total.',
+      'If your total exceeds 21, you bust and lose immediately.',
+      'After you stand, the dealer reveals their hole card and hits until 17+.',
+      'Closest to 21 without busting wins.',
+    ],
+  },
   go_fish: {
     title: 'How to play Go Fish',
     intro: 'Collect sets of 4 matching cards by asking your opponent for ranks you hold.',
@@ -171,7 +201,8 @@ function App() {
   const [learnedGames, setLearnedGames] = useState({})
   const [aiLastMove, setAiLastMove] = useState(null) // highlight AI's last move
   const [aiThinking, setAiThinking] = useState(null) // confidence + effort info from last AI move
-  const [showRulesModal, setShowRulesModal] = useState(true) // show rules on game start
+  const [showRulesModal, setShowRulesModal] = useState(false)
+  const rulesShownRef = useRef({})
   const [showGdlModal, setShowGdlModal] = useState(false)
   const [gdlData, setGdlData] = useState(null)
   const [teachInput, setTeachInput] = useState('')
@@ -254,7 +285,11 @@ function App() {
       const data = await res.json()
       setSessionId(data.session_id)
       setGameState(data.state)
-      setShowRulesModal(true)
+      // Show rules only the first time for each game
+      if (!rulesShownRef.current[selectedGame]) {
+        setShowRulesModal(true)
+        rulesShownRef.current[selectedGame] = true
+      }
     } catch (e) {
       console.error('Failed to start game:', e)
     }
@@ -524,6 +559,18 @@ function App() {
             />
           ) : selectedGame === 'checkers' ? (
             <CheckersBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'uno' ? (
+            <CrazyEightsBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'blackjack' ? (
+            <BlackjackBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
@@ -1096,6 +1143,79 @@ function CheckersBoard({ state, onMove, disabled }) {
   )
 }
 
+function BlackjackBoard({ state, onMove, disabled }) {
+  if (!state) return null
+
+  const zones = state.card_zones || {}
+  const vars = state.state_vars || {}
+  const myHand = zones.hand_p1?.cards || []
+  const dealerHand = zones.hand_p2?.cards || []
+  const holeSize = zones.hole_card?.size || 0
+  const lastAction = vars.last_action || ''
+  const phase = vars.phase || 'player'
+  const p1Bust = vars.p1_bust
+  const p2Bust = vars.p2_bust
+
+  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
+
+  const handValue = (cards) => {
+    let val = 0, aces = 0
+    for (const c of cards) {
+      if (['J','Q','K'].includes(c.rank)) val += 10
+      else if (c.rank === 'A') { val += 11; aces++ }
+      else val += parseInt(c.rank)
+    }
+    while (val > 21 && aces > 0) { val -= 10; aces-- }
+    return val
+  }
+
+  const handleHit = () => {
+    const move = state.legal_moves?.find(m => m.rule === 'hit')
+    if (move) onMove(move.rule, move.params)
+  }
+
+  const handleStand = () => {
+    const move = state.legal_moves?.find(m => m.rule === 'stand')
+    if (move) onMove(move.rule, move.params)
+  }
+
+  const renderCard = (card) => (
+    <div key={card.id} className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}
+         style={{ cursor: 'default' }}>
+      <span className="gofish-card-rank">{card.rank}</span>
+      <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
+    </div>
+  )
+
+  return (
+    <div className="blackjack-board">
+      <div className="blackjack-dealer">
+        <div className="blackjack-label">Dealer {phase === 'done' ? `(${handValue(dealerHand)})` : ''} {p2Bust === 'True' || p2Bust === true ? 'BUST!' : ''}</div>
+        <div className="gofish-cards">
+          {dealerHand.map(renderCard)}
+          {holeSize > 0 && <div className="gofish-card-back" style={{ width: 52, height: 74 }} />}
+        </div>
+      </div>
+
+      {lastAction && <div className="blackjack-action">{lastAction}</div>}
+
+      <div className="blackjack-player">
+        <div className="blackjack-label">Your hand ({handValue(myHand)}) {p1Bust === 'True' || p1Bust === true ? 'BUST!' : ''}</div>
+        <div className="gofish-cards">
+          {myHand.map(renderCard)}
+        </div>
+      </div>
+
+      {phase === 'player' && !disabled && (
+        <div className="blackjack-buttons">
+          <button className="action-btn action-btn-primary" onClick={handleHit}>Hit</button>
+          <button className="action-btn" onClick={handleStand}>Stand</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CrazyEightsBoard({ state, onMove, disabled }) {
   if (!state) return null
 
@@ -1112,6 +1232,13 @@ function CrazyEightsBoard({ state, onMove, disabled }) {
   const isMyTurn = state.current_player === 'player1'
 
   const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
+
+  // Abbreviate long Uno action card names to fit card bounds
+  const unoLabel = (rank) => {
+    const labels = { 'Reverse': 'REV', 'Skip': 'SKIP', 'Draw2': '+2', 'WildDraw4': '+4', 'Wild': 'W' }
+    return labels[rank] || rank
+  }
+  const isUnoGame = ['red','blue','green','yellow','wild'].includes(myHand[0]?.suit)
 
   // Find playable card IDs from legal moves
   const playableIds = new Set()
@@ -1144,8 +1271,12 @@ function CrazyEightsBoard({ state, onMove, disabled }) {
           <span className="crazy8-deck-count">{deckSize}</span>
         </div>
         {topCard && (
-          <div className={`crazy8-top-card ${topCard.suit === 'hearts' || topCard.suit === 'diamonds' ? 'red' : 'black'}`}>
-            <span className="crazy8-card-rank">{topCard.rank}</span>
+          <div className={`crazy8-top-card ${
+            ['red','blue','green','yellow','wild'].includes(topCard.suit)
+              ? `uno-${topCard.suit}`
+              : topCard.suit === 'hearts' || topCard.suit === 'diamonds' ? 'red' : 'black'
+          }`}>
+            <span className="crazy8-card-rank">{isUnoGame ? unoLabel(topCard.rank) : topCard.rank}</span>
             <span className="crazy8-card-suit">{SUIT_SYMBOLS[topCard.suit]}</span>
           </div>
         )}
@@ -1168,11 +1299,15 @@ function CrazyEightsBoard({ state, onMove, disabled }) {
             return (
               <button
                 key={card.id}
-                className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${!playable ? 'disabled' : ''} ${card.rank === '8' ? 'wild' : ''}`}
+                className={`gofish-card ${
+                  ['red','blue','green','yellow','wild'].includes(card.suit)
+                    ? `uno-${card.suit}`
+                    : card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'
+                } ${!playable ? 'disabled' : ''} ${card.rank === '8' || card.suit === 'wild' ? 'wild' : ''}`}
                 onClick={() => playable && handlePlay(card.id)}
                 disabled={disabled || !isMyTurn || !playable}
               >
-                <span className="gofish-card-rank">{card.rank}</span>
+                <span className="gofish-card-rank">{isUnoGame ? unoLabel(card.rank) : card.rank}</span>
                 <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
               </button>
             )

@@ -35,12 +35,13 @@ def parse_natural(text: str) -> dict:
     # Extract game components
     players = _extract_players(text_lower)
     board = _extract_board(text_lower)
+    is_card = board.get("type") == "card_zones"
     pieces = _extract_pieces(text_lower, board)
     rules = _extract_rules(text_lower, board, pieces)
     end_conditions = _extract_end_conditions(text_lower, board, rules)
     setup = _extract_setup(text_lower, board, pieces)
     turn_order = _extract_turn_order(text_lower)
-    state_vars = []
+    state_vars = _extract_state_vars(text_lower, board)
 
     # Infer game name from first few words or board type
     name = _infer_name(text, board)
@@ -54,7 +55,10 @@ def parse_natural(text: str) -> dict:
     else:
         understood.append("2 players (assumed)")
 
-    if board.get("type") == "grid" and any(w in text_lower for w in ['grid', 'board', 'x']):
+    if board.get("type") == "card_zones":
+        zone_names = [z["name"] for z in board.get("zones", [])]
+        understood.append(f"card game with zones: {', '.join(zone_names)}")
+    elif board.get("type") == "grid" and any(w in text_lower for w in ['grid', 'board', 'x']):
         g = board.get("grid", {})
         understood.append(f"{g.get('rows')}x{g.get('cols')} grid")
     elif board.get("type") == "track" and any(w in text_lower for w in ['pile', 'track']):
@@ -80,8 +84,7 @@ def parse_natural(text: str) -> dict:
     unknown_concepts = []
     concept_keywords = {
         'buy': 'buying/purchasing', 'sell': 'selling', 'money': 'currency/money',
-        'rent': 'rent/payment', 'card': 'cards (coming in Phase 5)',
-        'hand': 'card hands (coming in Phase 5)', 'deal': 'dealing cards (coming in Phase 5)',
+        'rent': 'rent/payment',
         'dice': 'dice rolling', 'bet': 'betting', 'bid': 'bidding',
         'trade': 'trading', 'build': 'building', 'upgrade': 'upgrading',
         'move from': 'moving pieces between spaces', 'capture': 'capturing pieces',
@@ -106,10 +109,16 @@ def parse_natural(text: str) -> dict:
         "setup": setup,
         "rules": rules,
         "end_conditions": end_conditions,
-        "_parse_info": {
-            "understood": understood,
-            "not_understood": not_understood,
-        },
+    }
+
+    # Add card-specific fields
+    if is_card:
+        deck_zone = "pond" if any(z["name"] == "pond" for z in board.get("zones", [])) else "deck"
+        gdl["cards"] = {"deck": "standard52", "deck_zone": deck_zone}
+
+    gdl["_parse_info"] = {
+        "understood": understood,
+        "not_understood": not_understood,
     }
 
     return gdl
@@ -134,8 +143,21 @@ def _extract_players(text: str) -> int:
     return 2  # default
 
 
+def _is_card_game(text: str) -> bool:
+    """Detect if the description is about a card game."""
+    card_signals = ['card', 'cards', 'deal', 'hand', 'deck', 'suit', 'rank',
+                    'hearts', 'spades', 'clubs', 'diamonds', 'draw pile',
+                    'discard', 'shuffle', 'ace', 'king', 'queen', 'jack']
+    count = sum(1 for s in card_signals if s in text)
+    return count >= 2  # need at least 2 card-related words
+
+
 def _extract_board(text: str) -> dict:
     """Extract board structure from text."""
+    # Card game detection — check before grid/track
+    if _is_card_game(text):
+        return _extract_card_board(text)
+
     # NxM grid
     grid_match = re.search(r'(\d+)\s*[x×]\s*(\d+)\s*(?:grid|board)', text)
     if grid_match:
@@ -200,8 +222,44 @@ def _extract_board(text: str) -> dict:
     }
 
 
+def _extract_card_board(text: str) -> dict:
+    """Extract card zone board structure from a card game description."""
+    zones = [
+        {"name": "deck", "visible_to": "none", "ordered": True},
+        {"name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": False},
+        {"name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": False},
+    ]
+
+    # Detect discard pile
+    if any(w in text for w in ['discard', 'play a card', 'play card', 'match', 'pile']):
+        zones.append({"name": "discard", "visible_to": "all", "ordered": True})
+
+    # Detect draw pile / pond
+    if any(w in text for w in ['draw pile', 'pond', 'go fish', 'draw from']):
+        # Rename deck to pond for fishing games
+        zones[0]["name"] = "pond"
+
+    # Detect set/score zones (for collecting games like Go Fish)
+    if any(w in text for w in ['set', 'sets', 'collect', 'book', 'books', 'group']):
+        zones.append({"name": "sets_p1", "owner": "player1", "visible_to": "all"})
+        zones.append({"name": "sets_p2", "owner": "player2", "visible_to": "all"})
+
+    # Detect table/play area
+    if any(w in text for w in ['table', 'flip', 'face up', 'face-up']):
+        zones.append({"name": "table", "visible_to": "all"})
+
+    return {
+        "type": "card_zones",
+        "zones": zones,
+    }
+
+
 def _extract_pieces(text: str, board: dict) -> list[dict]:
     """Extract piece definitions."""
+    # Card games don't use pieces — cards are in zones
+    if board.get("type") == "card_zones":
+        return []
+
     pieces = []
 
     # "placing stones/marks/discs/pieces"
@@ -249,6 +307,10 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
     """Extract move rules from text."""
     rules = []
     piece_name = pieces[0]["name"] if pieces else "mark"
+
+    # Card game rules
+    if board.get("type") == "card_zones":
+        return _extract_card_rules(text, board)
 
     # Gravity/column drop (Connect Four style)
     if ('drop' in text or 'falls' in text or 'column' in text) and board.get("type") == "grid":
@@ -332,6 +394,10 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
     """Extract win/draw conditions."""
     conditions = []
 
+    # Card game end conditions
+    if board.get("type") == "card_zones":
+        return _extract_card_end_conditions(text, board)
+
     # "N in a row" / "N in a line"
     row_match = re.search(r'(\d+)\s+in\s+a\s+(?:row|line|straight)', text)
     if row_match:
@@ -386,6 +452,38 @@ def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
     """Extract initial setup."""
     setup = []
 
+    # Card game setup
+    if board.get("type") == "card_zones":
+        deck_zone = "pond" if any(z["name"] == "pond" for z in board.get("zones", [])) else "deck"
+
+        # Shuffle deck
+        setup.append({"action": "shuffle", "zone": deck_zone})
+
+        # Deal cards — look for "deal N cards"
+        deal_match = re.search(r'deal\w*\s+(\d+)\s+cards?', text)
+        if not deal_match:
+            deal_match = re.search(r'(\d+)\s+cards?\s+(?:each|per|to each)', text)
+        if not deal_match:
+            # Common defaults
+            if 'go fish' in text:
+                deal_count = 7
+            elif 'crazy eight' in text or 'uno' in text:
+                deal_count = 7
+            else:
+                deal_count = 5  # reasonable default
+        else:
+            deal_count = int(deal_match.group(1))
+
+        setup.append({"action": "deal", "from": deck_zone, "to": "hand_p1", "count": deal_count})
+        setup.append({"action": "deal", "from": deck_zone, "to": "hand_p2", "count": deal_count})
+
+        # If there's a discard pile, flip one card to start it
+        has_discard = any(z["name"] == "discard" for z in board.get("zones", []))
+        if has_discard and any(w in text for w in ['flip', 'turn over', 'face up', 'start', 'discard']):
+            setup.append({"action": "reveal", "from": deck_zone, "to": "discard", "count": 1})
+
+        return setup
+
     # Nim-style: fill piles with specific counts
     pile_sizes = board.get("_pile_sizes", [])
     if pile_sizes and board.get("type") == "track":
@@ -397,9 +495,6 @@ def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
                 "at": f"index == {i}",
                 "count": count,
             })
-
-    # General: "starts empty" or no setup mentioned for grids
-    # (default for grid games is empty board, no setup needed)
 
     return setup
 
@@ -436,7 +531,163 @@ def _infer_name(text: str, board: dict) -> str:
             return f"{n.group(1)}-in-a-Row ({grid.group(1)}x{grid.group(2)})"
         elif n:
             return f"{n.group(1)}-in-a-Row"
-    if 'flank' in text_lower or 'flip' in text_lower:
+    if 'flank' in text_lower or ('flip' in text_lower and 'card' not in text_lower):
         return "Custom Reversi"
 
+    # Card game names
+    if _is_card_game(text_lower):
+        if 'go fish' in text_lower:
+            return "Custom Go Fish"
+        if 'crazy eight' in text_lower:
+            return "Custom Crazy Eights"
+        if 'war' in text_lower:
+            return "Custom War"
+        if 'ask' in text_lower and ('rank' in text_lower or 'card' in text_lower):
+            return "Custom Fishing Game"
+        if 'set' in text_lower or 'collect' in text_lower:
+            return "Custom Collection Game"
+        if 'match' in text_lower and ('suit' in text_lower or 'rank' in text_lower):
+            return "Custom Card Match"
+        if 'wild' in text_lower or 'eight' in text_lower:
+            return "Custom Crazy Eights"
+        return "Custom Card Game"
+
     return "Custom Game"
+
+
+def _extract_card_end_conditions(text: str, board: dict) -> list[dict]:
+    """Extract end conditions for card games."""
+    conditions = []
+
+    # "empty hand wins" / "first to play all cards"
+    if any(w in text for w in ['empty hand', 'no cards left', 'all cards', 'first to play all',
+                                'gets rid of all']):
+        conditions.append({
+            "type": "win",
+            "player": "current_player",
+            "condition": "crazy_eights_hand_empty(current_player)",
+        })
+
+    # "most sets wins" / "most books"
+    if any(w in text for w in ['most sets', 'most books', 'most groups', 'most collected']):
+        conditions.append({
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "go_fish_game_over()",
+            "score": "count_sets(current_player)",
+        })
+
+    # Go Fish style: all sets complete or can't continue
+    if 'go fish' in text or ('set' in text and 'collect' in text):
+        if not conditions:
+            conditions.append({
+                "type": "win",
+                "player": "player_by_score",
+                "condition": "go_fish_game_over()",
+                "score": "count_sets(current_player)",
+            })
+
+    # War style: opponent has no cards
+    if any(w in text for w in ['all cards', 'all 52', 'no cards']):
+        if 'war' in text or 'flip' in text or 'higher' in text:
+            conditions.append({
+                "type": "win", "player": "player1",
+                "condition": 'zone_empty("hand_p2")',
+            })
+            conditions.append({
+                "type": "win", "player": "player2",
+                "condition": 'zone_empty("hand_p1")',
+            })
+
+    # Fallback: deck runs out, fewer cards wins
+    if not conditions:
+        conditions.append({
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "crazy_eights_deck_empty()",
+            "score": "crazy_eights_score(current_player)",
+        })
+
+    return conditions
+
+
+def _extract_card_rules(text: str, board: dict) -> list[dict]:
+    """Extract rules for a card game from natural language."""
+    rules = []
+
+    # Go Fish style: ask for a rank
+    if any(w in text for w in ['ask', 'do you have', 'go fish', 'request']):
+        rules.append({
+            "name": "ask_for_rank",
+            "action": "ask",
+            "params": [{"name": "rank", "select": "card_rank"}],
+            "conditions": ["has_rank_in_hand(current_player, rank)"],
+            "effects": ["go_fish_ask(rank)"],
+        })
+        return rules
+
+    # Crazy Eights / Uno style: match suit or rank
+    if any(w in text for w in ['match', 'same suit', 'same rank', 'play a card',
+                                'matching', 'crazy eight', 'uno']):
+        rules.append({
+            "name": "play_card",
+            "action": "play",
+            "params": [{"name": "card_id", "select": "crazy_eights_playable"}],
+            "conditions": [],
+            "effects": ["crazy_eights_play(card_id)"],
+        })
+        rules.append({
+            "name": "draw_card",
+            "action": "draw",
+            "params": [],
+            "conditions": ["crazy_eights_must_draw()"],
+            "effects": ["crazy_eights_draw()"],
+        })
+        return rules
+
+    # War style: both flip cards
+    if any(w in text for w in ['flip', 'war', 'higher card wins', 'compare cards']):
+        rules.append({
+            "name": "battle",
+            "action": "chance",
+            "chance": True,
+            "params": [],
+            "conditions": [],
+            "effects": ["war_battle()"],
+        })
+        return rules
+
+    # Generic: draw a card (fallback for unrecognized card games)
+    rules.append({
+        "name": "draw_card",
+        "action": "draw",
+        "params": [],
+        "conditions": [],
+        "effects": ["card_move(deck, hand_p1, 1)"],
+    })
+    return rules
+
+
+def _extract_state_vars(text: str, board: dict) -> list[dict]:
+    """Extract state variables needed for the game."""
+    state_vars = []
+
+    if board.get("type") == "card_zones":
+        # Go Fish needs extra_turn tracking
+        if any(w in text for w in ['ask', 'go fish', 'extra turn', 'another turn']):
+            state_vars.extend([
+                {"name": "last_ask_rank", "type": "string", "scope": "global", "initial": ""},
+                {"name": "last_ask_player", "type": "string", "scope": "global", "initial": ""},
+                {"name": "last_result", "type": "string", "scope": "global", "initial": ""},
+                {"name": "extra_turn", "type": "bool", "scope": "global", "initial": False},
+            ])
+
+        # Crazy Eights needs active suit tracking
+        if any(w in text for w in ['match', 'wild', 'crazy eight', 'suit']):
+            state_vars.extend([
+                {"name": "active_suit", "type": "string", "scope": "global", "initial": ""},
+                {"name": "last_play", "type": "string", "scope": "global", "initial": ""},
+                {"name": "last_action", "type": "string", "scope": "global", "initial": ""},
+            ])
+
+    return state_vars

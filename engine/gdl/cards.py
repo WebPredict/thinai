@@ -170,6 +170,44 @@ def create_standard_deck(deck_type: str = "standard52") -> list[Card]:
         card_id += 1
         cards.append(Card(suit="joker", rank="Joker", id=card_id))
 
+    if deck_type == "uno":
+        return _create_uno_deck()
+
+    return cards
+
+
+UNO_COLORS = ["red", "yellow", "green", "blue"]
+UNO_COLOR_SYMBOLS = {"red": "\u2764", "yellow": "\u2B50", "green": "\u2618", "blue": "\u2666", "wild": "\u2605"}
+
+
+def _create_uno_deck() -> list:
+    """Create a 108-card Uno deck."""
+    cards = []
+    card_id = 0
+
+    for color in UNO_COLORS:
+        # One 0 per color
+        cards.append(Card(suit=color, rank="0", id=card_id))
+        card_id += 1
+        # Two each of 1-9
+        for num in range(1, 10):
+            for _ in range(2):
+                cards.append(Card(suit=color, rank=str(num), id=card_id))
+                card_id += 1
+        # Two each of Skip, Reverse, Draw Two
+        for action in ["Skip", "Reverse", "Draw2"]:
+            for _ in range(2):
+                cards.append(Card(suit=color, rank=action, id=card_id))
+                card_id += 1
+
+    # Four Wild and four Wild Draw Four
+    for _ in range(4):
+        cards.append(Card(suit="wild", rank="Wild", id=card_id))
+        card_id += 1
+    for _ in range(4):
+        cards.append(Card(suit="wild", rank="WildDraw4", id=card_id))
+        card_id += 1
+
     return cards
 
 

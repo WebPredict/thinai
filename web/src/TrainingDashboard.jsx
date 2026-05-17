@@ -44,6 +44,7 @@ const GAME_LABELS = {
   nim: 'Nim',
   chutes_and_ladders: 'Chutes & Ladders',
   checkers: 'Checkers',
+  crazy_eights: 'Crazy Eights',
   go_fish: 'Go Fish',
   war: 'War',
 }

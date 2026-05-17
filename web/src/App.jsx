@@ -5,7 +5,20 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'crazy_eights', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+
+const PLAYER_INDICATOR = {
+  tictactoe: { label: 'X', color: '#d4a656' },
+  connect_four: { label: 'Red', color: '#cc3333' },
+  reversi: { label: 'Black', color: '#333' },
+  mancala: { label: 'Bottom row', color: '#d4a656' },
+  nim: { label: 'First player', color: '#d4a656' },
+  chutes_and_ladders: { label: 'Gold token', color: '#d4a656' },
+  checkers: { label: 'Red', color: '#c83030' },
+  go_fish: { label: 'Player 1', color: '#d4a656' },
+  crazy_eights: { label: 'Player 1', color: '#d4a656' },
+  war: { label: 'Player 1', color: '#d4a656' },
+}
 
 const GAME_LABELS = {
   tictactoe: 'Tic-Tac-Toe',
@@ -15,6 +28,7 @@ const GAME_LABELS = {
   nim: 'Nim',
   chutes_and_ladders: 'Chutes & Ladders',
   checkers: 'Checkers',
+  crazy_eights: 'Crazy Eights',
   war: 'War',
   go_fish: 'Go Fish',
 }
@@ -87,6 +101,18 @@ const GAME_RULES = {
       'If you can capture, you must. Multiple captures in one turn are allowed.',
       'When a piece reaches the far row, it becomes a King and can move diagonally in any direction.',
       'You win when your opponent has no pieces left or cannot make a move.',
+    ],
+  },
+  crazy_eights: {
+    title: 'How to play Crazy Eights',
+    intro: 'Match the top card by suit or rank. First to empty your hand wins!',
+    rules: [
+      'Each player starts with 7 cards. One card is flipped face-up to start the discard pile.',
+      'On your turn, play a card that matches the top of the discard pile by suit or rank.',
+      'Eights are wild \u2014 play them on anything and choose the active suit.',
+      'If you can\'t play, draw one card from the deck.',
+      'First player to play all their cards wins.',
+      'If the deck runs out, the player with fewer cards wins.',
     ],
   },
   go_fish: {
@@ -250,20 +276,40 @@ function App() {
       setGameState(data.state)
 
       if (data.needs_ai) {
-        // Step 2: Pause so the player sees their move + any flips/captures
-        await new Promise(r => setTimeout(r, 500))
+        // AI may get multiple turns (e.g., extra turns in Go Fish)
+        let keepGoing = true
+        while (keepGoing) {
+          await new Promise(r => setTimeout(r, 400))
 
-        // Step 3: Ask the AI to play
-        const aiRes = await fetch(`${API}/game/${sessionId}/ai-move`, { method: 'POST' })
-        const aiData = await aiRes.json()
-        setGameState(aiData.state)
-        if (aiData.ai_move) {
-          setAiLastMove(aiData.ai_move)
-          setAiThinking({
-            confidence: aiData.ai_confidence,
-            effort: aiData.ai_effort,
-          })
-          setTimeout(() => setAiLastMove(null), 2500)
+          const aiStart = Date.now()
+          const aiRes = await fetch(`${API}/game/${sessionId}/ai-move`, { method: 'POST' })
+          const elapsed = Date.now() - aiStart
+          if (elapsed < 400) await new Promise(r => setTimeout(r, 400 - elapsed))
+          const aiData = await aiRes.json()
+          setGameState(aiData.state)
+          if (aiData.ai_move) {
+            setAiLastMove(aiData.ai_move)
+            setAiThinking({
+              confidence: aiData.ai_confidence,
+              effort: aiData.ai_effort,
+            })
+            setTimeout(() => setAiLastMove(null), 2500)
+          }
+
+          // Check if AI gets another turn
+          const nextState = aiData.state
+          keepGoing = nextState && !nextState.game_result &&
+            nextState.current_player !== 'player1'
+
+          // Safety: max 10 consecutive AI turns
+          if (keepGoing) {
+            const maxAiTurns = 10
+            if (!window._aiTurnCount) window._aiTurnCount = 0
+            window._aiTurnCount++
+            if (window._aiTurnCount >= maxAiTurns) { keepGoing = false }
+          } else {
+            window._aiTurnCount = 0
+          }
         }
       }
     } catch (e) {
@@ -439,6 +485,13 @@ function App() {
               <span className="game-title">{gameName}</span>
               <button className="rules-btn" onClick={() => setShowRulesModal(true)}>?</button>
             </div>
+            {PLAYER_INDICATOR[selectedGame] && (
+              <div className="player-indicator">
+                You are playing as <span className="player-indicator-label" style={{ color: PLAYER_INDICATOR[selectedGame].color }}>
+                  {PLAYER_INDICATOR[selectedGame].label}
+                </span>
+              </div>
+            )}
             <GameInfo state={gameState} aiLastMove={aiLastMove} loading={loading} />
             {aiThinking?.confidence && (
               <div className="ai-thinking-bar">
@@ -471,6 +524,12 @@ function App() {
             />
           ) : selectedGame === 'checkers' ? (
             <CheckersBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'crazy_eights' ? (
+            <CrazyEightsBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
@@ -1037,6 +1096,98 @@ function CheckersBoard({ state, onMove, disabled }) {
   )
 }
 
+function CrazyEightsBoard({ state, onMove, disabled }) {
+  if (!state) return null
+
+  const zones = state.card_zones || {}
+  const vars = state.state_vars || {}
+  const myHand = zones.hand_p1?.cards || []
+  const oppHandSize = zones.hand_p2?.size || 0
+  const deckSize = zones.deck?.size || 0
+  const discardCards = zones.discard?.cards || []
+  const topCard = discardCards.length > 0 ? discardCards[discardCards.length - 1] : null
+  const activeSuit = vars.active_suit || ''
+  const lastAction = vars.last_action || ''
+  const lastPlay = vars.last_play || ''
+  const isMyTurn = state.current_player === 'player1'
+
+  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
+
+  // Find playable card IDs from legal moves
+  const playableIds = new Set()
+  const canDraw = state.legal_moves?.some(m => m.rule === 'draw_card')
+  for (const m of (state.legal_moves || [])) {
+    if (m.params.card_id != null) playableIds.add(m.params.card_id)
+  }
+
+  const handlePlay = (cardId) => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.params.card_id === cardId)
+    if (move) onMove(move.rule, move.params)
+  }
+
+  const handleDraw = () => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.rule === 'draw_card')
+    if (move) onMove(move.rule, move.params)
+  }
+
+  return (
+    <div className="crazy8-board">
+      <div className="crazy8-info">
+        <span>Deck: {deckSize}</span>
+        <span>AI hand: {oppHandSize} cards</span>
+      </div>
+
+      <div className="crazy8-table">
+        <div className="crazy8-deck-pile">
+          <span className="crazy8-deck-count">{deckSize}</span>
+        </div>
+        {topCard && (
+          <div className={`crazy8-top-card ${topCard.suit === 'hearts' || topCard.suit === 'diamonds' ? 'red' : 'black'}`}>
+            <span className="crazy8-card-rank">{topCard.rank}</span>
+            <span className="crazy8-card-suit">{SUIT_SYMBOLS[topCard.suit]}</span>
+          </div>
+        )}
+        {activeSuit && (
+          <div className="crazy8-active-suit">Active suit: {SUIT_SYMBOLS[activeSuit] || activeSuit}</div>
+        )}
+      </div>
+
+      {lastPlay && (
+        <div className="crazy8-last-action">
+          {lastAction === 'draw' ? 'Drew a card' : `Played ${lastPlay}`}
+        </div>
+      )}
+
+      <div className="crazy8-my-hand">
+        <div className="crazy8-hand-label">Your hand — play a matching card</div>
+        <div className="gofish-cards">
+          {myHand.map((card) => {
+            const playable = playableIds.has(card.id)
+            return (
+              <button
+                key={card.id}
+                className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${!playable ? 'disabled' : ''} ${card.rank === '8' ? 'wild' : ''}`}
+                onClick={() => playable && handlePlay(card.id)}
+                disabled={disabled || !isMyTurn || !playable}
+              >
+                <span className="gofish-card-rank">{card.rank}</span>
+                <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
+              </button>
+            )
+          })}
+        </div>
+        {canDraw && isMyTurn && !disabled && (
+          <button className="crazy8-draw-btn" onClick={handleDraw}>
+            Draw from deck
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function GoFishBoard({ state, onMove, disabled }) {
   if (!state) return null
 
@@ -1047,6 +1198,16 @@ function GoFishBoard({ state, onMove, disabled }) {
   const pondSize = zones.pond?.size || 0
   const mySets = (zones.sets_p1?.size || 0) / 4
   const oppSets = (zones.sets_p2?.size || 0) / 4
+  const mySetCards = zones.sets_p1?.cards || []
+  const oppSetCards = zones.sets_p2?.cards || []
+  // Group set cards by rank to show completed sets
+  const groupByRank = (cards) => {
+    const groups = {}
+    cards.forEach(c => { groups[c.rank] = (groups[c.rank] || 0) + 1 })
+    return Object.keys(groups)
+  }
+  const mySetRanks = groupByRank(mySetCards)
+  const oppSetRanks = groupByRank(oppSetCards)
   const lastResult = vars.last_result || ''
   const lastAskRank = vars.last_ask_rank || ''
   const lastAskPlayer = vars.last_ask_player || ''
@@ -1070,8 +1231,14 @@ function GoFishBoard({ state, onMove, disabled }) {
     <div className="gofish-board">
       <div className="gofish-info-bar">
         <div className="gofish-score">
-          <span className="gofish-score-you">Your sets: <strong>{Math.floor(mySets)}</strong></span>
-          <span className="gofish-score-ai">AI sets: <strong>{Math.floor(oppSets)}</strong></span>
+          <span className="gofish-score-you">
+            Your sets: <strong>{Math.floor(mySets)}</strong>
+            {mySetRanks.length > 0 && <span className="gofish-set-ranks"> ({mySetRanks.join(', ')})</span>}
+          </span>
+          <span className="gofish-score-ai">
+            AI sets: <strong>{Math.floor(oppSets)}</strong>
+            {oppSetRanks.length > 0 && <span className="gofish-set-ranks"> ({oppSetRanks.join(', ')})</span>}
+          </span>
         </div>
         <div className="gofish-pond">Pond: {pondSize} cards</div>
       </div>

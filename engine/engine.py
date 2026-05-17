@@ -274,6 +274,18 @@ class GameEngine:
             from engine.gdl.cards import RANKS
             yield from RANKS
 
+        elif select == "crazy_eights_playable":
+            if state.card_zones:
+                suffix = "p1" if state.current_player == "player1" else "p2"
+                hand = state.card_zones.get(f"hand_{suffix}")
+                discard = state.card_zones.get("discard")
+                if hand and discard and not discard.is_empty:
+                    top = discard.peek()
+                    active_suit = state.state_vars.get("active_suit", "") or top.suit
+                    for card in hand.cards:
+                        if card.rank == "8" or card.suit == active_suit or card.rank == top.rank:
+                            yield card.id
+
         elif select == "checkers_moves":
             from engine.gdl.checkers import get_all_moves
             moves = get_all_moves(state)

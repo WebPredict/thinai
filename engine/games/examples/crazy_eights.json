@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "name": "Crazy Eights",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "deck", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "discard", "visible_to": "all", "ordered": true }
+    ]
+  },
+
+  "cards": {
+    "deck": "standard52",
+    "deck_zone": "deck"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "active_suit", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_play", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "deck" },
+    { "action": "deal", "from": "deck", "to": "hand_p1", "count": 7 },
+    { "action": "deal", "from": "deck", "to": "hand_p2", "count": 7 },
+    { "action": "reveal", "from": "deck", "to": "discard", "count": 1 }
+  ],
+
+  "rules": [
+    {
+      "name": "play_card",
+      "action": "play",
+      "params": [
+        { "name": "card_id", "select": "crazy_eights_playable" }
+      ],
+      "conditions": [],
+      "effects": [
+        "crazy_eights_play(card_id)"
+      ]
+    },
+    {
+      "name": "draw_card",
+      "action": "draw",
+      "params": [],
+      "conditions": [
+        "crazy_eights_must_draw()"
+      ],
+      "effects": [
+        "crazy_eights_draw()"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "crazy_eights_hand_empty(current_player)"
+    },
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "crazy_eights_deck_empty()",
+      "score": "crazy_eights_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Match the top of the discard pile by suit or rank. 8s are wild — play on anything and choose the active suit. If you can't play, draw one card. First to empty hand wins. If deck runs out, fewest cards wins.",
+    "crazy_eights_playable": "Parameter selector: yields card IDs from hand that can be legally played.",
+    "active_suit": "When an 8 is played, this overrides the suit to match. Reset when a non-8 is played."
+  }
+}

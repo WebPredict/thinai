@@ -200,6 +200,27 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             return checker(args[0])
         return True  # default to true if not available
 
+    # Crazy Eights built-ins
+    if name == "crazy_eights_must_draw":
+        return _crazy_eights_must_draw(ctx.state)
+
+    if name == "crazy_eights_hand_empty":
+        player = args[0]
+        suffix = "p1" if player == "player1" else "p2"
+        hand = ctx.state.get_zone(f"hand_{suffix}")
+        return hand is not None and hand.is_empty
+
+    if name == "crazy_eights_deck_empty":
+        deck = ctx.state.get_zone("deck")
+        return deck is not None and deck.is_empty
+
+    if name == "crazy_eights_score":
+        player = args[0]
+        suffix = "p1" if player == "player1" else "p2"
+        hand = ctx.state.get_zone(f"hand_{suffix}")
+        # Fewer cards = higher score (invert)
+        return 100 - (hand.size if hand else 0)
+
     # Checkers built-ins
     if name == "checkers_opponent_has_no_moves":
         from engine.gdl.checkers import opponent_has_no_moves
@@ -586,6 +607,15 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "checkers_execute":
         args = [evaluate(a, ctx) for a in node.args]
         _checkers_execute(ctx.state, int(args[0]))
+        return
+
+    if name == "crazy_eights_play":
+        args = [evaluate(a, ctx) for a in node.args]
+        _crazy_eights_play(ctx.state, int(args[0]))
+        return
+
+    if name == "crazy_eights_draw":
+        _crazy_eights_draw(ctx.state)
         return
 
     if name == "chutes_and_ladders_move":
@@ -1090,3 +1120,91 @@ def _checkers_execute(state: GameState, move_id: int):
     moves = get_all_moves(state)
     if move_id < len(moves):
         execute_move(state, moves[move_id])
+
+
+# --- Crazy Eights built-ins ---
+
+def _crazy_eights_must_draw(state: GameState) -> bool:
+    """Check if current player has no playable cards (must draw)."""
+    if not state.card_zones:
+        return False
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    deck = state.card_zones.get("deck")
+
+    if not hand or not discard or discard.is_empty:
+        return False
+    if deck and deck.is_empty:
+        return False  # can't draw if deck is empty
+
+    top = discard.peek()
+    active_suit = state.state_vars.get("active_suit", "") or top.suit
+
+    # Check if any card in hand is playable
+    for card in hand.cards:
+        if card.rank == "8" or card.suit == active_suit or card.rank == top.rank:
+            return False  # has a playable card
+
+    return True  # must draw
+
+
+def _crazy_eights_play(state: GameState, card_id: int):
+    """Play a card from hand to discard pile."""
+    if not state.card_zones:
+        return
+
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+
+    if not hand or not discard:
+        return
+
+    # Find the card by ID
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+
+    if not card:
+        return
+
+    # Move card from hand to discard
+    hand.remove(card)
+    discard.add(card)
+
+    # Update active suit
+    if card.rank == "8":
+        # When playing an 8, choose the most common suit in hand
+        from collections import Counter
+        if hand.cards:
+            suits = Counter(c.suit for c in hand.cards)
+            state.state_vars["active_suit"] = suits.most_common(1)[0][0]
+        else:
+            state.state_vars["active_suit"] = card.suit
+    else:
+        state.state_vars["active_suit"] = ""  # reset — use card's suit
+
+    state.state_vars["last_play"] = f"{card.rank}{card.symbol}"
+    state.state_vars["last_action"] = "play"
+
+
+def _crazy_eights_draw(state: GameState):
+    """Draw a card from the deck."""
+    if not state.card_zones:
+        return
+
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    deck = state.card_zones.get("deck")
+
+    if not hand or not deck or deck.is_empty:
+        return
+
+    card = deck.draw()
+    if card:
+        hand.add(card)
+        state.state_vars["last_action"] = "draw"
+        state.state_vars["last_play"] = "drew a card"

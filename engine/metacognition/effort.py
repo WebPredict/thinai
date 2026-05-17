@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from engine.gdl.state import GameState
-from engine.gdl.board import GridBoard, TrackBoard
+from engine.gdl.board import GridBoard, TrackBoard, CardBoard
 
 
 @dataclass
@@ -19,6 +19,7 @@ class PositionAnalysis:
     branching_factor: int  # number of legal moves
     game_phase: float  # 0.0 = opening, 1.0 = endgame
     piece_count: int  # total pieces on board
+    is_card_game: bool = False  # card zone board type
     eval_spread: float = 0.0  # gap between best and worst move evals
     weight_confidence: float = 0.5  # how confident we are in evaluation weights
 
@@ -76,10 +77,13 @@ class EffortAllocator:
         else:
             phase = min(1.0, state.turn_number / 40.0)
 
+        is_card = isinstance(state.board, CardBoard) if state.card_zones else False
+
         return PositionAnalysis(
             branching_factor=branching,
             game_phase=phase,
             piece_count=piece_count,
+            is_card_game=is_card,
         )
 
     def recommend(self, state: GameState, engine, evaluator=None) -> EffortDecision:
@@ -103,7 +107,8 @@ class EffortAllocator:
 
         # Cost check: estimate nodes = branching_factor ^ depth
         # If estimated cost is too high, reduce depth until affordable
-        max_affordable_nodes = 5000  # keep moves fast (Railway is slower than local)
+        # Think like a smart kid, not a computer — 500 nodes max
+        max_affordable_nodes = 500
         bf = max(analysis.branching_factor, 2)
         while depth > self.min_depth:
             estimated_nodes = bf ** depth
@@ -121,8 +126,10 @@ class EffortAllocator:
         bf = analysis.branching_factor
         phase = analysis.game_phase
 
-        # Few moves available → position is constrained, search deeper
-        # Many moves → broader search is expensive, stay shallow
+        # Card games: shallow (zone operations are expensive per node)
+        if analysis.is_card_game:
+            return 1.0
+
         if bf <= 3:
             base = 5.0  # few choices: think carefully
         elif bf <= 10:

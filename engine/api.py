@@ -93,9 +93,10 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
         for m in engine.legal_moves(state):
             move_dict = {"rule": m.rule_name, "params": {}}
             for k, v in m.params.items():
-                if hasattr(v, "row"):
+                from engine.gdl.board import TrackSpace
+                if hasattr(v, "row") and hasattr(v, "col"):
                     move_dict["params"][k] = {"row": v.row, "col": v.col}
-                elif hasattr(v, "index"):
+                elif isinstance(v, TrackSpace):
                     move_dict["params"][k] = {"index": v.index}
                 else:
                     move_dict["params"][k] = v
@@ -132,7 +133,8 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
                     if can_see else [],
             }
 
-    return {
+    import json as _json
+    raw = {
         "board_type": board_type,
         "rows": getattr(board, "rows", None),
         "cols": getattr(board, "cols", None),
@@ -146,6 +148,8 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
         "legal_moves": legal_moves,
         "game_result": game_result,
     }
+    # Ensure everything is JSON-safe (card objects, etc.)
+    return _json.loads(_json.dumps(raw, default=str))
 
 
 # --- API Models ---
@@ -282,15 +286,11 @@ def new_game(request: Request, req: NewGameRequest):
         "correction_handler": CorrectionHandler(engine.gdl),
     }
 
-    import json
-    state_dict = _state_to_dict(state, engine)
-    # Ensure all values are JSON-serializable
-    response = {
+    return {
         "session_id": session_id,
-        "state": json.loads(json.dumps(state_dict, default=str)),
+        "state": _state_to_dict(state, engine),
         "using_learned": eval_fn is not None,
     }
-    return response
 
 
 @app.post("/api/game/{session_id}/move")
@@ -393,12 +393,14 @@ def ai_move(request: Request, session_id: str):
     if result and handler:
         handler.on_game_end(state, result)
 
-    return {
+    import json as _json
+    response = {
         "state": _state_to_dict(state, engine),
         "ai_move": ai_move_info,
         "ai_confidence": ai_confidence,
         "ai_effort": ai_effort,
     }
+    return JSONResponse(content=_json.loads(_json.dumps(response, default=str)))
 
 
 @app.get("/api/game/{session_id}/corrections")

@@ -603,6 +603,16 @@ header em {
   font-size: 1rem;
 }
 
+.player-indicator {
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+}
+
+.player-indicator-label {
+  font-weight: 600;
+}
+
 .turn-indicator { color: var(--ink-dim); font-size: 1rem; }
 .turn-indicator.your-turn { color: var(--accent); }
 .turn-number { color: var(--ink-faint); font-size: 1rem; }
@@ -2210,6 +2220,125 @@ header em {
 /* (old move buttons removed — replaced with click-to-move) */
 
 
+/* === Crazy Eights === */
+
+.crazy8-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 700px;
+}
+
+.crazy8-info {
+  display: flex;
+  gap: 2rem;
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+
+.crazy8-table {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.crazy8-deck-pile {
+  width: 70px;
+  height: 100px;
+  background: linear-gradient(135deg, #2050a0, #183878);
+  border: 2px solid #4080d0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.crazy8-deck-count {
+  font-family: 'Georgia', serif;
+  font-size: 1.5rem;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.crazy8-top-card {
+  width: 80px;
+  height: 112px;
+  background: #faf5eb;
+  border: 2px solid #d0c8b8;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  gap: 2px;
+}
+
+.crazy8-top-card.red { color: #c83030; }
+.crazy8-top-card.black { color: #1a1a2e; }
+
+.crazy8-card-rank {
+  font-family: 'Georgia', serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.crazy8-card-suit { font-size: 1.8rem; }
+
+.crazy8-active-suit {
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.crazy8-last-action {
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+}
+
+.crazy8-my-hand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.crazy8-hand-label {
+  font-family: 'Menlo', monospace;
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+}
+
+.gofish-card.wild {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(212, 166, 86, 0.3);
+}
+
+.crazy8-draw-btn {
+  padding: 0.6rem 1.5rem;
+  background: var(--bg-raised);
+  border: 2px solid var(--ink-faint);
+  color: var(--ink);
+  font-family: 'Menlo', monospace;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+  margin-top: 0.5rem;
+}
+
+.crazy8-draw-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+
 /* === Go Fish === */
 
 .gofish-board {
@@ -2237,6 +2366,12 @@ header em {
 .gofish-score-you { color: var(--accent); }
 .gofish-score-ai { color: var(--p2-color); }
 .gofish-pond { color: var(--ink-faint); }
+
+.gofish-set-ranks {
+  font-size: 0.8rem;
+  font-weight: 400;
+  opacity: 0.8;
+}
 
 .gofish-opponent {
   display: flex;
@@ -2306,8 +2441,9 @@ header em {
 
 .gofish-hand-label {
   font-family: 'Menlo', monospace;
-  font-size: 0.8rem;
-  color: var(--ink-dim);
+  font-size: 0.9rem;
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .gofish-cards {
@@ -2334,9 +2470,10 @@ header em {
 }
 
 .gofish-card:hover:not(.disabled) {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(212, 166, 86, 0.3);
+  transform: translateY(-8px);
+  box-shadow: 0 6px 16px rgba(212, 166, 86, 0.4);
   border-color: var(--accent);
+  background: #fff8e8;
 }
 
 .gofish-card.disabled {

@@ -759,6 +759,33 @@ header em {
 
 .board-row { display: flex; }
 
+/* Generic board (custom/novel games) */
+.board:not(.ttt-board):not(.c4-board):not(.reversi-board) {
+  gap: 0;
+  border: 2px solid var(--rule-bright);
+  background: var(--bg-raised);
+}
+
+.board:not(.ttt-board):not(.c4-board):not(.reversi-board) .cell {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule-bright);
+  cursor: default;
+  transition: background 0.12s;
+}
+
+.board:not(.ttt-board):not(.c4-board):not(.reversi-board) .cell.legal {
+  cursor: pointer;
+  background: rgba(212, 166, 86, 0.08);
+}
+
+.board:not(.ttt-board):not(.c4-board):not(.reversi-board) .cell.legal:hover {
+  background: rgba(212, 166, 86, 0.2);
+}
+
 /* --- Tic-Tac-Toe --- */
 
 .ttt-board {
@@ -954,6 +981,30 @@ header em {
 
 .reversi-disc.p2 .disc-inner {
   background: radial-gradient(circle at 35% 35%, #fff, #ccc);
+}
+
+/* Generic stone piece for custom games */
+.generic-stone {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+
+.generic-stone .disc-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.generic-stone.p1 .disc-inner {
+  background: radial-gradient(circle at 35% 35%, var(--accent), #8a6d36);
+}
+
+.generic-stone.p2 .disc-inner {
+  background: radial-gradient(circle at 35% 35%, var(--p2-color), #5a7a9a);
 }
 
 /* --- AI move highlight --- */
@@ -1680,6 +1731,50 @@ header em {
   font-size: 0.75rem;
   color: var(--ink-faint);
   font-style: italic;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--rule-bright);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.train-starting-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: 'Menlo', monospace;
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+  background: var(--bg-raised);
+  border: 1px solid var(--rule-bright);
+  border-radius: 8px;
+  padding: 1.2rem 1.5rem;
+  margin-top: 1rem;
+}
+
+.train-starting-banner .spinner {
+  width: 18px;
+  height: 18px;
+}
+
+.train-error {
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: #d05040;
+  background: rgba(180, 60, 40, 0.12);
+  border: 1px solid rgba(200, 80, 60, 0.35);
+  border-radius: 6px;
+  padding: 0.7rem 1rem;
+  margin-top: 0.5rem;
 }
 
 .train-results {

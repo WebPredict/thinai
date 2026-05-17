@@ -28,7 +28,7 @@ class GameSkillProfile:
     def win_rate(self) -> float:
         if self.games_played == 0:
             return 0.0
-        return self.wins / self.games_played
+        return (self.wins + self.draws * 0.5) / self.games_played
 
     def to_dict(self) -> dict:
         return {
@@ -113,15 +113,15 @@ class SelfAssessor:
         profile.losses = sum(1 for o in outcomes if o < 0)
         profile.draws = sum(1 for o in outcomes if o == 0)
 
-        # Recent win rate (last 10 games)
+        # Recent win rate (last 10 games) — draws count as half-wins
         recent = outcomes[-10:]
-        profile.recent_win_rate = sum(1 for o in recent if o > 0) / len(recent)
+        profile.recent_win_rate = sum(1 if o > 0 else 0.5 if o == 0 else 0 for o in recent) / len(recent)
 
-        # Trend: compare first half to second half
+        # Trend: compare first half to second half (draws = half-wins)
         if len(outcomes) >= 10:
             mid = len(outcomes) // 2
-            first_half = sum(1 for o in outcomes[:mid] if o > 0) / mid
-            second_half = sum(1 for o in outcomes[mid:] if o > 0) / (len(outcomes) - mid)
+            first_half = sum(1 if o > 0 else 0.5 if o == 0 else 0 for o in outcomes[:mid]) / mid
+            second_half = sum(1 if o > 0 else 0.5 if o == 0 else 0 for o in outcomes[mid:]) / (len(outcomes) - mid)
 
             if second_half > first_half + 0.1:
                 profile.trend = "improving"
@@ -138,18 +138,18 @@ class SelfAssessor:
             correct = sum(1 for _, c in preds if c)
             profile.eval_accuracy = correct / len(preds)
 
-        # Skill level from recent win rate
+        # Skill level from recent win rate (need at least 5 games to assess)
         rwr = profile.recent_win_rate
-        if rwr >= 0.75:
+        if profile.games_played < 5:
+            profile.skill_level = "untrained"
+        elif rwr >= 0.75:
             profile.skill_level = "strong"
         elif rwr >= 0.55:
             profile.skill_level = "competent"
         elif rwr >= 0.35:
             profile.skill_level = "developing"
-        elif profile.games_played >= 5:
-            profile.skill_level = "beginner"
         else:
-            profile.skill_level = "untrained"
+            profile.skill_level = "beginner"
 
         self._profiles[game_name] = profile
 

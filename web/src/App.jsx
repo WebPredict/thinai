@@ -210,6 +210,7 @@ function App() {
   const [parseError, setParseError] = useState(null)
   const [parsing, setParsing] = useState(false)
   const [parsedGameId, setParsedGameId] = useState(null)
+  const [customDisplayName, setCustomDisplayName] = useState(null)
 
   const handleParse = async () => {
     if (!teachInput.trim()) return
@@ -255,7 +256,12 @@ function App() {
       .then(r => r.json())
       .then(d => {
         const map = {}
-        for (const m of (d.games || [])) map[m.game_name] = m
+        for (const m of (d.games || [])) {
+          map[m.game_name] = m
+          // Also index by slug so custom games match
+          const slug = m.game_name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '')
+          map[slug] = m
+        }
         setLearnedGames(map)
       })
       .catch(() => {})
@@ -294,6 +300,7 @@ function App() {
       const data = await res.json()
       setSessionId(data.session_id)
       setGameState(data.state)
+      if (data.display_name) setCustomDisplayName(data.display_name)
       // Show rules only the first time for each game
       if (!rulesShownRef.current[selectedGame]) {
         setShowRulesModal(true)
@@ -362,7 +369,7 @@ function App() {
     setLoading(false)
   }, [sessionId, loading])
 
-  const gameName = GAME_LABELS[selectedGame] || selectedGame
+  const gameName = GAME_LABELS[selectedGame] || customDisplayName || selectedGame
   const isC4 = selectedGame === 'connect_four'
   const isTTT = selectedGame === 'tictactoe'
 
@@ -549,13 +556,16 @@ function App() {
               <span className="game-title">{gameName}</span>
               <button className="rules-btn" onClick={() => setShowRulesModal(true)}>?</button>
             </div>
-            {PLAYER_INDICATOR[selectedGame] && (
-              <div className="player-indicator">
-                You are playing as <span className="player-indicator-label" style={{ color: PLAYER_INDICATOR[selectedGame].color }}>
-                  {PLAYER_INDICATOR[selectedGame].label}
-                </span>
-              </div>
-            )}
+            {(() => {
+              const pi = PLAYER_INDICATOR[selectedGame] || { label: 'Gold', color: 'var(--accent)' }
+              return (
+                <div className="player-indicator">
+                  You are playing as <span className="player-indicator-label" style={{ color: pi.color }}>
+                    {pi.label}
+                  </span>
+                </div>
+              )
+            })()}
             <GameInfo state={gameState} aiLastMove={aiLastMove} loading={loading} />
             {aiThinking?.confidence && (
               <div className="ai-thinking-bar">
@@ -694,7 +704,9 @@ function GameInfo({ state, aiLastMove, loading }) {
 function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
   const [hoverCol, setHoverCol] = useState(null)
 
-  if (!state || state.board_type !== 'grid') return null
+  if (!state) return null
+  // Accept grid board_type or any state with rows/cols (custom games)
+  if (state.board_type !== 'grid' && !(state.rows && state.cols)) return null
 
   const { rows, cols, spaces, legal_moves } = state
   const isC4 = gameType === 'connect_four'
@@ -764,7 +776,12 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
       )
     }
 
-    return <div className="piece">{piece.owner === 'player1' ? 'P1' : 'P2'}</div>
+    // Generic stone piece for custom/unknown games
+    return (
+      <div className={`piece generic-stone ${piece.owner === 'player1' ? 'p1' : 'p2'}`}>
+        <div className="disc-inner" />
+      </div>
+    )
   }
 
   const boardClass = [

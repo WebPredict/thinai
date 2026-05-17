@@ -88,7 +88,7 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
         .then(r => r.json())
         .then(d => {
           setStatus(d)
-          if (d.status === 'complete') {
+          if (d.status === 'complete' || d.status === 'error') {
             clearInterval(pollRef.current)
           }
         })
@@ -118,8 +118,8 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
       body: JSON.stringify({ game: selectedGame, num_games: numGames, think_time: thinkTime, fresh }),
     })
     const data = await res.json()
+    setStatus({ status: 'running', games_played: 0, total_games: numGames, snapshots: [] })
     setTrainingId(data.training_id)
-    setStatus(null)
   }
 
   const resetMemory = async (gameName) => {
@@ -185,7 +185,9 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
               ? `Training... ${status.games_played}/${status.total_games}`
               : status?.status === 'complete'
                 ? 'Retrain'
-                : 'Start Training'}
+                : status?.status === 'error'
+                  ? 'Retry Training'
+                  : 'Start Training'}
           </button>
           {status?.status === 'complete' && onBack && (
             <button className="action-btn" onClick={onBack}>
@@ -193,6 +195,11 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
             </button>
           )}
         </div>
+        {status?.status === 'running' && status.games_played === 0 && (
+          <div className="train-progress-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span className="spinner" /> Starting first game...
+          </div>
+        )}
         {status?.status === 'running' && status.snapshots?.length > 0 && (
           <div className="train-progress-info">
             {(() => {
@@ -204,6 +211,11 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
                 ? `~${remainSec < 60 ? remainSec + 's' : Math.ceil(remainSec / 60) + 'min'} remaining`
                 : 'Almost done...'
             })()}
+          </div>
+        )}
+        {status?.status === 'error' && (
+          <div className="train-error">
+            Training failed: {status.error || 'Unknown error'}
           </div>
         )}
       </div>
@@ -246,7 +258,14 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
         </div>
       )}
 
-      {status && (
+      {status?.status === 'running' && (!status.snapshots || status.snapshots.length === 0) && (
+        <div className="train-starting-banner">
+          <span className="spinner" />
+          <span>Training is starting — playing the first game...</span>
+        </div>
+      )}
+
+      {status && status.snapshots?.length > 0 && (
         <div className="train-results">
           <LearningCurve snapshots={status.snapshots} totalGames={status.total_games}
             wins={status.results?.wins} losses={status.results?.losses} draws={status.results?.draws} />

@@ -200,10 +200,10 @@ def parse_rules(request: Request, req: ParseRequest):
             errors.append("Could not identify any move rules from your description.")
         if not gdl.get("end_conditions"):
             errors.append("Could not identify win/draw conditions.")
-        if not gdl.get("board"):
-            errors.append("Could not identify a board structure.")
-        if not gdl.get("pieces"):
-            errors.append("Could not identify any game pieces.")
+        if not gdl.get("board") and not gdl.get("cards"):
+            errors.append("Could not identify a board or card structure.")
+        if not gdl.get("pieces") and not gdl.get("cards"):
+            errors.append("Could not identify any game pieces or cards.")
 
         if errors:
             return {"gdl": gdl, "error": " ".join(errors), "warnings": errors}
@@ -314,6 +314,7 @@ def new_game(request: Request, req: NewGameRequest):
         "session_id": session_id,
         "state": _state_to_dict(state, engine),
         "using_learned": eval_fn is not None,
+        "display_name": engine.meta.get("name", req.game),
     }
 
 
@@ -492,8 +493,12 @@ def start_training(request: Request, req: TrainingRequest):
             avg_bf = max(board.length, 3)  # track games
         else:
             avg_bf = 8
+        # Custom/parsed games cap at depth 2 — deeper makes fixed-eval opponents
+        # too strong for a learner starting from scratch
+        is_custom = os.path.exists(os.path.join(CUSTOM_DIR, f"{req.game}.json"))
+        max_train_depth = 2 if is_custom else 3
         depth = 1
-        while depth < 3:  # cap at 3 for training speed
+        while depth < max_train_depth:
             # Estimate time per move: nodes * cost_per_node * moves_per_game
             nodes_per_move = avg_bf ** (depth + 1)
             time_per_move = nodes_per_move * 0.003
@@ -549,12 +554,15 @@ def start_training(request: Request, req: TrainingRequest):
                 "duration_ms": snapshot.duration_ms,
             })
 
-        results = runner.train(req.num_games, progress_callback=on_progress)
-        run_state["status"] = "complete"
-        run_state["results"] = results.to_dict()
-
-        # Auto-save to memory
-        _memory_store.save(evaluator)
+        try:
+            results = runner.train(req.num_games, progress_callback=on_progress)
+            run_state["status"] = "complete"
+            run_state["results"] = results.to_dict()
+            # Auto-save to memory
+            _memory_store.save(evaluator)
+        except Exception as e:
+            run_state["status"] = "error"
+            run_state["error"] = str(e)
 
     thread = threading.Thread(target=_run_training, daemon=True)
     thread.start()

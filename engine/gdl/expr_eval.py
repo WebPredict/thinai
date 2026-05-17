@@ -15,6 +15,16 @@ from engine.gdl.expr_parser import (
 )
 from engine.gdl.state import GameState, Piece
 from engine.gdl.board import GridBoard, GridSpace, TrackBoard, TrackSpace
+from engine.gdl.cards import CardZone
+
+
+# Sentinel for safe zone lookups
+class _EmptyZone:
+    is_empty = True
+    size = 0
+    cards = []
+
+_empty_zone = _EmptyZone()
 
 
 class EvalContext:
@@ -206,6 +216,59 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
     if name == "uno_opponent_skipped":
         action = ctx.state.state_vars.get("last_action", "")
         return action in ("skip", "reverse", "draw2", "wild_draw4")
+
+    # Gin Rummy built-ins
+    if name == "gin_rummy_can_draw_discard":
+        return ctx.state.state_vars.get("phase") == "draw" and \
+            ctx.state.card_zones and not ctx.state.card_zones.get("discard", _empty_zone).is_empty
+    if name == "gin_rummy_can_draw_deck":
+        return ctx.state.state_vars.get("phase") == "draw" and \
+            ctx.state.card_zones and not ctx.state.card_zones.get("deck", _empty_zone).is_empty
+    if name == "gin_rummy_can_discard":
+        return ctx.state.state_vars.get("phase") == "discard"
+    if name == "gin_rummy_can_knock":
+        if ctx.state.state_vars.get("phase") != "discard":
+            return False
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        hand = ctx.state.card_zones.get(f"hand_{suffix}")
+        if not hand:
+            return False
+        return _gin_rummy_deadwood(hand.cards) <= 10
+    if name == "gin_rummy_turn_done":
+        return ctx.state.state_vars.get("phase") == "draw"
+    if name == "gin_rummy_round_over":
+        return ctx.state.state_vars.get("round_over", False)
+    if name == "gin_rummy_score":
+        suffix = "p1" if args[0] == "player1" or (not args[0] or args[0] == "current_player") and ctx.state.current_player == "player1" else "p2"
+        hand = ctx.state.card_zones.get(f"hand_{suffix}")
+        if not hand:
+            return 0
+        # Lower deadwood is better — return negative deadwood
+        return -_gin_rummy_deadwood(hand.cards)
+
+    # Poker built-ins
+    if name == "poker_can_discard":
+        phase = ctx.state.state_vars.get("phase", "")
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        return phase == f"discard_{suffix}" and ctx.state.state_vars.get(f"{suffix}_discards", 0) < 3
+    if name == "poker_can_stand":
+        phase = ctx.state.state_vars.get("phase", "")
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        return phase == f"discard_{suffix}"
+    if name == "poker_turn_done":
+        phase = ctx.state.state_vars.get("phase", "")
+        return phase == "discard_p2" and ctx.state.current_player == "player1"
+    if name == "poker_round_over":
+        return ctx.state.state_vars.get("round_over", False)
+    if name == "poker_hand_score":
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        hand = ctx.state.card_zones.get(f"hand_{suffix}")
+        if not hand or not hand.cards:
+            reveal = ctx.state.card_zones.get(f"reveal_{suffix}")
+            if reveal and reveal.cards:
+                return _poker_hand_score(reveal.cards)
+            return 0
+        return _poker_hand_score(hand.cards)
 
     # Blackjack built-ins
     if name == "blackjack_can_hit":
@@ -632,6 +695,31 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "checkers_execute":
         args = [evaluate(a, ctx) for a in node.args]
         _checkers_execute(ctx.state, int(args[0]))
+        return
+
+    # Gin Rummy effects
+    if name == "gin_rummy_draw_discard":
+        _gin_rummy_draw_discard(ctx.state)
+        return
+    if name == "gin_rummy_draw_deck":
+        _gin_rummy_draw_deck(ctx.state)
+        return
+    if name == "gin_rummy_discard":
+        args = [evaluate(a, ctx) for a in node.args]
+        _gin_rummy_discard(ctx.state, int(args[0]))
+        return
+    if name == "gin_rummy_knock":
+        args = [evaluate(a, ctx) for a in node.args]
+        _gin_rummy_knock(ctx.state, int(args[0]))
+        return
+
+    # Poker effects
+    if name == "poker_discard":
+        args = [evaluate(a, ctx) for a in node.args]
+        _poker_discard(ctx.state, int(args[0]))
+        return
+    if name == "poker_stand_pat":
+        _poker_stand_pat(ctx.state)
         return
 
     if name == "uno_play":
@@ -1464,3 +1552,338 @@ def _uno_draw(state: GameState):
             hand.add(card)
     state.state_vars["last_action"] = "draw"
     state.state_vars["last_play"] = "drew a card"
+
+
+# --- Gin Rummy built-ins ---
+
+_GIN_RANK_VALUES = {
+    "A": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7,
+    "8": 8, "9": 9, "10": 10, "J": 10, "Q": 10, "K": 10,
+}
+
+_GIN_RANK_ORDER = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+
+
+def _gin_card_value(card) -> int:
+    return _GIN_RANK_VALUES.get(card.rank, 0)
+
+
+def _gin_rank_index(card) -> int:
+    return _GIN_RANK_ORDER.index(card.rank) if card.rank in _GIN_RANK_ORDER else -1
+
+
+def _gin_find_all_melds(cards: list) -> list:
+    """Find all possible melds (sets and runs) from a list of cards."""
+    melds = []
+
+    # Sets: 3 or 4 cards of the same rank
+    from collections import defaultdict
+    by_rank = defaultdict(list)
+    for c in cards:
+        by_rank[c.rank].append(c)
+    for rank, group in by_rank.items():
+        if len(group) >= 3:
+            # All combinations of 3
+            from itertools import combinations
+            for combo in combinations(group, 3):
+                melds.append(list(combo))
+            if len(group) >= 4:
+                melds.append(list(group))
+
+    # Runs: 3+ sequential cards of the same suit
+    by_suit = defaultdict(list)
+    for c in cards:
+        by_suit[c.suit].append(c)
+    for suit, group in by_suit.items():
+        sorted_cards = sorted(group, key=lambda c: _gin_rank_index(c))
+        # Find all runs of 3+
+        for start in range(len(sorted_cards)):
+            run = [sorted_cards[start]]
+            for j in range(start + 1, len(sorted_cards)):
+                if _gin_rank_index(sorted_cards[j]) == _gin_rank_index(run[-1]) + 1:
+                    run.append(sorted_cards[j])
+                else:
+                    break
+            if len(run) >= 3:
+                # Add all sub-runs of length 3+
+                for length in range(3, len(run) + 1):
+                    for offset in range(len(run) - length + 1):
+                        melds.append(run[offset:offset + length])
+
+    return melds
+
+
+def _gin_rummy_best_melds(cards: list):
+    """Find the optimal set of non-overlapping melds minimizing deadwood."""
+    all_melds = _gin_find_all_melds(cards)
+    card_ids = {c.id for c in cards}
+
+    best_deadwood = sum(_gin_card_value(c) for c in cards)
+    best_combo = []
+
+    def search(idx, used_ids, current_melds):
+        nonlocal best_deadwood, best_combo
+        # Calculate current deadwood
+        remaining = [c for c in cards if c.id not in used_ids]
+        dw = sum(_gin_card_value(c) for c in remaining)
+        if dw < best_deadwood:
+            best_deadwood = dw
+            best_combo = list(current_melds)
+        if dw == 0:
+            return  # Can't do better than Gin
+
+        for i in range(idx, len(all_melds)):
+            meld = all_melds[i]
+            meld_ids = {c.id for c in meld}
+            if not meld_ids & used_ids:  # No overlap
+                search(i + 1, used_ids | meld_ids, current_melds + [meld])
+
+    search(0, set(), [])
+    return best_combo, best_deadwood
+
+
+def _gin_rummy_deadwood(cards: list) -> int:
+    """Calculate minimum deadwood for a hand."""
+    if not cards:
+        return 0
+    _, deadwood = _gin_rummy_best_melds(cards)
+    return deadwood
+
+
+def _gin_rummy_draw_discard(state: GameState):
+    """Draw the top card from the discard pile."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    if hand and discard and not discard.is_empty:
+        card = discard.draw()
+        if card:
+            hand.add(card)
+    state.state_vars["phase"] = "discard"
+    state.state_vars["last_action"] = "draw_discard"
+
+
+def _gin_rummy_draw_deck(state: GameState):
+    """Draw a card from the deck."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    deck = state.card_zones.get("deck")
+    if hand and deck and not deck.is_empty:
+        card = deck.draw()
+        if card:
+            hand.add(card)
+    state.state_vars["phase"] = "discard"
+    state.state_vars["last_action"] = "draw_deck"
+
+    # If deck is down to 2 cards, round is a draw
+    if deck and deck.size <= 2:
+        state.state_vars["round_over"] = True
+
+
+def _gin_rummy_discard(state: GameState, card_id: int):
+    """Discard a card from hand."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    if not hand or not discard:
+        return
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+    hand.remove(card)
+    discard.add(card)
+    state.state_vars["phase"] = "draw"
+    state.state_vars["last_action"] = "discard"
+    state.state_vars["last_play"] = f"discarded {card.rank} of {card.suit}"
+
+
+def _gin_rummy_knock(state: GameState, card_id: int):
+    """Knock — discard a card and end the round."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    if not hand or not discard:
+        return
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+    hand.remove(card)
+    discard.add(card)
+    dw = _gin_rummy_deadwood(hand.cards)
+    state.state_vars["phase"] = "draw"
+    state.state_vars["round_over"] = True
+    state.state_vars["knocked_by"] = state.current_player
+    if dw == 0:
+        state.state_vars["last_action"] = "gin"
+        state.state_vars["last_play"] = "GIN!"
+    else:
+        state.state_vars["last_action"] = "knock"
+        state.state_vars["last_play"] = f"knocked with {dw} deadwood"
+
+
+# --- Poker built-ins ---
+
+_POKER_RANK_VALUES = {
+    "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8,
+    "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14,
+}
+
+_POKER_HAND_NAMES = {
+    8: "Straight Flush", 7: "Four of a Kind", 6: "Full House",
+    5: "Flush", 4: "Straight", 3: "Three of a Kind",
+    2: "Two Pair", 1: "One Pair", 0: "High Card",
+}
+
+
+def _poker_hand_rank(cards: list) -> tuple:
+    """Rank a 5-card poker hand. Returns (tier, *tiebreakers)."""
+    if len(cards) < 5:
+        return (0, 0)
+
+    values = sorted([_POKER_RANK_VALUES.get(c.rank, 0) for c in cards], reverse=True)
+    suits = [c.suit for c in cards]
+
+    is_flush = len(set(suits)) == 1
+
+    # Check straight (including A-2-3-4-5 low straight)
+    is_straight = False
+    straight_high = 0
+    if values == list(range(values[0], values[0] - 5, -1)):
+        is_straight = True
+        straight_high = values[0]
+    elif values == [14, 5, 4, 3, 2]:  # Ace-low straight
+        is_straight = True
+        straight_high = 5
+
+    # Count rank groups
+    from collections import Counter
+    counts = Counter(values)
+    groups = sorted(counts.items(), key=lambda x: (x[1], x[0]), reverse=True)
+
+    if is_straight and is_flush:
+        return (8, straight_high)
+    if groups[0][1] == 4:
+        return (7, groups[0][0], groups[1][0])
+    if groups[0][1] == 3 and groups[1][1] == 2:
+        return (6, groups[0][0], groups[1][0])
+    if is_flush:
+        return (5, *values)
+    if is_straight:
+        return (4, straight_high)
+    if groups[0][1] == 3:
+        return (3, groups[0][0], *sorted([g[0] for g in groups[1:]], reverse=True))
+    if groups[0][1] == 2 and groups[1][1] == 2:
+        pair1, pair2 = sorted([groups[0][0], groups[1][0]], reverse=True)
+        kicker = groups[2][0]
+        return (2, pair1, pair2, kicker)
+    if groups[0][1] == 2:
+        pair = groups[0][0]
+        kickers = sorted([g[0] for g in groups[1:]], reverse=True)
+        return (1, pair, *kickers)
+    return (0, *values)
+
+
+def _poker_hand_score(cards: list) -> int:
+    """Convert hand rank tuple to a single comparable integer."""
+    rank = _poker_hand_rank(cards)
+    score = 0
+    for i, v in enumerate(rank):
+        score += v * (15 ** (10 - i))
+    return score
+
+
+def _poker_hand_name(cards: list) -> str:
+    """Human-readable name for a poker hand."""
+    rank = _poker_hand_rank(cards)
+    return _POKER_HAND_NAMES.get(rank[0], "Unknown")
+
+
+def _poker_discard(state: GameState, card_id: int):
+    """Discard a card in poker."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    if not hand or not discard:
+        return
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+    hand.remove(card)
+    discard.add(card)
+    state.state_vars[f"{suffix}_discards"] = state.state_vars.get(f"{suffix}_discards", 0) + 1
+    state.state_vars["last_action"] = "discard"
+
+
+def _poker_stand_pat(state: GameState):
+    """Finalize discard phase — draw replacements and advance."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    deck = state.card_zones.get("deck")
+    num_discarded = state.state_vars.get(f"{suffix}_discards", 0)
+
+    # Draw replacements
+    if hand and deck:
+        for _ in range(min(num_discarded, deck.size)):
+            card = deck.draw()
+            if card:
+                hand.add(card)
+
+    # Advance phase
+    phase = state.state_vars.get("phase", "")
+    if phase == "discard_p1":
+        state.state_vars["phase"] = "discard_p2"
+        state.state_vars["last_action"] = "stand"
+    elif phase == "discard_p2":
+        # Both done — showdown
+        _poker_showdown(state)
+
+
+def _poker_showdown(state: GameState):
+    """Reveal hands and determine winner."""
+    hand_p1 = state.card_zones.get("hand_p1")
+    hand_p2 = state.card_zones.get("hand_p2")
+    reveal_p1 = state.card_zones.get("reveal_p1")
+    reveal_p2 = state.card_zones.get("reveal_p2")
+
+    if hand_p1 and reveal_p1:
+        for c in list(hand_p1.cards):
+            hand_p1.remove(c)
+            reveal_p1.add(c)
+    if hand_p2 and reveal_p2:
+        for c in list(hand_p2.cards):
+            hand_p2.remove(c)
+            reveal_p2.add(c)
+
+    # Set hand rank names for display
+    if reveal_p1 and reveal_p1.cards:
+        state.state_vars["p1_hand_rank"] = _poker_hand_name(reveal_p1.cards)
+    if reveal_p2 and reveal_p2.cards:
+        state.state_vars["p2_hand_rank"] = _poker_hand_name(reveal_p2.cards)
+
+    state.state_vars["round_over"] = True
+    state.state_vars["phase"] = "showdown"
+    state.state_vars["last_action"] = "showdown"

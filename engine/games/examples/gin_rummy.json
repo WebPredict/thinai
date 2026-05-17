@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "name": "Gin Rummy",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if gin_rummy_turn_done(): next_player else: same_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "deck", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "discard", "visible_to": "all", "ordered": true }
+    ]
+  },
+
+  "cards": {
+    "deck": "standard52",
+    "deck_zone": "deck"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "phase", "type": "string", "scope": "global", "initial": "draw" },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" },
+    { "name": "round_over", "type": "bool", "scope": "global", "initial": false },
+    { "name": "knocked_by", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "deck" },
+    { "action": "deal", "from": "deck", "to": "hand_p1", "count": 10 },
+    { "action": "deal", "from": "deck", "to": "hand_p2", "count": 10 },
+    { "action": "reveal", "from": "deck", "to": "discard", "count": 1 }
+  ],
+
+  "rules": [
+    {
+      "name": "draw_discard",
+      "action": "draw",
+      "params": [],
+      "conditions": ["gin_rummy_can_draw_discard()"],
+      "effects": ["gin_rummy_draw_discard()"]
+    },
+    {
+      "name": "draw_deck",
+      "action": "draw",
+      "params": [],
+      "conditions": ["gin_rummy_can_draw_deck()"],
+      "effects": ["gin_rummy_draw_deck()"]
+    },
+    {
+      "name": "discard",
+      "action": "play",
+      "params": [
+        { "name": "card_id", "select": "gin_rummy_hand" }
+      ],
+      "conditions": ["gin_rummy_can_discard()"],
+      "effects": ["gin_rummy_discard(card_id)"]
+    },
+    {
+      "name": "knock",
+      "action": "knock",
+      "params": [
+        { "name": "card_id", "select": "gin_rummy_hand" }
+      ],
+      "conditions": ["gin_rummy_can_knock()"],
+      "effects": ["gin_rummy_knock(card_id)"]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "gin_rummy_round_over()",
+      "score": "gin_rummy_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Gin Rummy: 10 cards each, draw from deck or discard, then discard one card. Form melds (sets of 3-4 same rank, runs of 3+ sequential same suit). Knock when deadwood ≤ 10, Gin when deadwood = 0. Face cards = 10, Ace = 1."
+  }
+}

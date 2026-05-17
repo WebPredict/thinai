@@ -300,6 +300,22 @@ class GameEngine:
                             card.rank == top.rank):
                             yield card.id
 
+        elif select == "gin_rummy_hand":
+            if state.card_zones:
+                suffix = "p1" if state.current_player == "player1" else "p2"
+                hand = state.card_zones.get(f"hand_{suffix}")
+                if hand:
+                    for card in hand.cards:
+                        yield card.id
+
+        elif select == "poker_hand":
+            if state.card_zones:
+                suffix = "p1" if state.current_player == "player1" else "p2"
+                hand = state.card_zones.get(f"hand_{suffix}")
+                if hand:
+                    for card in hand.cards:
+                        yield card.id
+
         elif select == "checkers_moves":
             from engine.gdl.checkers import get_all_moves
             moves = get_all_moves(state)

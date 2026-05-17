@@ -743,8 +743,8 @@ header em {
 }
 
 .ai-thinking-effort {
-  color: var(--ink-faint);
-  font-size: 0.7rem;
+  color: var(--ink-dim);
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 

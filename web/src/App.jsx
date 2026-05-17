@@ -5,7 +5,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -20,6 +20,8 @@ const PLAYER_INDICATOR = {
   uno: { label: 'Player 1', color: '#d4a656' },
   blackjack: { label: 'Player (vs Dealer)', color: '#d4a656' },
   war: { label: 'Player 1', color: '#d4a656' },
+  gin_rummy: { label: 'Player 1', color: '#d4a656' },
+  five_card_draw: { label: 'Player 1', color: '#d4a656' },
 }
 
 const GAME_LABELS = {
@@ -35,6 +37,8 @@ const GAME_LABELS = {
   blackjack: 'Blackjack',
   war: 'War',
   go_fish: 'Go Fish',
+  gin_rummy: 'Gin Rummy',
+  five_card_draw: 'Five-Card Draw',
 }
 
 const GAME_RULES = {
@@ -167,6 +171,29 @@ const GAME_RULES = {
       'Higher rank wins both cards (Ace is highest).',
       'On a tie: each player places 3 cards face-down, then flips a 4th. Higher 4th card wins all.',
       'First player to collect all 52 cards wins.',
+    ],
+  },
+  gin_rummy: {
+    title: 'How to play Gin Rummy',
+    intro: 'Form melds (sets and runs) to reduce your deadwood. Knock when you\u2019re ready!',
+    rules: [
+      'Each player is dealt 10 cards. One card is turned up to start the discard pile.',
+      'On your turn: draw from the deck or the discard pile, then discard one card.',
+      'Form melds: sets of 3\u20134 same rank, or runs of 3+ sequential same suit.',
+      'Knock when your unmelded cards (deadwood) total 10 or less. Gin = 0 deadwood.',
+      'Face cards = 10 points, Ace = 1, number cards = face value.',
+      'Lower deadwood wins. If the defender has less deadwood, it\u2019s an undercut!',
+    ],
+  },
+  five_card_draw: {
+    title: 'How to play Five-Card Draw',
+    intro: 'Draw poker \u2014 make the best 5-card hand!',
+    rules: [
+      'Each player is dealt 5 cards.',
+      'Select up to 3 cards to discard, then draw replacements from the deck.',
+      'Click cards to select them for discard, then click "Done Discarding".',
+      'After both players draw, hands are revealed. Best poker hand wins.',
+      'Hand rankings: High Card < Pair < Two Pair < Three of a Kind < Straight < Flush < Full House < Four of a Kind < Straight Flush.',
     ],
   },
 }
@@ -575,7 +602,7 @@ function App() {
                 </div>
                 <span className="ai-thinking-level">{aiThinking.confidence.level}</span>
                 {aiThinking.effort && (
-                  <span className="ai-thinking-effort">depth {aiThinking.effort.depth_used}</span>
+                  <span className="ai-thinking-effort">depth {aiThinking.effort.depth_used} · {aiThinking.effort.nodes_searched} positions</span>
                 )}
               </div>
             )}
@@ -622,6 +649,18 @@ function App() {
             />
           ) : selectedGame === 'go_fish' ? (
             <GoFishBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'gin_rummy' ? (
+            <GinRummyBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'five_card_draw' ? (
+            <PokerBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
@@ -1709,6 +1748,238 @@ function ChutesAndLaddersBoard({ state, onMove, disabled, aiLastMove }) {
           <button className="cl-roll-btn" onClick={handleRoll} disabled={disabled || rolling}>
             {rolling ? 'Rolling...' : 'Roll Die'}
           </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function GinRummyBoard({ state, onMove, disabled }) {
+  if (!state) return null
+
+  const zones = state.card_zones || {}
+  const vars = state.state_vars || {}
+  const myHand = zones.hand_p1?.cards || []
+  const oppHandSize = zones.hand_p2?.size || 0
+  const deckSize = zones.deck?.size || 0
+  const discardCards = zones.discard?.cards || []
+  const topDiscard = discardCards.length > 0 ? discardCards[discardCards.length - 1] : null
+  const phase = vars.phase || 'draw'
+  const lastAction = vars.last_action || ''
+  const lastPlay = vars.last_play || ''
+  const isMyTurn = state.current_player === 'player1'
+  const roundOver = vars.round_over
+
+  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
+
+  const canDrawDiscard = state.legal_moves?.some(m => m.rule === 'draw_discard')
+  const canDrawDeck = state.legal_moves?.some(m => m.rule === 'draw_deck')
+  const canKnock = state.legal_moves?.some(m => m.rule === 'knock')
+  const discardableIds = new Set()
+  for (const m of (state.legal_moves || [])) {
+    if ((m.rule === 'discard' || m.rule === 'knock') && m.params.card_id != null)
+      discardableIds.add(m.params.card_id)
+  }
+
+  const handleDraw = (source) => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.rule === source)
+    if (move) onMove(move.rule, move.params)
+  }
+
+  const handleDiscard = (cardId) => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.rule === 'discard' && m.params.card_id === cardId)
+    if (move) onMove(move.rule, move.params)
+  }
+
+  const handleKnock = (cardId) => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.rule === 'knock' && m.params.card_id === cardId)
+    if (move) onMove(move.rule, move.params)
+  }
+
+  // Sort hand by suit then rank for readability
+  const RANK_ORDER = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
+  const SUIT_ORDER = ['hearts','diamonds','clubs','spades']
+  const sortedHand = [...myHand].sort((a, b) => {
+    const si = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit)
+    return si !== 0 ? si : RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank)
+  })
+
+  return (
+    <div className="crazy8-board">
+      <div className="crazy8-info">
+        <span>Deck: {deckSize} cards remaining</span>
+        <span>AI hand: {oppHandSize} cards</span>
+      </div>
+
+      <div className="crazy8-table">
+        <div className="crazy8-deck-pile" onClick={() => canDrawDeck && handleDraw('draw_deck')}
+             style={{ cursor: canDrawDeck ? 'pointer' : 'default' }}>
+        </div>
+        {topDiscard && (
+          <div className={`crazy8-top-card ${topDiscard.suit === 'hearts' || topDiscard.suit === 'diamonds' ? 'red' : 'black'}`}
+               onClick={() => canDrawDiscard && handleDraw('draw_discard')}
+               style={{ cursor: canDrawDiscard ? 'pointer' : 'default' }}>
+            <span className="crazy8-card-rank">{topDiscard.rank}</span>
+            <span className="crazy8-card-suit">{SUIT_SYMBOLS[topDiscard.suit]}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="crazy8-last-action">
+        {phase === 'draw' && isMyTurn && !roundOver && 'Draw from deck or discard pile'}
+        {phase === 'discard' && isMyTurn && !roundOver && (canKnock ? 'Discard a card, or click Knock to end the round' : 'Discard a card')}
+        {!isMyTurn && !roundOver && 'AI is thinking...'}
+        {lastPlay && roundOver && lastPlay}
+      </div>
+
+      <div className="crazy8-my-hand">
+        <div className="crazy8-hand-label">Your hand ({myHand.length} cards)</div>
+        <div className="gofish-cards">
+          {sortedHand.map((card) => {
+            const canDiscard = discardableIds.has(card.id) && phase === 'discard'
+            return (
+              <button
+                key={card.id}
+                className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${!canDiscard ? 'disabled' : ''}`}
+                onClick={() => canDiscard && handleDiscard(card.id)}
+                disabled={disabled || !isMyTurn || !canDiscard}
+              >
+                <span className="gofish-card-rank">{card.rank}</span>
+                <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
+              </button>
+            )
+          })}
+        </div>
+        {canKnock && isMyTurn && phase === 'discard' && (
+          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {sortedHand.map(card => (
+              <button key={`knock-${card.id}`} className="crazy8-draw-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                onClick={() => handleKnock(card.id)}>
+                Knock (discard {card.rank}{SUIT_SYMBOLS[card.suit]})
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PokerBoard({ state, onMove, disabled }) {
+  const [selectedCards, setSelectedCards] = useState(new Set())
+
+  if (!state) return null
+
+  const zones = state.card_zones || {}
+  const vars = state.state_vars || {}
+  const myHand = zones.hand_p1?.cards || []
+  const oppHandSize = zones.hand_p2?.size || 0
+  const phase = vars.phase || 'discard_p1'
+  const lastAction = vars.last_action || ''
+  const roundOver = vars.round_over
+  const isMyTurn = state.current_player === 'player1'
+  const isMyDiscard = phase === 'discard_p1'
+  const showdown = roundOver || phase === 'showdown'
+
+  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
+
+  // Revealed hands at showdown
+  const revealP1 = zones.reveal_p1?.cards || []
+  const revealP2 = zones.reveal_p2?.cards || []
+
+  const canDiscard = state.legal_moves?.some(m => m.rule === 'discard_card')
+  const canStand = state.legal_moves?.some(m => m.rule === 'stand_pat')
+
+  const handleDiscard = (cardId) => {
+    if (disabled || !isMyDiscard) return
+    const move = state.legal_moves?.find(m => m.rule === 'discard_card' && m.params.card_id === cardId)
+    if (move) {
+      onMove(move.rule, move.params)
+      setSelectedCards(prev => { const n = new Set(prev); n.delete(cardId); return n })
+    }
+  }
+
+  const handleStandPat = () => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.rule === 'stand_pat')
+    if (move) {
+      onMove(move.rule, move.params)
+      setSelectedCards(new Set())
+    }
+  }
+
+  const toggleSelect = (cardId) => {
+    if (!isMyDiscard || disabled) return
+    setSelectedCards(prev => {
+      const n = new Set(prev)
+      if (n.has(cardId)) n.delete(cardId)
+      else if (n.size < 3) n.add(cardId)
+      return n
+    })
+  }
+
+  const renderCard = (card, clickable, selected) => (
+    <button
+      key={card.id}
+      className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${selected ? '' : ''}`}
+      style={selected ? { transform: 'translateY(-8px)', boxShadow: '0 6px 16px rgba(212, 166, 86, 0.5)', borderColor: 'var(--accent)' } : {}}
+      onClick={() => clickable && toggleSelect(card.id)}
+      disabled={!clickable}
+    >
+      <span className="gofish-card-rank">{card.rank}</span>
+      <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
+    </button>
+  )
+
+  const handRankP1 = vars.p1_hand_rank || ''
+  const handRankP2 = vars.p2_hand_rank || ''
+
+  return (
+    <div className="crazy8-board">
+      <div className="crazy8-info">
+        <span>AI hand: {oppHandSize} cards</span>
+      </div>
+
+      {showdown && revealP2.length > 0 && (
+        <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+          <div className="crazy8-hand-label">AI's hand {handRankP2 && `— ${handRankP2}`}</div>
+          <div className="gofish-cards">
+            {revealP2.map(c => renderCard(c, false, false))}
+          </div>
+        </div>
+      )}
+
+      <div className="crazy8-last-action">
+        {isMyDiscard && !roundOver && `Select up to 3 cards to discard (${selectedCards.size} selected)`}
+        {phase === 'discard_p2' && !roundOver && 'AI is choosing cards to discard...'}
+        {showdown && 'Showdown!'}
+      </div>
+
+      <div className="crazy8-my-hand">
+        <div className="crazy8-hand-label">Your hand {showdown && handRankP1 && `— ${handRankP1}`}</div>
+        <div className="gofish-cards">
+          {(showdown && revealP1.length > 0 ? revealP1 : myHand).map(card =>
+            renderCard(card, isMyDiscard && !roundOver, selectedCards.has(card.id))
+          )}
+        </div>
+        {isMyDiscard && !roundOver && (
+          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+            {selectedCards.size > 0 && [...selectedCards].map(cid => {
+              const move = state.legal_moves?.find(m => m.rule === 'discard_card' && m.params.card_id === cid)
+              return move ? (
+                <button key={cid} className="crazy8-draw-btn" style={{ fontSize: '0.8rem' }}
+                  onClick={() => handleDiscard(cid)}>
+                  Discard selected
+                </button>
+              ) : null
+            }).filter(Boolean).slice(0, 1)}
+            <button className="crazy8-draw-btn" onClick={handleStandPat}>
+              {selectedCards.size === 0 ? 'Keep all cards' : 'Done discarding'}
+            </button>
+          </div>
         )}
       </div>
     </div>

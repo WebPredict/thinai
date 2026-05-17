@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "name": "Five-Card Draw",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if poker_turn_done(): next_player else: same_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "deck", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "discard", "visible_to": "none", "ordered": false },
+      { "name": "reveal_p1", "owner": "player1", "visible_to": "all", "ordered": false },
+      { "name": "reveal_p2", "owner": "player2", "visible_to": "all", "ordered": false }
+    ]
+  },
+
+  "cards": {
+    "deck": "standard52",
+    "deck_zone": "deck"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "phase", "type": "string", "scope": "global", "initial": "discard_p1" },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" },
+    { "name": "round_over", "type": "bool", "scope": "global", "initial": false },
+    { "name": "p1_discards", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_discards", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p1_hand_rank", "type": "string", "scope": "global", "initial": "" },
+    { "name": "p2_hand_rank", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "deck" },
+    { "action": "deal", "from": "deck", "to": "hand_p1", "count": 5 },
+    { "action": "deal", "from": "deck", "to": "hand_p2", "count": 5 }
+  ],
+
+  "rules": [
+    {
+      "name": "discard_card",
+      "action": "play",
+      "params": [
+        { "name": "card_id", "select": "poker_hand" }
+      ],
+      "conditions": ["poker_can_discard()"],
+      "effects": ["poker_discard(card_id)"]
+    },
+    {
+      "name": "stand_pat",
+      "action": "stand",
+      "params": [],
+      "conditions": ["poker_can_stand()"],
+      "effects": ["poker_stand_pat()"]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "poker_round_over()",
+      "score": "poker_hand_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Five-Card Draw: each player gets 5 cards, discards up to 3, draws replacements. Best poker hand wins. No betting in this simplified version."
+  }
+}

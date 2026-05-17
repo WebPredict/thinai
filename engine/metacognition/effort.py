@@ -106,9 +106,8 @@ class EffortAllocator:
         depth = max(self.min_depth, min(self.max_depth, depth))
 
         # Cost check: estimate nodes = branching_factor ^ depth
-        # If estimated cost is too high, reduce depth until affordable
-        # Think like a smart kid, not a computer — 500 nodes max
-        max_affordable_nodes = 500
+        # Card games stay cheap; board games need depth 4+ to see threats
+        max_affordable_nodes = 500 if analysis.is_card_game else 5000
         bf = max(analysis.branching_factor, 2)
         while depth > self.min_depth:
             estimated_nodes = bf ** depth

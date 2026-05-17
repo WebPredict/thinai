@@ -1291,13 +1291,12 @@ function CrazyEightsBoard({ state, onMove, disabled }) {
   return (
     <div className="crazy8-board">
       <div className="crazy8-info">
-        <span>Deck: {deckSize}</span>
+        <span>Deck: {deckSize} cards remaining</span>
         <span>AI hand: {oppHandSize} cards</span>
       </div>
 
       <div className="crazy8-table">
         <div className="crazy8-deck-pile">
-          <span className="crazy8-deck-count">{deckSize}</span>
         </div>
         {topCard && (
           <div className={`crazy8-top-card ${

@@ -52,7 +52,7 @@ header { text-align: center; }
   font-size: 0.85rem;
   color: var(--ink-dim);
   text-decoration: none;
-  border: 1px solid var(--rule-bright);
+  border: 1px solid var(--ink-faint);
   padding: 0.4rem 1rem;
   border-radius: 4px;
   transition: all 0.15s;
@@ -1916,7 +1916,7 @@ header em {
   align-items: center;
   padding: 0.7rem 1.1rem;
   background: var(--bg-raised);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--ink-faint);
   color: var(--ink-dim);
   font-family: 'Menlo', monospace;
   font-size: 0.9rem;
@@ -2359,8 +2359,8 @@ header em {
   display: flex;
   gap: 2rem;
   font-family: 'Menlo', monospace;
-  font-size: 0.85rem;
-  color: var(--ink-faint);
+  font-size: 0.9rem;
+  color: var(--ink-dim);
 }
 
 .crazy8-table {
@@ -2372,13 +2372,16 @@ header em {
 .crazy8-deck-pile {
   width: 70px;
   height: 100px;
-  background: linear-gradient(135deg, #2050a0, #183878);
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.06) 4px, rgba(255,255,255,0.06) 5px),
+    repeating-linear-gradient(-45deg, transparent, transparent 4px, rgba(255,255,255,0.06) 4px, rgba(255,255,255,0.06) 5px),
+    linear-gradient(135deg, #2050a0, #183878);
   border: 2px solid #4080d0;
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.25), 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
 .crazy8-deck-count {

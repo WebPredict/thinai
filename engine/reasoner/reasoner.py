@@ -19,13 +19,14 @@ class Reasoner:
 
     def __init__(self, engine: GameEngine, max_depth: int = 6, eval_fn=None,
                  effort_allocator=None, confidence_tracker=None,
-                 time_limit: float = 4.0):
+                 time_limit: float = 4.0, use_sampling: bool = False):
         self.engine = engine
         self.max_depth = max_depth
         self.eval_fn = eval_fn or default_eval
         self.effort_allocator = effort_allocator
         self.confidence_tracker = confidence_tracker
         self.time_limit = time_limit  # hard cap in seconds
+        self.use_sampling = use_sampling  # only for play vs human, not training
         self.nodes_searched = 0
         self.last_confidence = None  # MoveConfidence from most recent move
         self.last_depth_used = 0
@@ -39,8 +40,8 @@ class Reasoner:
         if not moves:
             return None
 
-        # For card games with hidden info, use sampling-based search
-        if state.card_zones and any(
+        # For card games with hidden info during play, use sampling-based search
+        if self.use_sampling and state.card_zones and any(
             z.visible_to == "owner" for z in state.card_zones.values()
         ):
             return self._choose_move_sampled(state, moves)

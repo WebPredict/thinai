@@ -381,7 +381,8 @@ def ai_move(request: Request, session_id: str):
         reasoner = Reasoner(engine, max_depth=session["ai_depth"],
                            eval_fn=session.get("eval_fn"),
                            effort_allocator=allocator,
-                           confidence_tracker=conf_tracker)
+                           confidence_tracker=conf_tracker,
+                           use_sampling=True)
         move = reasoner.choose_move(state)
         # Store for future moves in this session
         session["effort_allocator"] = allocator

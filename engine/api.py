@@ -300,6 +300,12 @@ def new_game(request: Request, req: NewGameRequest):
         except (ValueError, Exception):
             pass  # No features for this game type (e.g., card games)
 
+    # Create opponent model for card games with hidden info
+    opponent_model = None
+    if state.card_zones and any(z.visible_to == "owner" for z in state.card_zones.values()):
+        from engine.reasoner.opponent_model import OpponentModel
+        opponent_model = OpponentModel(opponent="player1")  # model the human
+
     _sessions[session_id] = {
         "engine": engine,
         "state": state,
@@ -308,6 +314,7 @@ def new_game(request: Request, req: NewGameRequest):
         "game_name": req.game,
         "eval_fn": eval_fn,
         "correction_handler": CorrectionHandler(engine.gdl),
+        "opponent_model": opponent_model,
     }
 
     return {
@@ -342,6 +349,30 @@ def make_move(request: Request, session_id: str, req: MoveRequest):
     move = Move(req.rule, params)
     state = engine.apply_move(state, move)
     session["state"] = state
+
+    # Observe human's move for opponent modeling
+    opp_model = session.get("opponent_model")
+    if opp_model:
+        last_action = state.state_vars.get("last_action", "")
+        last_play = state.state_vars.get("last_play", "")
+        # Extract card suit from last_play if available (e.g., "5♥" or "played hearts")
+        card_suit = None
+        for suit in ["hearts", "diamonds", "clubs", "spades"]:
+            if suit in last_play.lower():
+                card_suit = suit
+                break
+        # Check suit symbols too
+        suit_map = {"\u2665": "hearts", "\u2666": "diamonds", "\u2663": "clubs", "\u2660": "spades"}
+        for sym, suit in suit_map.items():
+            if sym in last_play:
+                card_suit = suit
+                break
+        opp_model.observe(
+            action=last_action or req.rule,
+            state_vars=state.state_vars,
+            card_suit=card_suit,
+            turn=state.turn_number,
+        )
 
     handler = session.get("correction_handler")
     if handler:
@@ -382,7 +413,8 @@ def ai_move(request: Request, session_id: str):
                            eval_fn=session.get("eval_fn"),
                            effort_allocator=allocator,
                            confidence_tracker=conf_tracker,
-                           use_sampling=True)
+                           use_sampling=True,
+                           opponent_model=session.get("opponent_model"))
         move = reasoner.choose_move(state)
         # Store for future moves in this session
         session["effort_allocator"] = allocator

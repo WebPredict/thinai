@@ -19,7 +19,8 @@ class Reasoner:
 
     def __init__(self, engine: GameEngine, max_depth: int = 6, eval_fn=None,
                  effort_allocator=None, confidence_tracker=None,
-                 time_limit: float = 4.0, use_sampling: bool = False):
+                 time_limit: float = 4.0, use_sampling: bool = False,
+                 opponent_model=None):
         self.engine = engine
         self.max_depth = max_depth
         self.eval_fn = eval_fn or default_eval
@@ -27,6 +28,7 @@ class Reasoner:
         self.confidence_tracker = confidence_tracker
         self.time_limit = time_limit  # hard cap in seconds
         self.use_sampling = use_sampling  # only for play vs human, not training
+        self.opponent_model = opponent_model
         self.nodes_searched = 0
         self.last_confidence = None  # MoveConfidence from most recent move
         self.last_depth_used = 0
@@ -107,6 +109,7 @@ class Reasoner:
             eval_fn=self.eval_fn,
             max_depth=1,
             num_samples=20,
+            opponent_model=self.opponent_model,
         )
         move = sampler.choose_move(state)
         self.nodes_searched = sampler.nodes_searched

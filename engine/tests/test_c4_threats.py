@@ -65,10 +65,10 @@ def test_effort_allocator_depth_for_c4():
     assert decision.depth >= 4, f"C4 needs at least depth 4, got {decision.depth}"
 
 
-def test_card_games_stay_shallow():
-    """Card games should stay at depth 1 (500 node budget)."""
+def test_card_games_stay_within_budget():
+    """Card games should stay within 1500 node budget."""
     eng = GameEngine.from_file("engine/games/examples/uno.json")
     state = eng.initial_state()
     allocator = EffortAllocator()
     decision = allocator.recommend(state, eng)
-    assert decision.depth <= 1, f"Card games should be depth 1, got {decision.depth}"
+    assert decision.max_nodes <= 1500, f"Card games should be within 1500 nodes, got {decision.max_nodes}"

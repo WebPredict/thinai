@@ -247,6 +247,31 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         # Lower deadwood is better — return negative deadwood
         return -_gin_rummy_deadwood(hand.cards)
 
+    # Compare/score card game built-ins (novel parsed games)
+    if name == "compare_game_over":
+        p1 = ctx.state.card_zones.get("hand_p1")
+        p2 = ctx.state.card_zones.get("hand_p2")
+        return (not p1 or p1.is_empty) and (not p2 or p2.is_empty)
+    if name == "compare_score":
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        suffix = "p1" if player == "player1" else "p2"
+        return ctx.state.state_vars.get(f"{suffix}_score", 0)
+
+    # Hearts built-ins
+    if name == "hearts_trick_complete":
+        return ctx.state.state_vars.get("last_action") == "trick_won"
+    if name == "hearts_trick_loser":
+        return _hearts_trick_loser(ctx.state)
+    if name == "hearts_game_over":
+        p1 = ctx.state.card_zones.get("hand_p1")
+        p2 = ctx.state.card_zones.get("hand_p2")
+        return (not p1 or p1.is_empty) and (not p2 or p2.is_empty)
+    if name == "hearts_score":
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        suffix = "p1" if player == "player1" else "p2"
+        # Lower points is better — return negative
+        return -ctx.state.state_vars.get(f"{suffix}_points", 0)
+
     # Poker built-ins
     if name == "poker_can_discard":
         phase = ctx.state.state_vars.get("phase", "")
@@ -713,6 +738,18 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "gin_rummy_knock":
         args = [evaluate(a, ctx) for a in node.args]
         _gin_rummy_knock(ctx.state, int(args[0]))
+        return
+
+    # Compare/score effects (novel card games)
+    if name == "compare_play":
+        args = [evaluate(a, ctx) for a in node.args]
+        _compare_play(ctx.state, int(args[0]))
+        return
+
+    # Hearts effects
+    if name == "hearts_play":
+        args = [evaluate(a, ctx) for a in node.args]
+        _hearts_play(ctx.state, int(args[0]))
         return
 
     # Poker effects
@@ -1889,3 +1926,170 @@ def _poker_showdown(state: GameState):
     state.state_vars["round_over"] = True
     state.state_vars["phase"] = "showdown"
     state.state_vars["last_action"] = "showdown"
+
+
+# --- Hearts built-ins ---
+
+_HEARTS_RANK_ORDER = {"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"J":11,"Q":12,"K":13,"A":14}
+
+
+def _hearts_play(state: GameState, card_id: int):
+    """Play a card in Hearts."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    trick = state.card_zones.get("trick")
+    if not hand or not trick:
+        return
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    hand.remove(card)
+    trick.add(card)
+
+    SUIT_SYMBOLS = {"hearts": "\u2665", "diamonds": "\u2666", "clubs": "\u2663", "spades": "\u2660"}
+    state.state_vars["last_play"] = f"{card.rank}{SUIT_SYMBOLS.get(card.suit, card.suit)}"
+    state.state_vars["last_action"] = "play"
+
+    # If leading (first card in trick), set lead suit
+    if trick.size == 1:
+        state.state_vars["lead_suit"] = card.suit
+        state.state_vars["lead_player"] = state.current_player
+
+    # Break hearts
+    if card.suit == "hearts":
+        state.state_vars["hearts_broken"] = True
+
+    # If trick is complete (2 cards), resolve it
+    if trick.size == 2:
+        _hearts_resolve_trick(state)
+
+
+def _hearts_resolve_trick(state: GameState):
+    """Resolve a completed trick — determine winner, assign points."""
+    trick = state.card_zones.get("trick")
+    if not trick or trick.size != 2:
+        return
+
+    lead_suit = state.state_vars.get("lead_suit", "")
+    lead_player = state.state_vars.get("lead_player", "player1")
+    follow_player = "player2" if lead_player == "player1" else "player1"
+
+    cards = list(trick.cards)
+    # Determine which card was played by whom
+    # First card was played by lead_player, second by follow_player
+    lead_card = cards[0]
+    follow_card = cards[1]
+
+    # Determine trick winner: highest card of lead suit wins
+    lead_val = _HEARTS_RANK_ORDER.get(lead_card.rank, 0)
+    follow_val = _HEARTS_RANK_ORDER.get(follow_card.rank, 0) if follow_card.suit == lead_suit else 0
+
+    if follow_val > lead_val:
+        winner = follow_player
+    else:
+        winner = lead_player
+
+    # Count points in trick
+    points = 0
+    for card in cards:
+        if card.suit == "hearts":
+            points += 1
+        if card.suit == "spades" and card.rank == "Q":
+            points += 13
+
+    # Move cards to winner's taken pile and add points
+    winner_suffix = "p1" if winner == "player1" else "p2"
+    taken = state.card_zones.get(f"taken_{winner_suffix}")
+    if taken:
+        for card in list(trick.cards):
+            trick.remove(card)
+            taken.add(card)
+    else:
+        trick.cards.clear()
+
+    state.state_vars[f"{winner_suffix}_points"] = state.state_vars.get(f"{winner_suffix}_points", 0) + points
+    state.state_vars["tricks_played"] = state.state_vars.get("tricks_played", 0) + 1
+    state.state_vars["lead_suit"] = ""
+    state.state_vars["trick_winner"] = winner
+    state.state_vars["last_action"] = "trick_won"
+    state.state_vars["last_play"] = f"{'You' if winner == 'player1' else 'AI'} won the trick ({points} pts)"
+
+
+def _hearts_trick_loser(state: GameState) -> str:
+    """Return the player who won the last trick (they lead next).
+    Called 'trick_loser' because in Hearts winning tricks is bad."""
+    winner = state.state_vars.get("trick_winner", "")
+    if winner in ("player1", "player2"):
+        return winner
+    return state.current_player
+
+
+# --- Compare/Score card game built-ins (novel parsed games) ---
+
+_COMPARE_RANK_VALUES = {
+    "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8,
+    "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14,
+}
+
+
+def _compare_play(state: GameState, card_id: int):
+    """Play a card in a compare/score game. When both have played, compare and score."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    trick = state.card_zones.get("trick")
+    if not hand or not trick:
+        return
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    hand.remove(card)
+    trick.add(card)
+
+    SUIT_SYMBOLS = {"hearts": "\u2665", "diamonds": "\u2666", "clubs": "\u2663", "spades": "\u2660"}
+    state.state_vars["last_play"] = f"{card.rank}{SUIT_SYMBOLS.get(card.suit, card.suit)}"
+    state.state_vars["last_action"] = "play"
+
+    # If both players have played (2 cards in trick), compare
+    if trick.size >= 2:
+        cards = list(trick.cards)
+        val1 = _COMPARE_RANK_VALUES.get(cards[0].rank, 0)
+        val2 = _COMPARE_RANK_VALUES.get(cards[1].rank, 0)
+
+        # First card was played by whoever went first this round
+        # In alternating turns, p1 plays first
+        if val1 > val2:
+            winner = "p1"
+        elif val2 > val1:
+            winner = "p2"
+        else:
+            winner = None  # tie — no points
+
+        if winner:
+            state.state_vars[f"{winner}_score"] = state.state_vars.get(f"{winner}_score", 0) + 1
+            state.state_vars["last_play"] = f"{'You' if winner == 'p1' else 'AI'} won the round!"
+        else:
+            state.state_vars["last_play"] = "Tie — no points"
+
+        # Move cards to taken pile
+        taken = state.card_zones.get(f"taken_{winner}") if winner else None
+        for c in list(trick.cards):
+            trick.remove(c)
+            if taken:
+                taken.add(c)
+        state.state_vars["last_action"] = "round_complete"

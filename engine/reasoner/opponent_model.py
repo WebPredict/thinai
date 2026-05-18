@@ -68,7 +68,6 @@ class OpponentModel:
 
         elif obs.action == "discard" and obs.card_rank:
             # Opponent discarded this rank — they probably don't need it
-            # (unless setting a trap, but at our level that's unlikely)
             self._constraints.append(Constraint(
                 card_rank=obs.card_rank,
                 zone_name=opp_hand,
@@ -85,6 +84,18 @@ class OpponentModel:
                     zone_name=opp_hand,
                     is_present=False,
                     reason=f"drew instead of playing {active_suit}",
+                ))
+
+        elif obs.action == "play" and obs.card_suit:
+            # In trick-taking games (Hearts): if opponent played off-suit,
+            # they're void in the lead suit
+            lead_suit = state_vars.get("lead_suit", "")
+            if lead_suit and obs.card_suit != lead_suit:
+                self._constraints.append(Constraint(
+                    card_suit=lead_suit,
+                    zone_name=opp_hand,
+                    is_present=False,
+                    reason=f"played off-suit ({obs.card_suit} instead of {lead_suit})",
                 ))
 
     def get_constraints(self) -> list[Constraint]:

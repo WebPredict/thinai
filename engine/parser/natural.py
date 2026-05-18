@@ -599,6 +599,17 @@ def _extract_card_end_conditions(text: str, board: dict) -> list[dict]:
                 "condition": 'zone_empty("hand_p1")',
             })
 
+    # Score/points based: "most points wins" / "more points wins"
+    if any(w in text for w in ['more points', 'most points', 'scores a point',
+                                'higher rank wins']):
+        conditions = [{
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "compare_game_over()",
+            "score": "compare_score(current_player)",
+        }]
+        return conditions
+
     # Fallback: deck runs out, fewer cards wins
     if not conditions:
         conditions.append({
@@ -646,7 +657,7 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
         return rules
 
     # War style: both flip cards
-    if any(w in text for w in ['flip', 'war', 'higher card wins', 'compare cards']):
+    if any(w in text for w in ['flip', 'war', 'compare cards']):
         rules.append({
             "name": "battle",
             "action": "chance",
@@ -654,6 +665,29 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
             "params": [],
             "conditions": [],
             "effects": ["war_battle()"],
+        })
+        return rules
+
+    # Compare/score style: play a card, higher rank wins, score points
+    if any(w in text for w in ['higher rank', 'higher card', 'wins the round',
+                                'scores a point', 'play one card', 'playing one card']):
+        # Add a table/trick zone if not present
+        zones = board.get("zones", [])
+        zone_names = [z["name"] for z in zones]
+        if "trick" not in zone_names:
+            zones.append({"name": "trick", "visible_to": "all", "ordered": True})
+        if "taken_p1" not in zone_names:
+            zones.append({"name": "taken_p1", "owner": "player1", "visible_to": "all", "ordered": False})
+        if "taken_p2" not in zone_names:
+            zones.append({"name": "taken_p2", "owner": "player2", "visible_to": "all", "ordered": False})
+        board["zones"] = zones
+
+        rules.append({
+            "name": "play_card",
+            "action": "play",
+            "params": [{"name": "card_id", "select": "gin_rummy_hand"}],
+            "conditions": [],
+            "effects": ["compare_play(card_id)"],
         })
         return rules
 
@@ -686,6 +720,16 @@ def _extract_state_vars(text: str, board: dict) -> list[dict]:
         if any(w in text for w in ['match', 'wild', 'crazy eight', 'suit']):
             state_vars.extend([
                 {"name": "active_suit", "type": "string", "scope": "global", "initial": ""},
+                {"name": "last_play", "type": "string", "scope": "global", "initial": ""},
+                {"name": "last_action", "type": "string", "scope": "global", "initial": ""},
+            ])
+
+        # Compare/score games need score and play tracking
+        if any(w in text for w in ['higher rank', 'higher card', 'scores a point',
+                                    'play one card', 'playing one card']):
+            state_vars.extend([
+                {"name": "p1_score", "type": "int", "scope": "global", "initial": 0},
+                {"name": "p2_score", "type": "int", "scope": "global", "initial": 0},
                 {"name": "last_play", "type": "string", "scope": "global", "initial": ""},
                 {"name": "last_action", "type": "string", "scope": "global", "initial": ""},
             ])

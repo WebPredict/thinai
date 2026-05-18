@@ -225,6 +225,11 @@ class GameEngine:
             return state.next_player_alternating()
         elif target == "same_player":
             return state.current_player
+        elif "(" in target:
+            # Function call — evaluate it
+            from engine.gdl.expr_parser import parse_condition
+            result = evaluate(parse_condition(target), eval_ctx)
+            return result if result in ("player1", "player2") else state.next_player_alternating()
         else:
             return target
 
@@ -315,6 +320,48 @@ class GameEngine:
                 if hand:
                     for card in hand.cards:
                         yield card.id
+
+        elif select == "hearts_playable":
+            if state.card_zones:
+                suffix = "p1" if state.current_player == "player1" else "p2"
+                hand = state.card_zones.get(f"hand_{suffix}")
+                trick = state.card_zones.get("trick")
+                lead_suit = state.state_vars.get("lead_suit", "")
+                hearts_broken = state.state_vars.get("hearts_broken", False)
+                is_leading = not trick or trick.is_empty
+
+                if hand:
+                    # First trick: must lead 2 of clubs if you have it
+                    if is_leading and state.state_vars.get("tricks_played", 0) == 0:
+                        has_2c = False
+                        for card in hand.cards:
+                            if card.rank == "2" and card.suit == "clubs":
+                                yield card.id
+                                has_2c = True
+                        if has_2c:
+                            return
+                        # Don't have 2 of clubs — play any non-heart
+                        for card in hand.cards:
+                            if card.suit != "hearts":
+                                yield card.id
+                        return
+
+                    if is_leading:
+                        non_hearts = [c for c in hand.cards if c.suit != "hearts"]
+                        if non_hearts and not hearts_broken:
+                            for card in non_hearts:
+                                yield card.id
+                        else:
+                            for card in hand.cards:
+                                yield card.id
+                    else:
+                        matching = [c for c in hand.cards if c.suit == lead_suit]
+                        if matching:
+                            for card in matching:
+                                yield card.id
+                        else:
+                            for card in hand.cards:
+                                yield card.id
 
         elif select == "checkers_moves":
             from engine.gdl.checkers import get_all_moves

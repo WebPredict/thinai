@@ -5,7 +5,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'hearts', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -20,6 +20,7 @@ const PLAYER_INDICATOR = {
   uno: { label: 'Player 1', color: '#d4a656' },
   blackjack: { label: 'Player (vs Dealer)', color: '#d4a656' },
   war: { label: 'Player 1', color: '#d4a656' },
+  hearts: { label: 'Player 1', color: '#d4a656' },
   gin_rummy: { label: 'Player 1', color: '#d4a656' },
   five_card_draw: { label: 'Player 1', color: '#d4a656' },
 }
@@ -37,6 +38,7 @@ const GAME_LABELS = {
   blackjack: 'Blackjack',
   war: 'War',
   go_fish: 'Go Fish',
+  hearts: 'Hearts',
   gin_rummy: 'Gin Rummy',
   five_card_draw: 'Five-Card Draw',
 }
@@ -171,6 +173,18 @@ const GAME_RULES = {
       'Higher rank wins both cards (Ace is highest).',
       'On a tie: each player places 3 cards face-down, then flips a 4th. Higher 4th card wins all.',
       'First player to collect all 52 cards wins.',
+    ],
+  },
+  hearts: {
+    title: 'How to play Hearts',
+    intro: 'Avoid taking hearts and the Queen of Spades! Lowest score wins.',
+    rules: [
+      'Each player gets 13 cards. The player with the 2 of clubs leads the first trick.',
+      'Players must follow the lead suit if they can. If they can\u2019t, they may play any card.',
+      'The highest card of the lead suit wins the trick. The winner leads the next trick.',
+      'Each heart taken = 1 point. Queen of Spades = 13 points.',
+      'Hearts cannot be led until a heart has been played on a previous trick ("broken").',
+      'After all 13 tricks, the player with fewer points wins.',
     ],
   },
   gin_rummy: {
@@ -473,18 +487,27 @@ function App() {
             <div className="teach-teaser-divider">
               <span>or</span>
             </div>
-            <h3>Teach it a new game</h3>
+            <h3>Teach it a new game <span style={{ fontFamily: 'Menlo, monospace', fontSize: '0.7rem', color: 'var(--accent)', border: '1px solid var(--accent-dim)', padding: '0.15rem 0.5rem', borderRadius: '3px', marginLeft: '0.5rem', verticalAlign: 'middle' }}>In Progress</span></h3>
             <p>
-              The goal of ThinAI is to learn <em>any</em> game from a natural-language
-              description of the rules. Describe your game below and the system will
-              parse the rules, build an internal model, and learn to play through practice.
+              ThinAI can learn simple games from a plain English description.
+              Describe a game with a board and rules, and the system will parse it,
+              generate evaluation features, train through self-play, and let you play against it.
+            </p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--ink-dim)' }}>
+              Current limitations: grid placement games (N-in-a-row, territory) and simple card games.
+              Complex movement rules (chess-like) are not yet supported for novel games.
             </p>
             <div className="teach-teaser-example">
-              <div className="teach-teaser-label">Example input</div>
+              <div className="teach-teaser-label">Example inputs</div>
               <div className="teach-teaser-text">
                 "Two players take turns placing stones on a 5x5 grid. A player wins by
                 getting 4 in a row horizontally, vertically, or diagonally. If the board
                 is full with no winner, it's a draw."
+              </div>
+              <div className="teach-teaser-text" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                "Two players are each dealt 5 cards. Players take turns playing one card.
+                The higher rank wins the round and scores a point. After all cards are
+                played, the player with more points wins."
               </div>
             </div>
             <div className="teach-workspace">
@@ -649,6 +672,12 @@ function App() {
             />
           ) : selectedGame === 'go_fish' ? (
             <GoFishBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'hearts' ? (
+            <HeartsBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
@@ -1749,6 +1778,93 @@ function ChutesAndLaddersBoard({ state, onMove, disabled, aiLastMove }) {
             {rolling ? 'Rolling...' : 'Roll Die'}
           </button>
         )}
+      </div>
+    </div>
+  )
+}
+
+function HeartsBoard({ state, onMove, disabled }) {
+  if (!state) return null
+
+  const zones = state.card_zones || {}
+  const vars = state.state_vars || {}
+  const myHand = zones.hand_p1?.cards || []
+  const oppHandSize = zones.hand_p2?.size || 0
+  const trickCards = zones.trick?.cards || []
+  const p1Points = vars.p1_points || 0
+  const p2Points = vars.p2_points || 0
+  const tricksPlayed = vars.tricks_played || 0
+  const lastPlay = vars.last_play || ''
+  const lastAction = vars.last_action || ''
+  const isMyTurn = state.current_player === 'player1'
+
+  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
+  const SUIT_ORDER = ['clubs', 'diamonds', 'spades', 'hearts']
+  const RANK_ORDER = ['2','3','4','5','6','7','8','9','10','J','Q','K','A']
+
+  const playableIds = new Set()
+  for (const m of (state.legal_moves || [])) {
+    if (m.params.card_id != null) playableIds.add(m.params.card_id)
+  }
+
+  const handlePlay = (cardId) => {
+    if (disabled) return
+    const move = state.legal_moves?.find(m => m.params.card_id === cardId)
+    if (move) onMove(move.rule, move.params)
+  }
+
+  const sortedHand = [...myHand].sort((a, b) => {
+    const si = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit)
+    return si !== 0 ? si : RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank)
+  })
+
+  return (
+    <div className="crazy8-board">
+      <div className="crazy8-info">
+        <span>Your points: {p1Points}</span>
+        <span>AI points: {p2Points}</span>
+        <span>Tricks: {tricksPlayed}/13</span>
+        <span>AI hand: {oppHandSize}</span>
+      </div>
+
+      {trickCards.length > 0 && (
+        <div className="crazy8-table">
+          {trickCards.map((card, i) => (
+            <div key={card.id} className={`crazy8-top-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
+              <span className="crazy8-card-rank">{card.rank}</span>
+              <span className="crazy8-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="crazy8-last-action">
+        {lastAction === 'trick_won' && lastPlay}
+        {lastAction === 'play' && !isMyTurn && `AI played ${lastPlay}`}
+        {isMyTurn && lastAction !== 'trick_won' && trickCards.length === 0 && 'Lead a card'}
+        {isMyTurn && trickCards.length === 1 && 'Play a card (must follow suit if possible)'}
+      </div>
+
+      <div className="crazy8-my-hand">
+        <div className="crazy8-hand-label">Your hand ({myHand.length} cards)</div>
+        <div className="gofish-cards">
+          {sortedHand.map((card) => {
+            const playable = playableIds.has(card.id)
+            const isDangerous = card.suit === 'hearts' || (card.suit === 'spades' && card.rank === 'Q')
+            return (
+              <button
+                key={card.id}
+                className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${!playable ? 'disabled' : ''}`}
+                style={isDangerous ? { borderColor: '#c83030' } : {}}
+                onClick={() => playable && handlePlay(card.id)}
+                disabled={disabled || !isMyTurn || !playable}
+              >
+                <span className="gofish-card-rank">{card.rank}</span>
+                <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

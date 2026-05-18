@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "name": "Hex",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "grid",
+    "grid": {
+      "rows": 7,
+      "cols": 7,
+      "topology": "hex6"
+    }
+  },
+
+  "pieces": [
+    { "name": "stone", "owner": "player1", "display": "R" },
+    { "name": "stone", "owner": "player2", "display": "B" }
+  ],
+
+  "rules": [
+    {
+      "name": "place_stone",
+      "action": "place",
+      "params": [
+        { "name": "target", "select": "empty_space" }
+      ],
+      "conditions": [],
+      "effects": [
+        "place stone(current_player) at target"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "hex_connected(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Hex: 7x7 board. Player 1 (Red) connects top-to-bottom, Player 2 (Blue) connects left-to-right. Place one stone per turn on any empty hex. First to connect their two sides wins. No draws possible in Hex.",
+    "topology": "hex6 means each cell has 6 neighbors (hex grid), not 8 (square grid)"
+  }
+}

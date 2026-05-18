@@ -589,6 +589,189 @@ GOFISH_FEATURES = [
 
 # ============================================================
 
+def _hex_connection_progress(state: GameState, player: str) -> float:
+    """How close is the player to connecting their two sides (0 to 1)."""
+    if not isinstance(state.board, GridBoard):
+        return 0.0
+    rows, cols = state.board.rows, state.board.cols
+    owned = set()
+    for space in state.board.spaces:
+        pieces = state.get_pieces(space)
+        if any(p.owner == player for p in pieces):
+            owned.add((space.row, space.col))
+    if not owned:
+        return 0.0
+
+    # BFS from start edge, measure how deep we reach toward target edge
+    if player == "player1":
+        start = {(r, c) for r, c in owned if r == 0}
+        max_progress = lambda r, c: r / (rows - 1) if rows > 1 else 1
+    else:
+        start = {(r, c) for r, c in owned if c == 0}
+        max_progress = lambda r, c: c / (cols - 1) if cols > 1 else 1
+
+    if not start:
+        return 0.0
+
+    visited = set(start)
+    queue = list(start)
+    best = max(max_progress(r, c) for r, c in start)
+
+    while queue:
+        r, c = queue.pop(0)
+        prog = max_progress(r, c)
+        if prog > best:
+            best = prog
+        for dr, dc in state.board.direction_vectors:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited and (nr, nc) in owned:
+                visited.add((nr, nc))
+                queue.append((nr, nc))
+
+    return best
+
+
+def _hex_center_mass(state: GameState, player: str) -> float:
+    """How central are the player's pieces."""
+    if not isinstance(state.board, GridBoard):
+        return 0.0
+    rows, cols = state.board.rows, state.board.cols
+    center_r, center_c = rows / 2, cols / 2
+    count = 0
+    total_dist = 0
+    for space in state.board.spaces:
+        pieces = state.get_pieces(space)
+        if any(p.owner == player for p in pieces):
+            count += 1
+            total_dist += abs(space.row - center_r) + abs(space.col - center_c)
+    if count == 0:
+        return 0.0
+    max_dist = center_r + center_c
+    return 1.0 - (total_dist / count) / max_dist
+
+
+HEX_FEATURES = [
+    FeatureSpec("connection_progress", "How close to connecting my two sides",
+                lambda s, p: _hex_connection_progress(s, p)),
+    FeatureSpec("opp_connection_progress", "How close opponent is to connecting",
+                lambda s, p: -_hex_connection_progress(s, s.opponent(p))),
+    FeatureSpec("piece_count", "Number of my pieces on the board",
+                lambda s, p: sum(1 for sp in s.board.spaces if any(pc.owner == p for pc in s.get_pieces(sp))) / 49),
+    FeatureSpec("center_control", "How central my pieces are",
+                lambda s, p: _hex_center_mass(s, p)),
+    FeatureSpec("blocking", "Opponent's connection is less than halfway",
+                lambda s, p: 1.0 if _hex_connection_progress(s, s.opponent(p)) < 0.5 else 0.0),
+]
+
+
+def _bg_pip_count(state: GameState, player: str) -> float:
+    """Total distance of player's checkers from bearing off (lower is better)."""
+    total = 0
+    is_p1 = player == "player1"
+    for i in range(24):
+        pieces = state.get_pieces(TrackSpace(i))
+        count = sum(1 for p in pieces if p.owner == player)
+        if count > 0:
+            dist = i + 1 if is_p1 else 24 - i  # distance to bear-off
+            total += count * dist
+    # Bar checkers count as 25
+    bar = 24 if is_p1 else 25
+    bar_count = sum(1 for p in state.get_pieces(TrackSpace(bar)) if p.owner == player)
+    total += bar_count * 25
+    return total / 167.0  # normalize by starting pip count
+
+
+def _bg_blots(state: GameState, player: str) -> float:
+    """Number of single checkers (vulnerable to being hit)."""
+    count = 0
+    for i in range(24):
+        pieces = state.get_pieces(TrackSpace(i))
+        mine = sum(1 for p in pieces if p.owner == player)
+        if mine == 1:
+            count += 1
+    return count / 15.0
+
+
+def _bg_home_count(state: GameState, player: str) -> float:
+    """How many checkers are in the home quadrant."""
+    is_p1 = player == "player1"
+    home = range(0, 6) if is_p1 else range(18, 24)
+    count = 0
+    for i in home:
+        pieces = state.get_pieces(TrackSpace(i))
+        count += sum(1 for p in pieces if p.owner == player)
+    # Add borne off
+    bear_off = 26 if is_p1 else 27
+    count += sum(1 for p in state.get_pieces(TrackSpace(bear_off)) if p.owner == player)
+    return count / 15.0
+
+
+BACKGAMMON_FEATURES = [
+    FeatureSpec("pip_advantage", "Lower pip count is closer to winning",
+                lambda s, p: _bg_pip_count(s, s.opponent(p)) - _bg_pip_count(s, p)),
+    FeatureSpec("blot_safety", "Fewer exposed single checkers is safer",
+                lambda s, p: _bg_blots(s, s.opponent(p)) - _bg_blots(s, p)),
+    FeatureSpec("home_progress", "More checkers in home quadrant = closer to bearing off",
+                lambda s, p: _bg_home_count(s, p)),
+    FeatureSpec("bearing_off", "Checkers already borne off",
+                lambda s, p: sum(1 for pc in s.get_pieces(TrackSpace(26 if p == 'player1' else 27)) if pc.owner == p) / 15.0),
+    FeatureSpec("bar_penalty", "Checkers on the bar is bad",
+                lambda s, p: -sum(1 for pc in s.get_pieces(TrackSpace(24 if p == 'player1' else 25)) if pc.owner == p) / 15.0),
+]
+
+
+def _gin_deadwood(state: GameState, player: str) -> float:
+    """Get deadwood for a player in Gin Rummy."""
+    from engine.gdl.expr_eval import _gin_rummy_deadwood
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand or not hand.cards:
+        return 0.0
+    return _gin_rummy_deadwood(hand.cards) / 100.0  # normalize
+
+
+def _gin_melds(state: GameState, player: str) -> float:
+    """Count melds in player's hand."""
+    from engine.gdl.expr_eval import _gin_rummy_best_melds
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand or not hand.cards:
+        return 0.0
+    melds, _ = _gin_rummy_best_melds(hand.cards)
+    return len(melds) / 4.0  # normalize by max reasonable melds
+
+
+GIN_RUMMY_FEATURES = [
+    FeatureSpec("deadwood_advantage", "Lower deadwood than opponent",
+                lambda s, p: _gin_deadwood(s, s.opponent(p)) - _gin_deadwood(s, p)),
+    FeatureSpec("meld_count", "Number of melds formed",
+                lambda s, p: _gin_melds(s, p)),
+    FeatureSpec("near_knock", "How close to being able to knock (deadwood <= 10)",
+                lambda s, p: max(0, 1.0 - _gin_deadwood(s, p) * 10)),
+    FeatureSpec("hand_size", "Cards in hand (fewer after knock = better)",
+                lambda s, p: -(_gin_deadwood(s, p))),
+]
+
+
+def _poker_hand_strength(state: GameState, player: str) -> float:
+    """Poker hand rank for a player."""
+    from engine.gdl.expr_eval import _poker_hand_rank
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand or len(hand.cards) < 5:
+        return 0.0
+    rank = _poker_hand_rank(hand.cards)
+    return rank[0] / 8.0  # normalize tier 0-8
+
+
+POKER_FEATURES = [
+    FeatureSpec("hand_strength", "How strong my poker hand is (pair, flush, etc.)",
+                lambda s, p: _poker_hand_strength(s, p)),
+    FeatureSpec("hand_advantage", "My hand rank minus opponent's",
+                lambda s, p: _poker_hand_strength(s, p) - _poker_hand_strength(s, s.opponent(p))),
+]
+
+
 FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Tic-Tac-Toe": TTT_FEATURES,
     "Connect Four": C4_FEATURES,
@@ -598,6 +781,10 @@ FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Chutes and Ladders": CL_FEATURES,
     "Go Fish": GOFISH_FEATURES,
     "Checkers": CHECKERS_FEATURES,
+    "Hex": HEX_FEATURES,
+    "Backgammon": BACKGAMMON_FEATURES,
+    "Gin Rummy": GIN_RUMMY_FEATURES,
+    "Five-Card Draw": POKER_FEATURES,
 }
 
 

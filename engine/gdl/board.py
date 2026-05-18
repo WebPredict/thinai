@@ -16,6 +16,12 @@ RECT8_DIRS = [
     (1, 0), (1, -1), (0, -1), (-1, -1),  # S, SW, W, NW
 ]
 
+# Hex grid: 6 neighbors (offset coordinates — even rows shift right)
+HEX6_DIRS = [
+    (-1, 0), (-1, 1), (0, 1),   # N, NE, E
+    (1, 0), (1, -1), (0, -1),   # S, SW, W
+]
+
 
 @dataclass(frozen=True)
 class GridSpace:
@@ -47,6 +53,8 @@ class GridBoard:
             self.direction_vectors = RECT4_DIRS
         elif topology == "rect8":
             self.direction_vectors = RECT8_DIRS
+        elif topology == "hex6":
+            self.direction_vectors = HEX6_DIRS
         else:
             raise ValueError(f"Unsupported grid topology: {topology}")
 

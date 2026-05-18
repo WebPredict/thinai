@@ -251,7 +251,8 @@ class LearningRunner:
         state = self.engine.initial_state()
         trace = []
         num_moves = 0
-        max_moves = 200
+        # Backgammon needs ~300+ moves (each die is separate), most games need < 200
+        max_moves = 500 if any(r.get("chance") for r in self.engine.gdl.get("rules", [])) else 200
 
         reasoner = Reasoner(
             self.engine, max_depth=self.max_depth, eval_fn=self.evaluator,

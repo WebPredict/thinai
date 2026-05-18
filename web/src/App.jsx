@@ -1,11 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import TrainingDashboard from './TrainingDashboard'
+import GridBoard from './boards/GridBoard'
+import MancalaBoard from './boards/MancalaBoard'
+import NimBoard from './boards/NimBoard'
+import CheckersBoard from './boards/CheckersBoard'
+import BlackjackBoard from './boards/BlackjackBoard'
+import CrazyEightsBoard from './boards/CrazyEightsBoard'
+import GoFishBoard from './boards/GoFishBoard'
+import WarBoard from './boards/WarBoard'
+import ChutesAndLaddersBoard from './boards/ChutesAndLaddersBoard'
+import BackgammonBoard from './boards/BackgammonBoard'
+import HexBoard from './boards/HexBoard'
+import HeartsBoard from './boards/HeartsBoard'
+import GinRummyBoard from './boards/GinRummyBoard'
+import PokerBoard from './boards/PokerBoard'
 import './App.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'mancala', 'hearts', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -20,6 +34,8 @@ const PLAYER_INDICATOR = {
   uno: { label: 'Player 1', color: '#d4a656' },
   blackjack: { label: 'Player (vs Dealer)', color: '#d4a656' },
   war: { label: 'Player 1', color: '#d4a656' },
+  hex: { label: 'Red (top-bottom)', color: '#c83030' },
+  backgammon: { label: 'White', color: '#e8dfd1' },
   hearts: { label: 'Player 1', color: '#d4a656' },
   gin_rummy: { label: 'Player 1', color: '#d4a656' },
   five_card_draw: { label: 'Player 1', color: '#d4a656' },
@@ -38,6 +54,8 @@ const GAME_LABELS = {
   blackjack: 'Blackjack',
   war: 'War',
   go_fish: 'Go Fish',
+  hex: 'Hex',
+  backgammon: 'Backgammon',
   hearts: 'Hearts',
   gin_rummy: 'Gin Rummy',
   five_card_draw: 'Five-Card Draw',
@@ -175,6 +193,29 @@ const GAME_RULES = {
       'First player to collect all 52 cards wins.',
     ],
   },
+  backgammon: {
+    title: 'How to play Backgammon',
+    intro: 'Race your 15 checkers around the board and bear them off before your opponent!',
+    rules: [
+      'Roll two dice each turn. Move checkers by the die values (each die is a separate move).',
+      'White (you) moves from high-numbered points toward 1. Black (AI) moves toward 24.',
+      'You can land on empty points, your own points, or points with a single opponent checker (hit).',
+      'Hit checkers go to the bar and must re-enter before making other moves.',
+      'When all your checkers are in your home area (points 1-6), you can bear them off.',
+      'First player to bear off all 15 checkers wins.',
+    ],
+  },
+  hex: {
+    title: 'How to play Hex',
+    intro: 'Connect your two sides of the board! Red connects top-to-bottom, Blue connects left-to-right.',
+    rules: [
+      'Players take turns placing one stone on any empty hex.',
+      'Red (you) wins by connecting the top edge to the bottom edge.',
+      'Blue (AI) wins by connecting the left edge to the right edge.',
+      'Connections can follow any path through adjacent hexes (6 neighbors each).',
+      'There are no draws in Hex \u2014 one player must win.',
+    ],
+  },
   hearts: {
     title: 'How to play Hearts',
     intro: 'Avoid taking hearts and the Queen of Spades! Lowest score wins.',
@@ -212,9 +253,27 @@ const GAME_RULES = {
   },
 }
 
-function RulesModal({ gameType, onClose }) {
+function RulesModal({ gameType, onClose, customDescription }) {
   const rules = GAME_RULES[gameType]
-  if (!rules) return null
+
+  if (!rules && !customDescription) return null
+
+  if (!rules && customDescription) {
+    return (
+      <div className="rules-overlay" onClick={onClose}>
+        <div className="rules-modal" onClick={e => e.stopPropagation()}>
+          <div className="rules-modal-header">
+            <span className="rules-modal-title">Game Rules</span>
+            <button className="rules-modal-close" onClick={onClose}>&times;</button>
+          </div>
+          <p className="rules-modal-intro">This game was created from the following description:</p>
+          <blockquote style={{ fontStyle: 'italic', borderLeft: '3px solid var(--accent)', paddingLeft: '1rem', margin: '1rem 0', color: 'var(--ink)' }}>
+            {customDescription}
+          </blockquote>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="rules-overlay" onClick={onClose}>
@@ -493,10 +552,14 @@ function App() {
               Describe a game with a board and rules, and the system will parse it,
               generate evaluation features, train through self-play, and let you play against it.
             </p>
-            <p style={{ fontSize: '0.85rem', color: 'var(--ink-dim)' }}>
-              Current limitations: grid placement games (N-in-a-row, territory) and simple card games.
-              Complex movement rules (chess-like) are not yet supported for novel games.
-            </p>
+            <div style={{
+              fontSize: '0.85rem', color: 'var(--ink)', background: 'rgba(212,166,86,0.08)',
+              border: '1px solid rgba(212,166,86,0.25)', borderRadius: '6px',
+              padding: '0.7rem 1rem', margin: '0.75rem 0', fontFamily: 'Menlo, monospace',
+              lineHeight: '1.6'
+            }}>
+              <strong style={{ color: 'var(--accent)' }}>Current limitations:</strong> Works with grid placement games (N-in-a-row, territory) and simple card games. Complex movement rules (chess-like) are not yet supported for novel games. <em>Note: this is not an LLM — it uses pattern matching, so its vocabulary is limited to common game terms.</em>
+            </div>
             <div className="teach-teaser-example">
               <div className="teach-teaser-label">Example inputs</div>
               <div className="teach-teaser-text">
@@ -631,7 +694,7 @@ function App() {
             )}
           </div>
           {showRulesModal && (
-            <RulesModal gameType={selectedGame} onClose={() => setShowRulesModal(false)} />
+            <RulesModal gameType={selectedGame} onClose={() => setShowRulesModal(false)} customDescription={teachInput} />
           )}
           {selectedGame === 'mancala' ? (
             <MancalaBoard
@@ -676,6 +739,18 @@ function App() {
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
             />
+          ) : selectedGame === 'hex' ? (
+            <HexBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'backgammon' ? (
+            <BackgammonBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
           ) : selectedGame === 'hearts' ? (
             <HeartsBoard
               state={gameState}
@@ -706,6 +781,12 @@ function App() {
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
               aiLastMove={aiLastMove}
+            />
+          ) : gameState?.board_type === 'card_zones' ? (
+            <CrazyEightsBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
             />
           ) : (
             <GridBoard
@@ -765,214 +846,6 @@ function GameInfo({ state, aiLastMove, loading }) {
         {statusText}
       </span>
       <span className="turn-number">Move {state.turn_number}</span>
-    </div>
-  )
-}
-
-function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
-  const [hoverCol, setHoverCol] = useState(null)
-
-  if (!state) return null
-  // Accept grid board_type or any state with rows/cols (custom games)
-  if (state.board_type !== 'grid' && !(state.rows && state.cols)) return null
-
-  const { rows, cols, spaces, legal_moves } = state
-  const isC4 = gameType === 'connect_four'
-  const isTTT = gameType === 'tictactoe'
-  const isReversi = gameType === 'reversi'
-
-  // Determine which cell the AI last played
-  const aiRow = aiLastMove?.target?.row ?? null
-  const aiCol = aiLastMove?.target?.col ?? aiLastMove?.column ?? null
-
-  const isColumnBased = legal_moves.length > 0 && 'column' in (legal_moves[0]?.params || {})
-
-  const handleCellClick = (row, col) => {
-    if (disabled) return
-    if (isColumnBased) {
-      const move = legal_moves.find(m => m.params.column === col)
-      if (move) onMove(move.rule, move.params)
-    } else {
-      const move = legal_moves.find(m =>
-        m.params.target?.row === row && m.params.target?.col === col
-      )
-      if (move) onMove(move.rule, move.params)
-    }
-  }
-
-  const isLegal = (row, col) => {
-    if (isColumnBased) return legal_moves.some(m => m.params.column === col)
-    return legal_moves.some(m =>
-      m.params.target?.row === row && m.params.target?.col === col
-    )
-  }
-
-  const renderPiece = (piece, row) => {
-    if (!piece) return null
-
-    if (isTTT) {
-      return (
-        <div className={`piece ttt-piece ${piece.owner === 'player1' ? 'p1' : 'p2'}`}>
-          {piece.owner === 'player1' ? (
-            <svg viewBox="0 0 40 40" className="piece-svg">
-              <line x1="8" y1="8" x2="32" y2="32" strokeWidth="4" strokeLinecap="round" />
-              <line x1="32" y1="8" x2="8" y2="32" strokeWidth="4" strokeLinecap="round" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 40 40" className="piece-svg">
-              <circle cx="20" cy="20" r="13" fill="none" strokeWidth="4" />
-            </svg>
-          )}
-        </div>
-      )
-    }
-
-    if (isC4) {
-      return (
-        <div className={`piece c4-disc ${piece.owner === 'player1' ? 'p1' : 'p2'} drop-in`}
-             style={{ '--drop-rows': row }}>
-          <div className="disc-inner" />
-        </div>
-      )
-    }
-
-    if (isReversi) {
-      return (
-        <div className={`piece reversi-disc ${piece.owner === 'player1' ? 'p1' : 'p2'}`}>
-          <div className="disc-inner" />
-        </div>
-      )
-    }
-
-    // Generic stone piece for custom/unknown games
-    return (
-      <div className={`piece generic-stone ${piece.owner === 'player1' ? 'p1' : 'p2'}`}>
-        <div className="disc-inner" />
-      </div>
-    )
-  }
-
-  const boardClass = [
-    'board',
-    isC4 ? 'c4-board' : '',
-    isTTT ? 'ttt-board' : '',
-    isReversi ? 'reversi-board' : '',
-  ].filter(Boolean).join(' ')
-
-  const grid = []
-  for (let r = 0; r < rows; r++) {
-    const rowCells = []
-    for (let c = 0; c < cols; c++) {
-      const key = `${r},${c}`
-      const piece = spaces[key]
-      const legal = !disabled && isLegal(r, c)
-      const isHoverCol = isC4 && hoverCol === c && legal
-      const isAiMove = aiLastMove && (
-        (aiRow === r && aiCol === c) ||
-        (isC4 && aiCol === c && piece?.owner === 'player2')
-      )
-
-      rowCells.push(
-        <div
-          key={key}
-          className={[
-            'cell',
-            piece ? 'occupied' : '',
-            legal ? 'legal' : '',
-            isHoverCol ? 'hover-col' : '',
-            isAiMove ? 'ai-last-move' : '',
-            piece?.owner === 'player1' ? 'p1' : piece?.owner === 'player2' ? 'p2' : '',
-          ].filter(Boolean).join(' ')}
-          onClick={() => handleCellClick(r, c)}
-          onMouseEnter={() => isC4 && setHoverCol(c)}
-          onMouseLeave={() => isC4 && setHoverCol(null)}
-        >
-          {isC4 && <div className="c4-hole" />}
-          {renderPiece(piece, r)}
-        </div>
-      )
-    }
-    grid.push(<div key={r} className="board-row">{rowCells}</div>)
-  }
-
-  return <div className={boardClass}>{grid}</div>
-}
-
-function MancalaBoard({ state, onMove, disabled }) {
-  if (!state) return null
-
-  const { spaces, legal_moves } = state
-
-  // Mancala layout: 14 spaces in a track
-  // Top row (P2 pits, right to left): 12, 11, 10, 9, 8, 7
-  // Bottom row (P1 pits, left to right): 0, 1, 2, 3, 4, 5
-  // Left store (P2): 13
-  // Right store (P1): 6
-
-  const getCount = (idx) => {
-    const val = spaces[String(idx)]
-    if (!val) return 0
-    if (Array.isArray(val)) return val.length
-    return 1
-  }
-
-  const isLegal = (idx) => {
-    return legal_moves.some(m => m.params.pit?.index === idx)
-  }
-
-  const handleClick = (idx) => {
-    if (disabled) return
-    const move = legal_moves.find(m => m.params.pit?.index === idx)
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const p1Pits = [0, 1, 2, 3, 4, 5]
-  const p2Pits = [12, 11, 10, 9, 8, 7]
-
-  const renderStones = (count, max) => {
-    const shown = Math.min(count, max)
-    return (
-      <div className="mancala-stones">
-        {Array.from({ length: shown }).map((_, i) => (
-          <div key={i} className="mancala-stone" />
-        ))}
-      </div>
-    )
-  }
-
-  const renderPit = (idx) => {
-    const count = getCount(idx)
-    return (
-      <div key={idx} className={`mancala-pit ${isLegal(idx) && !disabled ? 'legal' : ''}`}
-           onClick={() => handleClick(idx)}>
-        {renderStones(count, 8)}
-        <span className="stone-count">{count}</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="mancala-board">
-      <div className="mancala-store p2-store">
-        {renderStones(getCount(13), 12)}
-        <div className="store-count">{getCount(13)}</div>
-        <div className="store-label">AI</div>
-      </div>
-
-      <div className="mancala-center">
-        <div className="mancala-row p2-row">
-          {p2Pits.map(renderPit)}
-        </div>
-        <div className="mancala-row p1-row">
-          {p1Pits.map(renderPit)}
-        </div>
-      </div>
-
-      <div className="mancala-store p1-store">
-        {renderStones(getCount(6), 12)}
-        <div className="store-count">{getCount(6)}</div>
-        <div className="store-label">You</div>
-      </div>
     </div>
   )
 }
@@ -1070,1094 +943,6 @@ function CorrectionsPanel({ sessionId, gameResult }) {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function NimBoard({ state, onMove, disabled }) {
-  const [selectedPile, setSelectedPile] = useState(null)
-
-  if (!state) return null
-
-  const { spaces, legal_moves } = state
-
-  const getCount = (idx) => {
-    const val = spaces[String(idx)]
-    if (!val) return 0
-    if (Array.isArray(val)) return val.length
-    return 1
-  }
-
-  const piles = [0, 1, 2]
-  const pileCounts = piles.map(getCount)
-
-  const getAmounts = (pileIdx) => {
-    return legal_moves
-      .filter(m => m.params.pile?.index === pileIdx)
-      .map(m => m.params.amount)
-      .sort((a, b) => a - b)
-  }
-
-  const handleTake = (pileIdx, amount) => {
-    if (disabled) return
-    const move = legal_moves.find(
-      m => m.params.pile?.index === pileIdx && m.params.amount === amount
-    )
-    if (move) {
-      onMove(move.rule, move.params)
-      setSelectedPile(null)
-    }
-  }
-
-  return (
-    <div className="nim-board">
-      <div className="nim-piles">
-        {piles.map(idx => {
-          const count = pileCounts[idx]
-          const amounts = getAmounts(idx)
-          const isSelected = selectedPile === idx
-          const hasStones = count > 0
-
-          return (
-            <div key={idx} className="nim-pile-col">
-              <div className="nim-pile-label">Pile {idx + 1}</div>
-              <div
-                className={[
-                  'nim-pile',
-                  isSelected ? 'selected' : '',
-                  hasStones && !disabled ? 'clickable' : '',
-                ].filter(Boolean).join(' ')}
-                onClick={() => hasStones && !disabled && setSelectedPile(isSelected ? null : idx)}
-              >
-                {Array.from({ length: count }).map((_, i) => (
-                  <div key={i} className="nim-stone" />
-                ))}
-                {count === 0 && <div className="nim-empty">empty</div>}
-              </div>
-              {isSelected && amounts.length > 0 && (
-                <div className="nim-take-buttons">
-                  {amounts.map(amt => (
-                    <button
-                      key={amt}
-                      className="nim-take-btn"
-                      onClick={() => handleTake(idx, amt)}
-                    >
-                      Take {amt}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      <div className="nim-hint">Click a pile, then choose how many to take</div>
-    </div>
-  )
-}
-
-function CheckersBoard({ state, onMove, disabled }) {
-  const [selectedPiece, setSelectedPiece] = useState(null)
-
-  if (!state || state.board_type !== 'grid') return null
-
-  const { rows, cols, spaces, legal_moves } = state
-  const moveOptions = legal_moves || []
-
-  // Build lookup: which pieces can move, and where can they go
-  const movesFromPiece = {}  // "r,c" -> [{move, to: "r,c"}]
-  const movablePieces = new Set()
-  for (const m of moveOptions) {
-    if (m.from && m.to) {
-      const fromKey = `${m.from.row},${m.from.col}`
-      const toKey = `${m.to.row},${m.to.col}`
-      movablePieces.add(fromKey)
-      if (!movesFromPiece[fromKey]) movesFromPiece[fromKey] = []
-      movesFromPiece[fromKey].push({ move: m, toKey })
-    }
-  }
-
-  // Valid destinations for selected piece
-  const validDestinations = new Set()
-  if (selectedPiece && movesFromPiece[selectedPiece]) {
-    for (const { toKey } of movesFromPiece[selectedPiece]) {
-      validDestinations.add(toKey)
-    }
-  }
-
-  const handleCellClick = (row, col) => {
-    if (disabled) return
-    const key = `${row},${col}`
-    const piece = spaces[key]
-
-    // Clicking a movable piece: select it
-    if (movablePieces.has(key)) {
-      setSelectedPiece(selectedPiece === key ? null : key)
-      return
-    }
-
-    // Clicking a valid destination: make the move
-    if (selectedPiece && validDestinations.has(key)) {
-      const moveEntry = movesFromPiece[selectedPiece].find(m => m.toKey === key)
-      if (moveEntry) {
-        onMove(moveEntry.move.rule, moveEntry.move.params)
-        setSelectedPiece(null)
-      }
-      return
-    }
-
-    // Clicking anything else: deselect
-    setSelectedPiece(null)
-  }
-
-  return (
-    <div className="checkers-container">
-      <div className="checkers-you-label">You are <span className="checkers-red-dot" /> Red</div>
-      <div className="checkers-board">
-        {Array.from({ length: rows }).map((_, r) => (
-          <div key={r} className="checkers-row">
-            {Array.from({ length: cols }).map((_, c) => {
-              const key = `${r},${c}`
-              const piece = spaces[key]
-              const isDark = (r + c) % 2 === 1
-              const isSelected = selectedPiece === key
-              const isMovable = movablePieces.has(key) && !disabled
-              const isDestination = validDestinations.has(key)
-
-              return (
-                <div
-                  key={c}
-                  className={[
-                    'checkers-cell',
-                    isDark ? 'dark' : 'light',
-                    isSelected ? 'selected' : '',
-                    isMovable ? 'movable' : '',
-                    isDestination ? 'destination' : '',
-                  ].filter(Boolean).join(' ')}
-                  onClick={() => handleCellClick(r, c)}
-                >
-                  {piece && (
-                    <div className={`checkers-piece ${piece.owner === 'player1' ? 'red' : 'black'} ${piece.name === 'king' ? 'king' : ''}`}>
-                      {piece.name === 'king' && <span className="checkers-crown">&#9813;</span>}
-                    </div>
-                  )}
-                  {isDestination && <div className="checkers-dest-dot" />}
-                </div>
-              )
-            })}
-          </div>
-        ))}
-      </div>
-      {!disabled && moveOptions.length > 0 && (
-        <div className="checkers-hint">
-          {selectedPiece ? 'Click a highlighted square to move there' : 'Click one of your red pieces to move it'}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function BlackjackBoard({ state, onMove, disabled }) {
-  if (!state) return null
-
-  const zones = state.card_zones || {}
-  const vars = state.state_vars || {}
-  const myHand = zones.hand_p1?.cards || []
-  const dealerHand = zones.hand_p2?.cards || []
-  const holeSize = zones.hole_card?.size || 0
-  const lastAction = vars.last_action || ''
-  const phase = vars.phase || 'player'
-  const p1Bust = vars.p1_bust
-  const p2Bust = vars.p2_bust
-
-  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
-
-  const handValue = (cards) => {
-    let val = 0, aces = 0
-    for (const c of cards) {
-      if (['J','Q','K'].includes(c.rank)) val += 10
-      else if (c.rank === 'A') { val += 11; aces++ }
-      else val += parseInt(c.rank)
-    }
-    while (val > 21 && aces > 0) { val -= 10; aces-- }
-    return val
-  }
-
-  const handleHit = () => {
-    const move = state.legal_moves?.find(m => m.rule === 'hit')
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const handleStand = () => {
-    const move = state.legal_moves?.find(m => m.rule === 'stand')
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const renderCard = (card) => (
-    <div key={card.id} className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}
-         style={{ cursor: 'default' }}>
-      <span className="gofish-card-rank">{card.rank}</span>
-      <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
-    </div>
-  )
-
-  return (
-    <div className="blackjack-board">
-      <div className="blackjack-dealer">
-        <div className="blackjack-label">Dealer {phase === 'done' ? `(${handValue(dealerHand)})` : ''} {p2Bust === 'True' || p2Bust === true ? 'BUST!' : ''}</div>
-        <div className="gofish-cards">
-          {dealerHand.map(renderCard)}
-          {holeSize > 0 && <div className="gofish-card-back" style={{ width: 52, height: 74 }} />}
-        </div>
-      </div>
-
-      {lastAction && <div className="blackjack-action">{lastAction}</div>}
-
-      <div className="blackjack-player">
-        <div className="blackjack-label">Your hand ({handValue(myHand)}) {p1Bust === 'True' || p1Bust === true ? 'BUST!' : ''}</div>
-        <div className="gofish-cards">
-          {myHand.map(renderCard)}
-        </div>
-      </div>
-
-      {phase === 'player' && !disabled && (
-        <div className="blackjack-buttons">
-          <button className="action-btn action-btn-primary" onClick={handleHit}>Hit</button>
-          <button className="action-btn" onClick={handleStand}>Stand</button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CrazyEightsBoard({ state, onMove, disabled }) {
-  if (!state) return null
-
-  const zones = state.card_zones || {}
-  const vars = state.state_vars || {}
-  const myHand = zones.hand_p1?.cards || []
-  const oppHandSize = zones.hand_p2?.size || 0
-  const deckSize = zones.deck?.size || 0
-  const discardCards = zones.discard?.cards || []
-  const topCard = discardCards.length > 0 ? discardCards[discardCards.length - 1] : null
-  const activeSuit = vars.active_suit || ''
-  const lastAction = vars.last_action || ''
-  const lastPlay = vars.last_play || ''
-  const isMyTurn = state.current_player === 'player1'
-
-  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
-
-  // Abbreviate long Uno action card names to fit card bounds
-  const unoLabel = (rank) => {
-    const labels = { 'Reverse': 'REV', 'Skip': 'SKIP', 'Draw2': '+2', 'WildDraw4': '+4', 'Wild': 'W' }
-    return labels[rank] || rank
-  }
-  const isUnoGame = ['red','blue','green','yellow','wild'].includes(myHand[0]?.suit)
-
-  // Find playable card IDs from legal moves
-  const playableIds = new Set()
-  const canDraw = state.legal_moves?.some(m => m.rule === 'draw_card')
-  for (const m of (state.legal_moves || [])) {
-    if (m.params.card_id != null) playableIds.add(m.params.card_id)
-  }
-
-  const handlePlay = (cardId) => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.params.card_id === cardId)
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const handleDraw = () => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.rule === 'draw_card')
-    if (move) onMove(move.rule, move.params)
-  }
-
-  return (
-    <div className="crazy8-board">
-      <div className="crazy8-info">
-        <span>Deck: {deckSize} cards remaining</span>
-        <span>AI hand: {oppHandSize} cards</span>
-      </div>
-
-      <div className="crazy8-table">
-        <div className="crazy8-deck-pile">
-        </div>
-        {topCard && (
-          <div className={`crazy8-top-card ${
-            ['red','blue','green','yellow','wild'].includes(topCard.suit)
-              ? `uno-${topCard.suit}`
-              : topCard.suit === 'hearts' || topCard.suit === 'diamonds' ? 'red' : 'black'
-          }`}>
-            <span className="crazy8-card-rank">{isUnoGame ? unoLabel(topCard.rank) : topCard.rank}</span>
-            <span className="crazy8-card-suit">{SUIT_SYMBOLS[topCard.suit]}</span>
-          </div>
-        )}
-        {activeSuit && (
-          <div className="crazy8-active-suit">Active suit: {SUIT_SYMBOLS[activeSuit] || activeSuit}</div>
-        )}
-      </div>
-
-      {lastPlay && (
-        <div className="crazy8-last-action">
-          {lastAction === 'draw' ? 'Drew a card' : `Played ${lastPlay}`}
-        </div>
-      )}
-
-      <div className="crazy8-my-hand">
-        <div className="crazy8-hand-label">Your hand — play a matching card</div>
-        <div className="gofish-cards">
-          {myHand.map((card) => {
-            const playable = playableIds.has(card.id)
-            return (
-              <button
-                key={card.id}
-                className={`gofish-card ${
-                  ['red','blue','green','yellow','wild'].includes(card.suit)
-                    ? `uno-${card.suit}`
-                    : card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'
-                } ${!playable ? 'disabled' : ''} ${card.rank === '8' || card.suit === 'wild' ? 'wild' : ''}`}
-                onClick={() => playable && handlePlay(card.id)}
-                disabled={disabled || !isMyTurn || !playable}
-              >
-                <span className="gofish-card-rank">{isUnoGame ? unoLabel(card.rank) : card.rank}</span>
-                <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
-              </button>
-            )
-          })}
-        </div>
-        {canDraw && isMyTurn && !disabled && (
-          <button className="crazy8-draw-btn" onClick={handleDraw}>
-            Draw from deck
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function GoFishBoard({ state, onMove, disabled }) {
-  if (!state) return null
-
-  const zones = state.card_zones || {}
-  const vars = state.state_vars || {}
-  const myHand = zones.hand_p1?.cards || []
-  const oppHandSize = zones.hand_p2?.size || 0
-  const pondSize = zones.pond?.size || 0
-  const mySets = (zones.sets_p1?.size || 0) / 4
-  const oppSets = (zones.sets_p2?.size || 0) / 4
-  const mySetCards = zones.sets_p1?.cards || []
-  const oppSetCards = zones.sets_p2?.cards || []
-  // Group set cards by rank to show completed sets
-  const groupByRank = (cards) => {
-    const groups = {}
-    cards.forEach(c => { groups[c.rank] = (groups[c.rank] || 0) + 1 })
-    return Object.keys(groups)
-  }
-  const mySetRanks = groupByRank(mySetCards)
-  const oppSetRanks = groupByRank(oppSetCards)
-  const lastResult = vars.last_result || ''
-  const lastAskRank = vars.last_ask_rank || ''
-  const lastAskPlayer = vars.last_ask_player || ''
-  const isMyTurn = state.current_player === 'player1'
-
-  // Group hand by rank for display
-  const rankCounts = {}
-  myHand.forEach(c => {
-    rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1
-  })
-
-  const handleAsk = (rank) => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.params.rank === rank)
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
-
-  return (
-    <div className="gofish-board">
-      <div className="gofish-info-bar">
-        <div className="gofish-score">
-          <span className="gofish-score-you">
-            Your sets: <strong>{Math.floor(mySets)}</strong>
-            {mySetRanks.length > 0 && <span className="gofish-set-ranks"> ({mySetRanks.join(', ')})</span>}
-          </span>
-          <span className="gofish-score-ai">
-            AI sets: <strong>{Math.floor(oppSets)}</strong>
-            {oppSetRanks.length > 0 && <span className="gofish-set-ranks"> ({oppSetRanks.join(', ')})</span>}
-          </span>
-        </div>
-        <div className="gofish-pond">Pond: {pondSize} cards</div>
-      </div>
-
-      <div className="gofish-opponent">
-        <div className="gofish-opp-label">AI's hand</div>
-        <div className="gofish-card-backs">
-          {Array.from({ length: Math.min(oppHandSize, 10) }).map((_, i) => (
-            <div key={i} className="gofish-card-back" />
-          ))}
-          {oppHandSize > 10 && <span className="gofish-more">+{oppHandSize - 10}</span>}
-        </div>
-      </div>
-
-      {lastResult && (
-        <div className={`gofish-result ${lastResult.includes('Go Fish') ? 'gofish-miss' : 'gofish-hit'}`}>
-          {lastAskPlayer === 'player1' ? 'You' : 'AI'} asked for {lastAskRank}s — {lastResult}
-        </div>
-      )}
-
-      <div className="gofish-my-hand">
-        <div className="gofish-hand-label">Your hand — tap a rank to ask for it</div>
-        <div className="gofish-cards">
-          {myHand.map((card, i) => (
-            <button
-              key={card.id}
-              className={`gofish-card ${disabled || !isMyTurn ? 'disabled' : ''} ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}
-              onClick={() => handleAsk(card.rank)}
-              disabled={disabled || !isMyTurn}
-            >
-              <span className="gofish-card-rank">{card.rank}</span>
-              <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function WarBoard({ state, onMove, disabled }) {
-  if (!state) return null
-
-  const zones = state.card_zones || {}
-  const vars = state.state_vars || {}
-  const p1Size = zones.hand_p1?.size || 0
-  const p2Size = zones.hand_p2?.size || 0
-  const lastP1 = vars.last_p1_card || ''
-  const lastP2 = vars.last_p2_card || ''
-  const roundWinner = vars.round_winner || ''
-
-  const handleBattle = () => {
-    if (disabled) return
-    const moves = state.legal_moves
-    if (moves && moves.length > 0) {
-      onMove(moves[0].rule, moves[0].params)
-    }
-  }
-
-  return (
-    <div className="war-board">
-      <div className="war-players">
-        <div className="war-player">
-          <div className="war-deck-pile war-p1-pile">
-            <span className="war-card-count">{p1Size}</span>
-          </div>
-          <div className="war-player-label">You</div>
-        </div>
-
-        <div className="war-center">
-          {lastP1 && lastP2 ? (
-            <div className="war-flipped">
-              <div className="war-card war-card-p1">{lastP1}</div>
-              <div className="war-vs">vs</div>
-              <div className="war-card war-card-p2">{lastP2}</div>
-            </div>
-          ) : (
-            <div className="war-prompt">Flip cards!</div>
-          )}
-          {roundWinner && (
-            <div className={`war-round-result ${roundWinner === 'war' ? 'war-tie' : ''}`}>
-              {roundWinner === 'player1' ? 'You win this round!' :
-               roundWinner === 'player2' ? 'AI wins this round!' :
-               roundWinner === 'war' ? 'WAR!' : ''}
-            </div>
-          )}
-        </div>
-
-        <div className="war-player">
-          <div className="war-deck-pile war-p2-pile">
-            <span className="war-card-count">{p2Size}</span>
-          </div>
-          <div className="war-player-label">AI</div>
-        </div>
-      </div>
-
-      {!state.game_result && (
-        <button className="war-flip-btn" onClick={handleBattle} disabled={disabled}>
-          Flip Cards
-        </button>
-      )}
-    </div>
-  )
-}
-
-function ChutesAndLaddersBoard({ state, onMove, disabled, aiLastMove }) {
-  const [lastRoll, setLastRoll] = useState(null)
-  const [rolling, setRolling] = useState(false)
-
-  if (!state) return null
-
-  const { spaces, legal_moves } = state
-  const rows = 5
-  const cols = 5
-
-  const getSpaceNumber = (row, col) => {
-    const baseRow = (rows - 1 - row)
-    const rowStart = baseRow * cols + 1
-    return baseRow % 2 === 0 ? rowStart + col : rowStart + (cols - 1 - col)
-  }
-
-  const findPlayer = (player) => {
-    for (const [key, val] of Object.entries(spaces)) {
-      const pieces = Array.isArray(val) ? val : [val]
-      if (pieces.some(p => p.owner === player)) return parseInt(key)
-    }
-    return 0
-  }
-
-  const p1Pos = findPlayer('player1')
-  const p2Pos = findPlayer('player2')
-
-  const ladders = { 2: 10, 6: 16, 8: 12, 15: 23 }
-  const chutes = { 14: 3, 19: 7, 22: 11, 24: 18 }
-
-  // Alternating warm/cool squares like a real game board
-  const getSquareColor = (num) => {
-    if (num in ladders) return '#1e5a2e' // dark green for ladder starts
-    if (num in chutes) return '#5a1e1e'  // dark red for chute starts
-    // Checkerboard pattern
-    const row = Math.floor((num - 1) / 5)
-    const col = (num - 1) % 5
-    return (row + col) % 2 === 0 ? '#2a2520' : '#332e28'
-  }
-
-  const handleRoll = async () => {
-    if (disabled || rolling) return
-    setRolling(true)
-    const roll = Math.floor(Math.random() * 6) + 1
-    setLastRoll(roll)
-    const move = legal_moves.find(m => m.params.roll === roll)
-    if (move) {
-      await new Promise(r => setTimeout(r, 600))
-      await onMove(move.rule, move.params)
-    }
-    setRolling(false)
-  }
-
-  const aiRollVal = aiLastMove?.roll
-  const isYourTurn = state.current_player === 'player1' && !state.game_result
-
-  // Compute cell center coordinates for SVG overlay
-  const cellSize = 96
-  const boardW = cols * cellSize
-  const boardH = rows * cellSize
-  const getCellCenter = (num) => {
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (getSpaceNumber(r, c) === num) {
-          return { x: c * cellSize + cellSize / 2, y: r * cellSize + cellSize / 2 }
-        }
-      }
-    }
-    return { x: 0, y: 0 }
-  }
-
-  // Build ladder SVG (two parallel rails + rungs)
-  const renderLadder = (from, to) => {
-    const a = getCellCenter(from)
-    const b = getCellCenter(to)
-    const dx = b.x - a.x
-    const dy = b.y - a.y
-    const len = Math.sqrt(dx * dx + dy * dy)
-    // Perpendicular offset for rails
-    const px = (-dy / len) * 8
-    const py = (dx / len) * 8
-    // Rungs
-    const rungCount = Math.max(2, Math.floor(len / 30))
-    const rungs = []
-    for (let i = 1; i <= rungCount; i++) {
-      const t = i / (rungCount + 1)
-      const mx = a.x + dx * t
-      const my = a.y + dy * t
-      rungs.push(<line key={i} x1={mx + px} y1={my + py} x2={mx - px} y2={my - py}
-        stroke="#4aba5a" strokeWidth="2" strokeLinecap="round" opacity="0.7" />)
-    }
-    return (
-      <g key={`l${from}`}>
-        <line x1={a.x + px} y1={a.y + py} x2={b.x + px} y2={b.y + py}
-          stroke="#4aba5a" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
-        <line x1={a.x - px} y1={a.y - py} x2={b.x - px} y2={b.y - py}
-          stroke="#4aba5a" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
-        {rungs}
-      </g>
-    )
-  }
-
-  // Build chute SVG (wavy line)
-  const renderChute = (from, to) => {
-    const a = getCellCenter(from)
-    const b = getCellCenter(to)
-    const mx = (a.x + b.x) / 2
-    const my = (a.y + b.y) / 2
-    // Perpendicular offset for curve
-    const dx = b.x - a.x
-    const dy = b.y - a.y
-    const len = Math.sqrt(dx * dx + dy * dy)
-    const px = (-dy / len) * 20
-    const py = (dx / len) * 20
-    return (
-      <g key={`c${from}`}>
-        <path
-          d={`M ${a.x} ${a.y} Q ${mx + px} ${my + py} ${b.x} ${b.y}`}
-          fill="none" stroke="#e04040" strokeWidth="5" strokeLinecap="round" opacity="0.5" />
-        <path
-          d={`M ${a.x} ${a.y} Q ${mx + px} ${my + py} ${b.x} ${b.y}`}
-          fill="none" stroke="#ff6060" strokeWidth="2" strokeLinecap="round" opacity="0.4"
-          strokeDasharray="4 6" />
-      </g>
-    )
-  }
-
-  return (
-    <div className="cl-board-container">
-      <div className="cl-board-wrapper">
-        <div className="cl-board">
-          {Array.from({ length: rows }).map((_, r) => (
-            <div key={r} className="cl-row">
-              {Array.from({ length: cols }).map((_, c) => {
-                const num = getSpaceNumber(r, c)
-                const isLadder = num in ladders
-                const isChute = num in chutes
-                const hasP1 = p1Pos === num
-                const hasP2 = p2Pos === num
-                const isFinish = num === 25
-
-                return (
-                  <div key={c} className={[
-                    'cl-cell',
-                    isLadder ? 'cl-ladder' : '',
-                    isChute ? 'cl-chute' : '',
-                    isFinish ? 'cl-finish' : '',
-                  ].filter(Boolean).join(' ')} style={{ background: getSquareColor(num) }}>
-                    <span className="cl-number">{num}</span>
-                    {isFinish && !hasP1 && !hasP2 && (
-                      <div className="cl-finish-star">&#9733;</div>
-                    )}
-                    <div className="cl-tokens">
-                      {hasP1 && <div className="cl-token cl-p1">You</div>}
-                      {hasP2 && <div className="cl-token cl-p2">AI</div>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-        <svg className="cl-svg-overlay" viewBox={`0 0 ${boardW} ${boardH}`} preserveAspectRatio="none">
-          {Object.entries(ladders).map(([f, t]) => renderLadder(Number(f), Number(t)))}
-          {Object.entries(chutes).map(([f, t]) => renderChute(Number(f), Number(t)))}
-        </svg>
-      </div>
-      <div className="cl-controls">
-        <div className="cl-roll-area">
-          {lastRoll && (
-            <div className="cl-die">
-              <span className="cl-die-face">{lastRoll}</span>
-            </div>
-          )}
-          {aiRollVal && (
-            <div className="cl-die cl-die-ai">
-              <span className="cl-die-face">{aiRollVal}</span>
-              <span className="cl-die-label">AI</span>
-            </div>
-          )}
-        </div>
-        {isYourTurn && (
-          <button className="cl-roll-btn" onClick={handleRoll} disabled={disabled || rolling}>
-            {rolling ? 'Rolling...' : 'Roll Die'}
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function HeartsBoard({ state, onMove, disabled }) {
-  if (!state) return null
-
-  const zones = state.card_zones || {}
-  const vars = state.state_vars || {}
-  const myHand = zones.hand_p1?.cards || []
-  const oppHandSize = zones.hand_p2?.size || 0
-  const trickCards = zones.trick?.cards || []
-  const p1Points = vars.p1_points || 0
-  const p2Points = vars.p2_points || 0
-  const tricksPlayed = vars.tricks_played || 0
-  const lastPlay = vars.last_play || ''
-  const lastAction = vars.last_action || ''
-  const isMyTurn = state.current_player === 'player1'
-
-  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
-  const SUIT_ORDER = ['clubs', 'diamonds', 'spades', 'hearts']
-  const RANK_ORDER = ['2','3','4','5','6','7','8','9','10','J','Q','K','A']
-
-  const playableIds = new Set()
-  for (const m of (state.legal_moves || [])) {
-    if (m.params.card_id != null) playableIds.add(m.params.card_id)
-  }
-
-  const handlePlay = (cardId) => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.params.card_id === cardId)
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const sortedHand = [...myHand].sort((a, b) => {
-    const si = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit)
-    return si !== 0 ? si : RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank)
-  })
-
-  return (
-    <div className="crazy8-board">
-      <div className="crazy8-info">
-        <span>Your points: {p1Points}</span>
-        <span>AI points: {p2Points}</span>
-        <span>Tricks: {tricksPlayed}/13</span>
-        <span>AI hand: {oppHandSize}</span>
-      </div>
-
-      {trickCards.length > 0 && (
-        <div className="crazy8-table">
-          {trickCards.map((card, i) => (
-            <div key={card.id} className={`crazy8-top-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
-              <span className="crazy8-card-rank">{card.rank}</span>
-              <span className="crazy8-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="crazy8-last-action">
-        {lastAction === 'trick_won' && lastPlay}
-        {lastAction === 'play' && !isMyTurn && `AI played ${lastPlay}`}
-        {isMyTurn && lastAction !== 'trick_won' && trickCards.length === 0 && 'Lead a card'}
-        {isMyTurn && trickCards.length === 1 && 'Play a card (must follow suit if possible)'}
-      </div>
-
-      <div className="crazy8-my-hand">
-        <div className="crazy8-hand-label">Your hand ({myHand.length} cards)</div>
-        <div className="gofish-cards">
-          {sortedHand.map((card) => {
-            const playable = playableIds.has(card.id)
-            const isDangerous = card.suit === 'hearts' || (card.suit === 'spades' && card.rank === 'Q')
-            return (
-              <button
-                key={card.id}
-                className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${!playable ? 'disabled' : ''}`}
-                style={isDangerous ? { borderColor: '#c83030' } : {}}
-                onClick={() => playable && handlePlay(card.id)}
-                disabled={disabled || !isMyTurn || !playable}
-              >
-                <span className="gofish-card-rank">{card.rank}</span>
-                <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function GinRummyBoard({ state, onMove, disabled }) {
-  if (!state) return null
-
-  const zones = state.card_zones || {}
-  const vars = state.state_vars || {}
-  const myHand = zones.hand_p1?.cards || []
-  const oppHandSize = zones.hand_p2?.size || 0
-  const deckSize = zones.deck?.size || 0
-  const discardCards = zones.discard?.cards || []
-  const topDiscard = discardCards.length > 0 ? discardCards[discardCards.length - 1] : null
-  const phase = vars.phase || 'draw'
-  const lastAction = vars.last_action || ''
-  const lastPlay = vars.last_play || ''
-  const isMyTurn = state.current_player === 'player1'
-  const roundOver = vars.round_over
-
-  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
-
-  const canDrawDiscard = state.legal_moves?.some(m => m.rule === 'draw_discard')
-  const canDrawDeck = state.legal_moves?.some(m => m.rule === 'draw_deck')
-  const canKnock = state.legal_moves?.some(m => m.rule === 'knock')
-  const discardableIds = new Set()
-  for (const m of (state.legal_moves || [])) {
-    if ((m.rule === 'discard' || m.rule === 'knock') && m.params.card_id != null)
-      discardableIds.add(m.params.card_id)
-  }
-
-  const handleDraw = (source) => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.rule === source)
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const handleDiscard = (cardId) => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.rule === 'discard' && m.params.card_id === cardId)
-    if (move) onMove(move.rule, move.params)
-  }
-
-  const handleKnock = (cardId) => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.rule === 'knock' && m.params.card_id === cardId)
-    if (move) onMove(move.rule, move.params)
-  }
-
-  // Sort hand by suit then rank for readability
-  const RANK_ORDER = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
-  const SUIT_ORDER = ['hearts','diamonds','clubs','spades']
-  const CARD_VALUES = { A:1, '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, J:10, Q:10, K:10 }
-  const sortedHand = [...myHand].sort((a, b) => {
-    const si = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit)
-    return si !== 0 ? si : RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank)
-  })
-
-  // Find melds and deadwood for display
-  const meldCardIds = new Set()
-  const findMelds = (cards) => {
-    const melds = []
-    // Sets: 3+ of same rank
-    const byRank = {}
-    cards.forEach(c => { (byRank[c.rank] = byRank[c.rank] || []).push(c) })
-    Object.values(byRank).forEach(group => { if (group.length >= 3) melds.push(group.slice(0, Math.min(group.length, 4))) })
-    // Runs: 3+ sequential same suit
-    const bySuit = {}
-    cards.forEach(c => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c) })
-    Object.values(bySuit).forEach(group => {
-      const sorted = [...group].sort((a, b) => RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank))
-      let run = [sorted[0]]
-      for (let i = 1; i < sorted.length; i++) {
-        if (RANK_ORDER.indexOf(sorted[i].rank) === RANK_ORDER.indexOf(run[run.length-1].rank) + 1) {
-          run.push(sorted[i])
-        } else {
-          if (run.length >= 3) melds.push([...run])
-          run = [sorted[i]]
-        }
-      }
-      if (run.length >= 3) melds.push([...run])
-    })
-    // Greedy non-overlapping (good enough for display)
-    const used = new Set()
-    const best = []
-    melds.sort((a, b) => b.length - a.length)
-    melds.forEach(m => {
-      if (m.every(c => !used.has(c.id))) {
-        best.push(m)
-        m.forEach(c => used.add(c.id))
-      }
-    })
-    return { melds: best, meldIds: used }
-  }
-  const { melds, meldIds } = findMelds(myHand)
-  const deadwood = myHand.filter(c => !meldIds.has(c.id)).reduce((s, c) => s + (CARD_VALUES[c.rank] || 0), 0)
-
-  return (
-    <div className="crazy8-board">
-      <div className="crazy8-info">
-        <span>Deck: {deckSize} cards remaining</span>
-        <span>AI hand: {oppHandSize} cards</span>
-      </div>
-
-      <div className="crazy8-table">
-        <div className="crazy8-deck-pile" onClick={() => canDrawDeck && handleDraw('draw_deck')}
-             style={{ cursor: canDrawDeck ? 'pointer' : 'default' }}>
-        </div>
-        {topDiscard && (
-          <div className={`crazy8-top-card ${topDiscard.suit === 'hearts' || topDiscard.suit === 'diamonds' ? 'red' : 'black'}`}
-               onClick={() => canDrawDiscard && handleDraw('draw_discard')}
-               style={{ cursor: canDrawDiscard ? 'pointer' : 'default' }}>
-            <span className="crazy8-card-rank">{topDiscard.rank}</span>
-            <span className="crazy8-card-suit">{SUIT_SYMBOLS[topDiscard.suit]}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="crazy8-last-action">
-        {phase === 'draw' && isMyTurn && !roundOver && 'Draw from deck or discard pile'}
-        {phase === 'discard' && isMyTurn && !roundOver && (canKnock ? 'Discard a card, or click Knock to end the round' : 'Discard a card')}
-        {!isMyTurn && !roundOver && 'AI is thinking...'}
-        {lastPlay && roundOver && lastPlay}
-      </div>
-
-      <div className="crazy8-my-hand">
-        <div className="crazy8-hand-label">
-          Your hand ({myHand.length} cards) — Deadwood: {deadwood} {deadwood <= 10 && myHand.length >= 10 ? '(can knock!)' : ''} {deadwood === 0 && myHand.length >= 10 ? '🎉 GIN!' : ''}
-        </div>
-        {melds.length > 0 && (
-          <div style={{ fontSize: '0.8rem', color: 'var(--ink-dim)', marginBottom: '0.3rem', fontFamily: 'Menlo, monospace' }}>
-            Melds: {melds.map((m, i) => m.map(c => `${c.rank}${SUIT_SYMBOLS[c.suit]}`).join(' ')).join(' | ')}
-          </div>
-        )}
-        <div className="gofish-cards">
-          {sortedHand.map((card) => {
-            const canDiscard = discardableIds.has(card.id) && phase === 'discard'
-            const inMeld = meldIds.has(card.id)
-            return (
-              <button
-                key={card.id}
-                className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${!canDiscard ? 'disabled' : ''}`}
-                style={inMeld ? { borderColor: '#5cba6e', borderWidth: '2px', background: '#f0fff4' } : {}}
-                onClick={() => canDiscard && handleDiscard(card.id)}
-                disabled={disabled || !isMyTurn || !canDiscard}
-              >
-                <span className="gofish-card-rank">{card.rank}</span>
-                <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
-              </button>
-            )
-          })}
-        </div>
-        {isMyTurn && phase === 'discard' && !roundOver && (
-          canKnock ? (
-            <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.85rem', color: 'var(--accent)', marginBottom: '0.4rem', fontFamily: 'Menlo, monospace' }}>
-                Deadwood is {deadwood} — you can knock! Pick a card to discard:
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {sortedHand.filter(c => !meldIds.has(c.id)).slice(0, 4).map(card => (
-                  <button key={`knock-${card.id}`} className="crazy8-draw-btn"
-                    onClick={() => handleKnock(card.id)}>
-                    Knock (discard {card.rank}{SUIT_SYMBOLS[card.suit]})
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--ink-faint)', fontFamily: 'Menlo, monospace', textAlign: 'center' }}>
-              Knock requires deadwood ≤ 10 (currently {deadwood}). Discard a card to continue.
-            </div>
-          )
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PokerBoard({ state, onMove, disabled }) {
-  const [selectedCards, setSelectedCards] = useState(new Set())
-
-  if (!state) return null
-
-  const zones = state.card_zones || {}
-  const vars = state.state_vars || {}
-  const myHand = zones.hand_p1?.cards || []
-  const oppHandSize = zones.hand_p2?.size || 0
-  const phase = vars.phase || 'discard_p1'
-  const lastAction = vars.last_action || ''
-  const roundOver = vars.round_over
-  const isMyTurn = state.current_player === 'player1'
-  const isMyDiscard = phase === 'discard_p1'
-  const showdown = roundOver || phase === 'showdown'
-
-  const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
-
-  // Revealed hands at showdown
-  const revealP1 = zones.reveal_p1?.cards || []
-  const revealP2 = zones.reveal_p2?.cards || []
-
-  const canDiscard = state.legal_moves?.some(m => m.rule === 'discard_card')
-  const canStand = state.legal_moves?.some(m => m.rule === 'stand_pat')
-
-  const handleDiscard = (cardId) => {
-    if (disabled || !isMyDiscard) return
-    const move = state.legal_moves?.find(m => m.rule === 'discard_card' && m.params.card_id === cardId)
-    if (move) {
-      onMove(move.rule, move.params)
-      setSelectedCards(prev => { const n = new Set(prev); n.delete(cardId); return n })
-    }
-  }
-
-  const handleStandPat = () => {
-    if (disabled) return
-    const move = state.legal_moves?.find(m => m.rule === 'stand_pat')
-    if (move) {
-      onMove(move.rule, move.params)
-      setSelectedCards(new Set())
-    }
-  }
-
-  const toggleSelect = (cardId) => {
-    if (!isMyDiscard || disabled) return
-    setSelectedCards(prev => {
-      const n = new Set(prev)
-      if (n.has(cardId)) n.delete(cardId)
-      else if (n.size < 3) n.add(cardId)
-      return n
-    })
-  }
-
-  const renderCard = (card, clickable, selected) => (
-    <button
-      key={card.id}
-      className={`gofish-card ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'} ${selected ? '' : ''}`}
-      style={selected ? { transform: 'translateY(-8px)', boxShadow: '0 6px 16px rgba(212, 166, 86, 0.5)', borderColor: 'var(--accent)' } : {}}
-      onClick={() => clickable && toggleSelect(card.id)}
-      disabled={!clickable}
-    >
-      <span className="gofish-card-rank">{card.rank}</span>
-      <span className="gofish-card-suit">{SUIT_SYMBOLS[card.suit]}</span>
-    </button>
-  )
-
-  const handRankP1 = vars.p1_hand_rank || ''
-  const handRankP2 = vars.p2_hand_rank || ''
-
-  return (
-    <div className="crazy8-board">
-      <div className="crazy8-info">
-        <span>AI hand: {oppHandSize} cards</span>
-      </div>
-
-      {showdown && revealP2.length > 0 && (
-        <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-          <div className="crazy8-hand-label">AI's hand {handRankP2 && `— ${handRankP2}`}</div>
-          <div className="gofish-cards">
-            {revealP2.map(c => renderCard(c, false, false))}
-          </div>
-        </div>
-      )}
-
-      <div className="crazy8-last-action">
-        {isMyDiscard && !roundOver && `Select up to 3 cards to discard (${selectedCards.size} selected)`}
-        {phase === 'discard_p2' && !roundOver && 'AI is choosing cards to discard...'}
-        {showdown && 'Showdown!'}
-      </div>
-
-      <div className="crazy8-my-hand">
-        <div className="crazy8-hand-label">Your hand {showdown && handRankP1 && `— ${handRankP1}`}</div>
-        <div className="gofish-cards">
-          {(showdown && revealP1.length > 0 ? revealP1 : myHand).map(card =>
-            renderCard(card, isMyDiscard && !roundOver, selectedCards.has(card.id))
-          )}
-        </div>
-        {isMyDiscard && !roundOver && (
-          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-            {selectedCards.size > 0 && [...selectedCards].map(cid => {
-              const move = state.legal_moves?.find(m => m.rule === 'discard_card' && m.params.card_id === cid)
-              return move ? (
-                <button key={cid} className="crazy8-draw-btn" style={{ fontSize: '0.8rem' }}
-                  onClick={() => handleDiscard(cid)}>
-                  Discard selected
-                </button>
-              ) : null
-            }).filter(Boolean).slice(0, 1)}
-            <button className="crazy8-draw-btn" onClick={handleStandPat}>
-              {selectedCards.size === 0 ? 'Keep all cards' : 'Done discarding'}
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   )
 }

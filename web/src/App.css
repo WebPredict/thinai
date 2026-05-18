@@ -1007,6 +1007,8 @@ header em {
   background: radial-gradient(circle at 35% 35%, var(--p2-color), #5a7a9a);
 }
 
+/* Hex board uses custom SVG component — no CSS needed */
+
 /* --- AI move highlight --- */
 
 .cell.ai-last-move {

@@ -127,7 +127,9 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
         card_zones = {}
         for name, zone in state.card_zones.items():
             # Player1 (human) can see: all-visible zones + their own hand
-            can_see = (zone.visible_to == "all" or
+            # At game over, reveal everything
+            can_see = (game_result is not None or
+                       zone.visible_to == "all" or
                        (zone.visible_to == "owner" and zone.owner == "player1"))
             card_zones[name] = {
                 "name": zone.name,
@@ -546,7 +548,12 @@ def start_training(request: Request, req: TrainingRequest):
     if not req.fresh:
         evaluator = _memory_store.load(game_name)
     if evaluator is None:
-        evaluator = LearnableEval(game_name, gdl=engine.gdl)
+        # For custom/novel games, use auto-discovered features
+        features = None
+        if is_custom:
+            from engine.reasoner.feature_discovery import discover_features_from_rules
+            features = discover_features_from_rules(engine.gdl)
+        evaluator = LearnableEval(game_name, features=features, gdl=engine.gdl)
 
     run_state = {
         "status": "running",

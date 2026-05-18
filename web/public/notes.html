@@ -158,10 +158,10 @@
   <li><strong>Game engine</strong> — loads any GDL spec and handles legal moves, state transitions, and win/draw detection</li>
   <li><strong>Auto-feature discovery</strong> — analyzes GDL structure to generate evaluation features without game-specific knowledge</li>
   <li><strong>Auto-priors ("intuition")</strong> — derives initial weight biases from rule structure (e.g., "line-based wins suggest lines matter")</li>
-  <li><strong>Minimax search</strong> with alpha-beta pruning — looks ahead N moves using learned evaluation weights</li>
-  <li><strong>Sampling-based search</strong> — for card games with hidden information, samples possible opponent hands</li>
-  <li><strong>Adaptive effort allocation</strong> — adjusts search depth per position based on branching factor and node budget</li>
-  <li><strong>Self-play training</strong> — learns feature weights through win/loss reinforcement over ~40 games</li>
+  <li><strong><a href="https://en.wikipedia.org/wiki/Minimax" style="color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint);">Minimax search</a></strong> with alpha-beta pruning — looks ahead N moves, assuming the opponent plays optimally, using learned evaluation weights</li>
+  <li><strong>Sampling-based search</strong> — for card games with hidden information, samples possible opponent hands and evaluates moves across multiple possible worlds</li>
+  <li><strong>Adaptive effort allocation</strong> — adjusts search depth per position based on branching factor (how many choices are available) and a node budget</li>
+  <li><strong><a href="https://en.wikipedia.org/wiki/Self-play" style="color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint);">Self-play</a> training</strong> — learns feature weights through win/loss reinforcement over ~40 games, similar to how a human improves by playing practice matches</li>
 </ul>
 
 <h2>Games Implemented</h2>
@@ -179,8 +179,11 @@
   <tr><td>Crazy Eights</td><td>Card</td><td><span class="status done">works</span></td><td>Learns suit/rank matching</td></tr>
   <tr><td>Blackjack</td><td>Card</td><td><span class="status done">works</span></td><td>Learns hit/stand thresholds</td></tr>
   <tr><td>Uno</td><td>Card</td><td><span class="status done">works</span></td><td>Action cards (skip, reverse, draw) working</td></tr>
-  <tr><td>Gin Rummy</td><td>Card</td><td><span class="status partial">new</span></td><td>Meld detection, deadwood scoring, knock mechanics</td></tr>
-  <tr><td>Five-Card Draw</td><td>Card</td><td><span class="status partial">new</span></td><td>Hand ranking, discard/draw, showdown</td></tr>
+  <tr><td>Gin Rummy</td><td>Card</td><td><span class="status done">works</span></td><td>Meld detection, deadwood scoring, knock/gin, AI hand reveal</td></tr>
+  <tr><td>Five-Card Draw</td><td>Card</td><td><span class="status done">works</span></td><td>Hand ranking, discard/draw, showdown with hand names</td></tr>
+  <tr><td>Hearts</td><td>Card (trick)</td><td><span class="status done">works</span></td><td>First trick-taking game: follow suit, avoid points, Queen of Spades</td></tr>
+  <tr><td>Hex</td><td>Grid (territory)</td><td><span class="status done">works</span></td><td>7x7 hex board, connect top-bottom vs left-right. SVG hexagons</td></tr>
+  <tr><td>Backgammon</td><td>Track (race+dice)</td><td><span class="status done">works</span></td><td>24-point board, dice, hitting, bearing off. Click-to-move UI</td></tr>
 </table>
 
 <h2>What Works Well</h2>
@@ -209,7 +212,7 @@
   <tr><td>2</td><td>More games — Nim, Chutes & Ladders, benchmarks</td><td><span class="status done">done</span></td></tr>
   <tr><td>3</td><td>Corrections — rule revision, error detection</td><td><span class="status done">done</span></td></tr>
   <tr><td>4</td><td>Metacognition — adaptive search, confidence, self-assessment</td><td><span class="status done">done</span></td></tr>
-  <tr><td>5</td><td>Card games — hidden information, 7 card games, sampling search</td><td><span class="status partial">~80%</span></td></tr>
+  <tr><td>5</td><td>Card games — hidden information, 9 card games, sampling search, opponent modeling</td><td><span class="status partial">~90%</span></td></tr>
   <tr><td>6</td><td>Harder games — chess-level complexity, stress testing</td><td><span class="status todo">not started</span></td></tr>
   <tr><td>7</td><td>Visualization — game-specific UIs, demo infrastructure</td><td><span class="status partial">started</span></td></tr>
   <tr><td>8</td><td>Writing — documentation, research notes, landing page</td><td><span class="status partial">started</span></td></tr>
@@ -217,13 +220,24 @@
 
 <h2>Key Numbers</h2>
 <ul>
-  <li><strong>14</strong> playable games</li>
+  <li><strong>17</strong> playable games</li>
   <li><strong>336</strong> automated tests (including 20 AI competency tests)</li>
-  <li><strong>~8,000</strong> lines of engine code</li>
+  <li><strong>~10,000</strong> lines of engine code</li>
   <li><strong>40</strong> training games to reach competence (board games)</li>
-  <li><strong>< 1 second</strong> per AI move</li>
-  <li><strong>1,500 / 5,000</strong> max nodes per move (card / board games)</li>
+  <li><strong>< 2 seconds</strong> per AI move (typically under 1 second for most games)</li>
+  <li><strong>1,500 / 2,500</strong> max nodes per move (card / board games)</li>
   <li><strong>0</strong> GPUs required</li>
+</ul>
+
+<h2>Recent Changes (May 18, 2026)</h2>
+<ul>
+  <li><strong>3 new games:</strong> Hex (territory, hex grid with SVG board), Backgammon (race+dice, click-to-move with SVG triangles and pip dice), Hearts (trick-taking, first of its kind in the system)</li>
+  <li><strong>Auto-feature discovery:</strong> Two-level system for novel games — Level 1 infers features from GDL rule structure (e.g., "track game with bear-off → pip count matters"), Level 2 discovers features via win/loss correlation from play data. Outperforms hand-crafted features on Backgammon (12W vs 7W) and Hex (16W vs 13W).</li>
+  <li><strong>Node budget reduced:</strong> Board games 5000→2500, card games 1500. All 20 AI competency tests still pass. Moving toward the goal of smart evaluation over brute-force search.</li>
+  <li><strong>Hand-crafted features</strong> for Gin Rummy (deadwood, melds, near-knock), Poker (hand strength), Backgammon (pip count, blots, home progress), and Hex (connection progress, blocking).</li>
+  <li><strong>UI refactoring:</strong> Extracted 14 board components from App.jsx (2300→1100 lines). Custom card game fallback. Gin Rummy shows AI's hand and melds at game over. Backgammon click-to-move with highlighted destinations.</li>
+  <li><strong>Backgammon training fix:</strong> Move limit raised from 200→500 for dice games (was causing false draws). Proper features instead of generic auto-features.</li>
+  <li><strong>Game-over card reveal:</strong> All hidden cards revealed at end of game across all card games.</li>
 </ul>
 
 <h2>Game Categories and Coverage</h2>
@@ -240,28 +254,28 @@
   <tr><td><strong>Matching/Shedding</strong> — match cards, empty your hand</td><td>Crazy Eights, Uno, Rummy</td><td><span class="status done">works</span></td><td>Color/rank matching, action cards, melds</td></tr>
   <tr><td><strong>Collecting</strong> — gather sets of cards</td><td>Go Fish, Rummy, Canasta</td><td><span class="status done">works</span></td><td>Set detection, asking, drawing</td></tr>
   <tr><td><strong>Comparing</strong> — compare hands for best rank</td><td>Poker, Blackjack, War</td><td><span class="status done">works</span></td><td>Hand ranking, hit/stand, draw/discard</td></tr>
-  <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Spades, Bridge</td><td><span class="status todo">planned</span></td><td>Needs trick/round structure and trump suits</td></tr>
+  <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Spades, Bridge</td><td><span class="status done">works</span></td><td>Hearts implemented: follow suit, trick resolution, point avoidance</td></tr>
   <tr><td><strong>Auction/Bidding</strong> — bid resources for advantage</td><td>Bridge (bidding), Power Grid</td><td><span class="status todo">planned</span></td><td>Needs economic modeling</td></tr>
-  <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes & Ladders, Backgammon, Parcheesi</td><td><span class="status partial">partial</span></td><td>Simple races work; backgammon needs dice + bearing off</td></tr>
-  <tr><td><strong>Territory</strong> — control areas of the board</td><td>Go, Hex, Blokus</td><td><span class="status todo">planned</span></td><td>Needs area-counting evaluation</td></tr>
+  <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes & Ladders, Backgammon, Parcheesi</td><td><span class="status done">works</span></td><td>Backgammon: dice, hitting, bearing off, click-to-move</td></tr>
+  <tr><td><strong>Territory</strong> — control areas of the board</td><td>Go, Hex, Blokus</td><td><span class="status partial">partial</span></td><td>Hex works (7x7, connect sides). Go-level complexity is Phase 6</td></tr>
   <tr><td><strong>Word/Tile</strong> — form words or patterns with tiles</td><td>Scrabble, Bananagrams</td><td><span class="status todo">planned</span></td><td>Needs dictionary lookup, tile scoring</td></tr>
   <tr><td><strong>Partnership</strong> — teams of players cooperate</td><td>Bridge, Tichu, Euchre</td><td><span class="status todo">planned</span></td><td>Needs multi-agent cooperation model</td></tr>
 </table>
 
 <h3>Estimated coverage of popular games</h3>
-<p>Of the ~50 most commonly played tabletop/card games worldwide, ThinAI's current architecture can represent roughly <strong>60-70%</strong> with its existing game types (grid placement, card matching, shedding, collecting, comparing, movement). Adding trick-taking and territory mechanics would push this to <strong>~80%</strong>. The remaining 20% require auction/bidding, real-time elements, or complex partnership dynamics that are outside the current scope.</p>
+<p>Of the ~50 most commonly played tabletop/card games worldwide, ThinAI's current architecture can represent roughly <strong>75-80%</strong> with its existing game types (grid placement, card matching/shedding/collecting/comparing, trick-taking, territory, race+dice, movement/capture). The remaining ~20% require auction/bidding, word/dictionary lookup, or complex partnership dynamics that are outside the current scope.</p>
 
 <p>The natural language parser can already handle novel grid-based games end-to-end. Extending it to fully support card game descriptions from English is a near-term goal.</p>
 
 <h2>Technical Decisions</h2>
 <h3>Why not neural networks?</h3>
-<p>Neural approaches (AlphaZero, MuZero) need millions of training games and significant compute per game. They learn one game at a time and don't transfer. ThinAI's structured approach learns from rules, not just from playing, and transfers features across games via the GDL abstraction. The tradeoff: less raw playing strength, but vastly more sample-efficient and interpretable.</p>
+<p>Neural approaches like <a href="https://en.wikipedia.org/wiki/AlphaZero" style="color: var(--accent); text-decoration: none;">AlphaZero</a> (DeepMind's game-playing system) and <a href="https://en.wikipedia.org/wiki/MuZero" style="color: var(--accent); text-decoration: none;">MuZero</a> (its successor that learns without knowing the rules) need millions of training games and significant compute per game. They learn one game at a time and don't transfer knowledge between games. ThinAI's structured approach learns from rules, not just from playing, and transfers features across games via a shared game description format. The tradeoff: less raw playing strength, but vastly more sample-efficient and interpretable.</p>
 
 <h3>Why minimax instead of MCTS?</h3>
-<p>Minimax with alpha-beta pruning is simpler, more predictable, and works well with learned evaluation functions. MCTS would be better for very high branching factor games (Go), but none of our current games require it. The evaluation function is the learning target — depth is just how far ahead we look.</p>
+<p><a href="https://en.wikipedia.org/wiki/Minimax#Minimax_algorithm_with_alternate_moves" style="color: var(--accent); text-decoration: none;">Minimax</a> (a search algorithm that evaluates moves by assuming the opponent plays optimally) with <a href="https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning" style="color: var(--accent); text-decoration: none;">alpha-beta pruning</a> (a technique to skip branches that can't affect the outcome) is simpler, more predictable, and works well with learned evaluation functions. <a href="https://en.wikipedia.org/wiki/Monte_Carlo_tree_search" style="color: var(--accent); text-decoration: none;">MCTS</a> (Monte Carlo Tree Search — a probabilistic approach that samples random playouts) would be better for very high branching factor games like Go, but none of our current games require it. The evaluation function is the learning target — depth is just how far ahead we look.</p>
 
 <h3>Why JSON for GDL?</h3>
-<p>Machine-parseable, human-readable, and web-friendly. The parser converts English to JSON, the engine loads JSON, the frontend displays JSON. One format throughout. The tradeoff: JSON can't express truly arbitrary game logic — complex conditions need built-in functions.</p>
+<p>Machine-parseable, human-readable, and web-friendly. <a href="https://en.wikipedia.org/wiki/Game_Description_Language" style="color: var(--accent); text-decoration: none;">GDL</a> (Game Description Language) is a formal way to describe game rules so a computer can understand them. Our version uses JSON: the parser converts English to JSON, the engine loads JSON, the frontend displays JSON. One format throughout. The tradeoff: JSON can't express truly arbitrary game logic — complex conditions need built-in functions.</p>
 
 <footer>
   <p>Built by <a href="https://www.highdesertapps.com/">Jeff Sanchez</a> with <a href="https://claude.ai">Claude</a> &middot; <a href="https://github.com/WebPredict/thinai">GitHub</a></p>

@@ -313,6 +313,17 @@ class GameEngine:
                     for card in hand.cards:
                         yield card.id
 
+        elif select == "gin_rummy_knockable":
+            if state.card_zones:
+                from engine.gdl.expr_eval import _gin_rummy_deadwood
+                suffix = "p1" if state.current_player == "player1" else "p2"
+                hand = state.card_zones.get(f"hand_{suffix}")
+                if hand:
+                    for card in hand.cards:
+                        remaining = [c for c in hand.cards if c.id != card.id]
+                        if _gin_rummy_deadwood(remaining) <= 10:
+                            yield card.id
+
         elif select == "poker_hand":
             if state.card_zones:
                 suffix = "p1" if state.current_player == "player1" else "p2"
@@ -320,6 +331,11 @@ class GameEngine:
                 if hand:
                     for card in hand.cards:
                         yield card.id
+
+        elif select == "backgammon_moves":
+            from engine.gdl.expr_eval import _backgammon_get_moves
+            for move_id in _backgammon_get_moves(state):
+                yield move_id
 
         elif select == "hearts_playable":
             if state.card_zones:

@@ -66,7 +66,7 @@
       "name": "knock",
       "action": "knock",
       "params": [
-        { "name": "card_id", "select": "gin_rummy_hand" }
+        { "name": "card_id", "select": "gin_rummy_knockable" }
       ],
       "conditions": ["gin_rummy_can_knock()"],
       "effects": ["gin_rummy_knock(card_id)"]

@@ -259,6 +259,9 @@ def _apply_setup_action(action: dict, state: GameState, gdl: dict):
         from engine.gdl.checkers import setup_checkers
         setup_checkers(state)
 
+    elif action_type == "backgammon_setup":
+        _backgammon_setup(state)
+
     elif action_type == "shuffle":
         # Shuffle a card zone
         if state.card_zones and action["zone"] in state.card_zones:
@@ -369,3 +372,18 @@ def _eval_simple_index_condition(selector: str, index: int) -> bool:
                     return False
                 break
     return True
+
+
+def _backgammon_setup(state: GameState):
+    """Set up the initial backgammon board position."""
+    from engine.gdl.board import TrackSpace
+    # Standard starting position
+    # P1 (White) moves high→low (home = 0-5), P2 (Black) moves low→high (home = 18-23)
+    p1_positions = {23: 2, 12: 5, 7: 3, 5: 5}
+    p2_positions = {0: 2, 11: 5, 16: 3, 18: 5}
+    for pos, count in p1_positions.items():
+        for _ in range(count):
+            state.add_piece(TrackSpace(pos), Piece("checker", "player1"))
+    for pos, count in p2_positions.items():
+        for _ in range(count):
+            state.add_piece(TrackSpace(pos), Piece("checker", "player2"))

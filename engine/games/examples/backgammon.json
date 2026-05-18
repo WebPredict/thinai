@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "name": "Backgammon",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if backgammon_turn_done(): next_player else: same_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "track",
+    "track": {
+      "length": 28,
+      "loop": false
+    }
+  },
+
+  "pieces": [
+    { "name": "checker", "owner": "player1", "display": "W" },
+    { "name": "checker", "owner": "player2", "display": "B" }
+  ],
+
+  "state_vars": [
+    { "name": "phase", "type": "string", "scope": "global", "initial": "roll" },
+    { "name": "die1", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "die2", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "moves_remaining", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_play", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "backgammon_setup" }
+  ],
+
+  "rules": [
+    {
+      "name": "roll_dice",
+      "action": "chance",
+      "chance": true,
+      "params": [],
+      "conditions": ["backgammon_can_roll()"],
+      "effects": ["backgammon_roll()"]
+    },
+    {
+      "name": "move_checker",
+      "action": "move",
+      "params": [
+        { "name": "move_id", "select": "backgammon_moves" }
+      ],
+      "conditions": ["backgammon_can_move()"],
+      "effects": ["backgammon_execute(move_id)"]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "current_player",
+      "condition": "backgammon_won(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Backgammon: 15 checkers per player on a 24-point board. Roll two dice, move checkers by die values. Points 0-23 are the board, 24-25 are bars, 26-27 are bear-off. P1 moves from high points toward 0 (home 0-5), P2 moves from low toward 23 (home 18-23). Hit single opponent checkers to their bar. Bear off when all in home.",
+    "track_layout": "0-5: P1 home, 6-11: P1 outer, 12-17: P2 outer, 18-23: P2 home, 24: P1 bar, 25: P2 bar, 26: P1 bear-off, 27: P2 bear-off"
+  }
+}

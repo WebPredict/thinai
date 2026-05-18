@@ -231,9 +231,14 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             return False
         suffix = "p1" if ctx.state.current_player == "player1" else "p2"
         hand = ctx.state.card_zones.get(f"hand_{suffix}")
-        if not hand:
+        if not hand or len(hand.cards) < 2:
             return False
-        return _gin_rummy_deadwood(hand.cards) <= 10
+        # Check if discarding any single card would bring deadwood ≤ 10
+        for card in hand.cards:
+            remaining = [c for c in hand.cards if c.id != card.id]
+            if _gin_rummy_deadwood(remaining) <= 10:
+                return True
+        return False
     if name == "gin_rummy_turn_done":
         return ctx.state.state_vars.get("phase") == "draw"
     if name == "gin_rummy_round_over":
@@ -246,6 +251,29 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             return 0
         # Lower deadwood is better — return negative deadwood
         return -_gin_rummy_deadwood(hand.cards)
+
+    # Backgammon built-ins
+    if name == "backgammon_can_roll":
+        return ctx.state.state_vars.get("phase") == "roll"
+    if name == "backgammon_can_move":
+        return ctx.state.state_vars.get("phase") == "move"
+    if name == "backgammon_turn_done":
+        return ctx.state.state_vars.get("phase") == "roll"
+    if name == "backgammon_won":
+        player = args[0] if args else ctx.state.current_player
+        if player == "current_player":
+            player = ctx.state.current_player
+        bear_off = 26 if player == "player1" else 27
+        from engine.gdl.board import TrackSpace
+        pieces = ctx.state.get_pieces(TrackSpace(bear_off))
+        return len(pieces) >= 15
+
+    # Hex built-ins
+    if name == "hex_connected":
+        player = args[0] if args else ctx.state.current_player
+        if player == "current_player":
+            player = ctx.state.current_player
+        return _hex_connected(ctx.state, player)
 
     # Compare/score card game built-ins (novel parsed games)
     if name == "compare_game_over":
@@ -738,6 +766,15 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "gin_rummy_knock":
         args = [evaluate(a, ctx) for a in node.args]
         _gin_rummy_knock(ctx.state, int(args[0]))
+        return
+
+    # Backgammon effects
+    if name == "backgammon_roll":
+        _backgammon_roll(ctx.state)
+        return
+    if name == "backgammon_execute":
+        args = [evaluate(a, ctx) for a in node.args]
+        _backgammon_execute(ctx.state, int(args[0]))
         return
 
     # Compare/score effects (novel card games)
@@ -2080,11 +2117,15 @@ def _compare_play(state: GameState, card_id: int):
         else:
             winner = None  # tie — no points
 
+        SUIT_SYM = {"hearts": "\u2665", "diamonds": "\u2666", "clubs": "\u2663", "spades": "\u2660"}
+        c1_str = f"{cards[0].rank}{SUIT_SYM.get(cards[0].suit, '')}"
+        c2_str = f"{cards[1].rank}{SUIT_SYM.get(cards[1].suit, '')}"
+
         if winner:
             state.state_vars[f"{winner}_score"] = state.state_vars.get(f"{winner}_score", 0) + 1
-            state.state_vars["last_play"] = f"{'You' if winner == 'p1' else 'AI'} won the round!"
+            state.state_vars["last_play"] = f"You played {c1_str} vs AI's {c2_str} — {'You' if winner == 'p1' else 'AI'} won!"
         else:
-            state.state_vars["last_play"] = "Tie — no points"
+            state.state_vars["last_play"] = f"You played {c1_str} vs AI's {c2_str} — Tie!"
 
         # Move cards to taken pile
         taken = state.card_zones.get(f"taken_{winner}") if winner else None
@@ -2093,3 +2134,271 @@ def _compare_play(state: GameState, card_id: int):
             if taken:
                 taken.add(c)
         state.state_vars["last_action"] = "round_complete"
+
+
+# --- Hex built-ins ---
+
+def _hex_connected(state: GameState, player: str) -> bool:
+    """Check if player has connected their two sides on a hex board.
+    
+    Player 1 (Red): connects top row (row 0) to bottom row (row max).
+    Player 2 (Blue): connects left column (col 0) to right column (col max).
+    Uses BFS flood fill from one edge to check if it reaches the other.
+    """
+    from engine.gdl.board import GridBoard, GridSpace
+    
+    if not isinstance(state.board, GridBoard):
+        return False
+    
+    board = state.board
+    rows, cols = board.rows, board.cols
+    
+    # Find all spaces owned by this player
+    owned = set()
+    for space in board.spaces:
+        piece = state.get_piece(space)
+        if piece and piece.owner == player:
+            owned.add((space.row, space.col))
+    
+    if not owned:
+        return False
+    
+    # Player 1: connect top (row 0) to bottom (row max)
+    # Player 2: connect left (col 0) to right (col max)
+    if player == "player1":
+        start_cells = {(r, c) for r, c in owned if r == 0}
+        target_check = lambda r, c: r == rows - 1
+    else:
+        start_cells = {(r, c) for r, c in owned if c == 0}
+        target_check = lambda r, c: c == cols - 1
+    
+    if not start_cells:
+        return False
+    
+    # BFS from start edge
+    visited = set()
+    queue = list(start_cells)
+    visited.update(start_cells)
+    
+    while queue:
+        r, c = queue.pop(0)
+        if target_check(r, c):
+            return True
+        
+        for dr, dc in board.direction_vectors:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited and (nr, nc) in owned:
+                visited.add((nr, nc))
+                queue.append((nr, nc))
+    
+    return False
+
+
+# --- Backgammon built-ins ---
+
+# Board layout: 0-5 = P1 home, 18-23 = P2 home
+# 24 = P1 bar, 25 = P2 bar, 26 = P1 bear-off, 27 = P2 bear-off
+
+def _backgammon_roll(state: GameState):
+    """Roll two dice and set moves_remaining."""
+    import random
+    d1 = random.randint(1, 6)
+    d2 = random.randint(1, 6)
+    state.state_vars["die1"] = d1
+    state.state_vars["die2"] = d2
+    if d1 == d2:
+        state.state_vars["moves_remaining"] = f"{d1},{d1},{d1},{d1}"
+    else:
+        state.state_vars["moves_remaining"] = f"{d1},{d2}"
+    state.state_vars["phase"] = "move"
+    state.state_vars["last_action"] = "roll"
+    state.state_vars["last_play"] = f"Rolled {d1} and {d2}" + (" (doubles!)" if d1 == d2 else "")
+
+    # If no legal moves available, skip to next player
+    moves = list(_backgammon_get_moves(state))
+    if not moves:
+        state.state_vars["moves_remaining"] = ""
+        state.state_vars["phase"] = "roll"
+        state.state_vars["last_play"] += " — no legal moves"
+
+
+def _backgammon_get_moves(state: GameState):
+    """Enumerate all legal single-checker moves for current player."""
+    from engine.gdl.board import TrackSpace
+
+    remaining = state.state_vars.get("moves_remaining", "")
+    if not remaining:
+        return
+
+    dice = [int(d) for d in remaining.split(",")]
+    player = state.current_player
+    is_p1 = player == "player1"
+    bar = 24 if is_p1 else 25
+    bear_off = 26 if is_p1 else 27
+    home_range = range(0, 6) if is_p1 else range(18, 24)
+    direction = -1 if is_p1 else 1  # P1 goes down, P2 goes up
+
+    # Get all checker positions for this player
+    bar_pieces = state.get_pieces(TrackSpace(bar))
+    has_bar = len([p for p in bar_pieces if p.owner == player]) > 0
+
+    # Check if all checkers are in home (for bearing off)
+    all_home = True
+    for i in range(24):
+        if i not in home_range:
+            pieces = state.get_pieces(TrackSpace(i))
+            if any(p.owner == player for p in pieces):
+                all_home = False
+                break
+    if has_bar:
+        all_home = False
+
+    seen_moves = set()
+    unique_dice = set(dice)
+
+    for die_val in unique_dice:
+        if has_bar:
+            # Must re-enter from bar
+            if is_p1:
+                dest = 24 - die_val  # P1 enters at 24-die (points 18-23)
+            else:
+                dest = die_val - 1   # P2 enters at die-1 (points 0-5)
+            if 0 <= dest <= 23 and _bg_can_land(state, dest, player):
+                move_id = bar * 100 + die_val
+                if move_id not in seen_moves:
+                    seen_moves.add(move_id)
+                    yield move_id
+        else:
+            # Regular moves from board positions
+            for i in range(24):
+                pieces = state.get_pieces(TrackSpace(i))
+                if not any(p.owner == player for p in pieces):
+                    continue
+                dest = i + direction * die_val
+                if 0 <= dest <= 23:
+                    if _bg_can_land(state, dest, player):
+                        move_id = i * 100 + die_val
+                        if move_id not in seen_moves:
+                            seen_moves.add(move_id)
+                            yield move_id
+                elif all_home:
+                    # Bearing off
+                    if is_p1 and dest < 0:
+                        # Can bear off if this is the furthest checker or exact
+                        if dest == -1 or _bg_is_furthest(state, i, player, is_p1):
+                            move_id = i * 100 + die_val
+                            if move_id not in seen_moves:
+                                seen_moves.add(move_id)
+                                yield move_id
+                    elif not is_p1 and dest > 23:
+                        if dest == 24 or _bg_is_furthest(state, i, player, is_p1):
+                            move_id = i * 100 + die_val
+                            if move_id not in seen_moves:
+                                seen_moves.add(move_id)
+                                yield move_id
+
+    # If no moves found, yield a pass (0)
+    if not seen_moves:
+        yield 0
+
+
+def _bg_can_land(state: GameState, point: int, player: str) -> bool:
+    """Check if player can land on a point."""
+    from engine.gdl.board import TrackSpace
+    pieces = state.get_pieces(TrackSpace(point))
+    opponent = "player2" if player == "player1" else "player1"
+    opp_count = sum(1 for p in pieces if p.owner == opponent)
+    return opp_count <= 1  # Empty, own pieces, or single opponent (hit)
+
+
+def _bg_is_furthest(state: GameState, point: int, player: str, is_p1: bool) -> bool:
+    """Check if this is the furthest checker from bear-off (for inexact bearing off)."""
+    from engine.gdl.board import TrackSpace
+    home_range = range(0, 6) if is_p1 else range(18, 24)
+    for i in (reversed(home_range) if is_p1 else home_range):
+        pieces = state.get_pieces(TrackSpace(i))
+        if any(p.owner == player for p in pieces):
+            return i == point
+    return True
+
+
+def _backgammon_execute(state: GameState, move_id: int):
+    """Execute a backgammon move. move_id = from_point * 100 + die_value."""
+    from engine.gdl.board import TrackSpace
+
+    if move_id == 0:
+        # Pass — no legal moves, clear remaining dice
+        state.state_vars["moves_remaining"] = ""
+        state.state_vars["phase"] = "roll"
+        state.state_vars["last_play"] = "No legal moves — pass"
+        return
+
+    from_point = move_id // 100
+    die_val = move_id % 100
+    player = state.current_player
+    is_p1 = player == "player1"
+    bar = 24 if is_p1 else 25
+    opponent = "player2" if is_p1 else "player1"
+    opp_bar = 25 if is_p1 else 24
+    bear_off = 26 if is_p1 else 27
+    direction = -1 if is_p1 else 1
+
+    # Remove checker from source
+    from_space = TrackSpace(from_point)
+    pieces = state.get_pieces(from_space)
+    checker = None
+    for p in pieces:
+        if p.owner == player:
+            checker = p
+            break
+    if not checker:
+        return
+    state.remove_piece(from_space, checker)
+
+    # Calculate destination
+    if from_point == bar:
+        # Re-entering from bar
+        if is_p1:
+            dest = 24 - die_val
+        else:
+            dest = die_val - 1
+    else:
+        dest = from_point + direction * die_val
+
+    # Check if bearing off
+    if dest < 0 or dest > 23:
+        state.add_piece(TrackSpace(bear_off), checker)
+        state.state_vars["last_play"] = f"Bear off from {from_point + 1}"
+    else:
+        # Check for hit
+        dest_space = TrackSpace(dest)
+        dest_pieces = state.get_pieces(dest_space)
+        opp_checker = None
+        for p in dest_pieces:
+            if p.owner == opponent:
+                opp_checker = p
+                break
+        if opp_checker:
+            state.remove_piece(dest_space, opp_checker)
+            state.add_piece(TrackSpace(opp_bar), opp_checker)
+            state.state_vars["last_play"] = f"Hit! {from_point + 1}→{dest + 1}"
+        else:
+            state.state_vars["last_play"] = f"{from_point + 1}→{dest + 1}"
+
+        state.add_piece(dest_space, checker)
+
+    state.state_vars["last_action"] = "move"
+
+    # Remove used die from remaining
+    remaining = [int(d) for d in state.state_vars["moves_remaining"].split(",")]
+    remaining.remove(die_val)
+    if remaining:
+        state.state_vars["moves_remaining"] = ",".join(str(d) for d in remaining)
+        # Check if any moves left with remaining dice
+        moves = list(_backgammon_get_moves(state))
+        if not moves or (len(moves) == 1 and moves[0] == 0):
+            state.state_vars["moves_remaining"] = ""
+            state.state_vars["phase"] = "roll"
+    else:
+        state.state_vars["moves_remaining"] = ""
+        state.state_vars["phase"] = "roll"

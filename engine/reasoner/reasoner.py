@@ -33,6 +33,7 @@ class Reasoner:
         self.last_confidence = None  # MoveConfidence from most recent move
         self.last_depth_used = 0
         self.last_effort_reason = ""
+        self.last_commentary = ""  # human-readable move explanation
         self._search_start = 0.0
         self._timed_out = False
 
@@ -81,7 +82,8 @@ class Reasoner:
                 break
 
             new_state = self.engine.apply_move(state, move)
-            score = -self._negamax(new_state, depth - 1, -beta, -alpha)
+            score = -self._negamax(new_state, depth - 1, -beta, -alpha,
+                                   root_depth=depth)
             if score > best_score:
                 second_score = best_score
                 best_score = score
@@ -97,6 +99,20 @@ class Reasoner:
             self.last_confidence = self.confidence_tracker.score_move(
                 best_score, second, depth, len(moves)
             )
+
+        # Generate commentary
+        self.last_commentary = ""
+        if best_move:
+            try:
+                from engine.reasoner.commentary import generate_commentary
+                new_state = self.engine.apply_move(state, best_move)
+                self.last_commentary = generate_commentary(
+                    state, new_state, best_move, self.engine,
+                    eval_fn=self.eval_fn, best_score=best_score,
+                    second_score=second_score, depth=depth,
+                )
+            except Exception:
+                self.last_commentary = ""
 
         return best_move
 
@@ -116,6 +132,18 @@ class Reasoner:
         self.last_depth_used = sampler.last_depth_used
         self.last_effort_reason = f"sampled {sampler.num_samples} worlds"
 
+        # Generate commentary for card games
+        self.last_commentary = ""
+        if move:
+            try:
+                from engine.reasoner.commentary import generate_commentary
+                new_state = self.engine.apply_move(state, move)
+                self.last_commentary = generate_commentary(
+                    state, new_state, move, self.engine, eval_fn=self.eval_fn,
+                )
+            except Exception:
+                self.last_commentary = ""
+
         # Score confidence (simple: based on score spread)
         if self.confidence_tracker and move:
             self.last_confidence = self.confidence_tracker.score_move(
@@ -124,8 +152,14 @@ class Reasoner:
 
         return move
 
-    def _negamax(self, state: GameState, depth: int, alpha: float, beta: float) -> float:
-        """Negamax with alpha-beta pruning."""
+    def _negamax(self, state: GameState, depth: int, alpha: float, beta: float,
+                 root_depth: int = 0) -> float:
+        """Negamax with alpha-beta pruning and selective deepening.
+
+        At depth 1-2 from current position: consider all moves (full breadth).
+        At depth 3+: only consider top K "promising" moves, scored by quick eval.
+        This lets us see deeper into likely lines without exponential blowup.
+        """
         self.nodes_searched += 1
 
         # Time check — abort if over limit
@@ -148,11 +182,30 @@ class Reasoner:
             return 0.0  # No moves, no result = draw-ish
 
         moves = self._order_moves(moves, state)
+
+        # Selective deepening: at depth 3+ from root, prune to top K moves
+        # Depth from root = root_depth - depth (how deep we've gone)
+        plies_deep = root_depth - depth if root_depth > 0 else 0
+        if plies_deep >= 2 and len(moves) > 8:
+            # Score moves cheaply with eval, keep top K
+            scored = []
+            player = state.current_player
+            for move in moves:
+                new_state = self.engine.apply_move(state, move)
+                quick_score = self.eval_fn(new_state, player, self.engine)
+                scored.append((quick_score, move))
+                self.nodes_searched += 1
+            scored.sort(key=lambda x: x[0], reverse=True)
+            # Keep more at depth 3, fewer at depth 4+
+            k = 8 if plies_deep == 2 else 5
+            moves = [m for _, m in scored[:k]]
+
         best = -math.inf
 
         for move in moves:
             new_state = self.engine.apply_move(state, move)
-            score = -self._negamax(new_state, depth - 1, -beta, -alpha)
+            score = -self._negamax(new_state, depth - 1, -beta, -alpha,
+                                   root_depth=root_depth)
             best = max(best, score)
             alpha = max(alpha, score)
             if alpha >= beta:

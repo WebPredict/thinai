@@ -158,7 +158,7 @@
   <li><strong>Game engine</strong> — loads any GDL spec and handles legal moves, state transitions, and win/draw detection</li>
   <li><strong>Auto-feature discovery</strong> — analyzes GDL structure to generate evaluation features without game-specific knowledge</li>
   <li><strong>Auto-priors ("intuition")</strong> — derives initial weight biases from rule structure (e.g., "line-based wins suggest lines matter")</li>
-  <li><strong><a href="https://en.wikipedia.org/wiki/Minimax" style="color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint);">Minimax search</a></strong> with alpha-beta pruning — looks ahead N moves, assuming the opponent plays optimally, using learned evaluation weights</li>
+  <li><strong><a href="https://en.wikipedia.org/wiki/Minimax" style="color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint);">Minimax search</a></strong> with alpha-beta pruning and selective deepening — at depth 1-2, considers all moves; at depth 3+, focuses on the top 8 most promising moves (like a human ignoring obviously bad options)</li>
   <li><strong>Sampling-based search</strong> — for card games with hidden information, samples possible opponent hands and evaluates moves across multiple possible worlds</li>
   <li><strong>Adaptive effort allocation</strong> — adjusts search depth per position based on branching factor (how many choices are available) and a node budget</li>
   <li><strong><a href="https://en.wikipedia.org/wiki/Self-play" style="color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint);">Self-play</a> training</strong> — learns feature weights through win/loss reinforcement over ~40 games, similar to how a human improves by playing practice matches</li>
@@ -192,7 +192,9 @@
   <li><strong>Novel game parsing:</strong> The end-to-end loop works — paste a plain English description like "5x5 grid, 4 in a row wins" and the system parses it, generates features, trains, and lets you play. No game-specific code needed.</li>
   <li><strong>Auto-features:</strong> The system can generate reasonable evaluation features from the GDL structure alone, without hand-crafted knowledge. This is key for novel games.</li>
   <li><strong>Speed:</strong> Training 40 games takes 10-60 seconds on a laptop. Playing a move takes under 1 second. No GPU needed.</li>
-  <li><strong>Card infrastructure:</strong> 7 card games work with hidden hands, melds, action cards, and multi-phase turns.</li>
+  <li><strong>Card infrastructure:</strong> 9 card games work with hidden hands, melds, action cards, trick-taking, and multi-phase turns.</li>
+  <li><strong>AI commentary:</strong> The AI explains its reasoning after each move — blocking threats, extending lines, positional play, feature-driven decisions.</li>
+  <li><strong>Visual customization:</strong> Novel games can specify piece colors, board patterns (checkerboard, wood), and piece types (238 recognized objects, 58 with SVG icons).</li>
 </ul>
 
 <h2>What Needs Work</h2>
@@ -225,11 +227,26 @@
   <li><strong>~10,000</strong> lines of engine code</li>
   <li><strong>40</strong> training games to reach competence (board games)</li>
   <li><strong>< 2 seconds</strong> per AI move (typically under 1 second for most games)</li>
-  <li><strong>1,500 / 2,500</strong> max nodes per move (card / board games)</li>
+  <li><strong>1,500 / 2,000</strong> max nodes per move (card / board games, with selective deepening)</li>
+  <li><strong>238</strong> game objects recognized by the parser (58 with SVG icons)</li>
+  <li><strong>26</strong> parser tests covering 10 game categories</li>
   <li><strong>0</strong> GPUs required</li>
 </ul>
 
-<h2>Recent Changes (May 18, 2026)</h2>
+<h2>Recent Changes (May 19, 2026)</h2>
+<ul>
+  <li><strong>Selective deepening:</strong> At search depth 3+, only the top 8 most promising moves (scored by quick eval) are explored. This lets the AI look 3-4 moves ahead on large boards without exponential blowup — like a human focusing on "interesting" moves. All 20 AI competency tests pass.</li>
+  <li><strong>AI commentary:</strong> After each AI move, a brief explanation appears — "Blocked opponent's 3-in-a-row threat", "Took a central position for control", "Best for center control (improved)". Generated from feature deltas and pattern detection.</li>
+  <li><strong>Game object library:</strong> 238 words recognized across 9 categories (pieces, chess, military, nature, characters, resources, symbols, board, cards). 58 SVG icons for visual rendering. Games described with "wizards" or "knights" show actual icons on the board.</li>
+  <li><strong>Cosmetics system:</strong> Parser detects piece colors ("red and blue stones"), board styles ("wooden board", "checkerboard"), and applies them. Custom games render with the described visual theme.</li>
+  <li><strong>Clarification questions:</strong> After parsing, the system detects missing details (no draw condition? no board size? one color for both players?) and asks the user before training.</li>
+  <li><strong>Game naming:</strong> Users can name their custom games before training. Names display in the game selector and training dashboard.</li>
+  <li><strong>Parser expansion:</strong> Now handles 10 game categories — added movement/capture, sowing/mancala, and expanded trick-taking, flanking, and matching/shedding detection. 26 parser tests.</li>
+  <li><strong>Novel game training:</strong> Games without hand-crafted features now train against a random opponent (was default_eval, which was too strong for a learner starting from scratch). 10W 0L vs random on novel 6x6 grid game.</li>
+  <li><strong>Generic track board:</strong> Novel track/race games auto-render with a winding numbered path.</li>
+</ul>
+
+<h2>Changes (May 18, 2026)</h2>
 <ul>
   <li><strong>3 new games:</strong> Hex (territory, hex grid with SVG board), Backgammon (race+dice, click-to-move with SVG triangles and pip dice), Hearts (trick-taking, first of its kind in the system)</li>
   <li><strong>Auto-feature discovery:</strong> Two-level system for novel games — Level 1 infers features from GDL rule structure (e.g., "track game with bear-off → pip count matters"), Level 2 discovers features via win/loss correlation from play data. Outperforms hand-crafted features on Backgammon (12W vs 7W) and Hex (16W vs 13W).</li>

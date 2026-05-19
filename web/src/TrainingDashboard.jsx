@@ -49,9 +49,14 @@ const GAME_LABELS = {
   blackjack: 'Blackjack',
   go_fish: 'Go Fish',
   war: 'War',
+  hex: 'Hex',
+  backgammon: 'Backgammon',
+  hearts: 'Hearts',
+  gin_rummy: 'Gin Rummy',
+  five_card_draw: 'Five-Card Draw',
 }
 
-export default function TrainingDashboard({ games, initialGame, onBack }) {
+export default function TrainingDashboard({ games, initialGame, customGameNames, onBack }) {
   // Smart defaults per game: low depth so the system starts weak
   // and the learned evaluation actually drives improvement
   const DEFAULTS = {
@@ -153,7 +158,7 @@ export default function TrainingDashboard({ games, initialGame, onBack }) {
                 setThinkTime(d.thinkTime)
               }}
             >
-              {GAME_LABELS[g] || g}
+              {GAME_LABELS[g] || (customGameNames && customGameNames[g]) || g}
             </button>
           ))}
         </div>

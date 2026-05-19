@@ -162,9 +162,17 @@ class LearningRunner:
                         self.engine, max_depth=self.max_depth, eval_fn=opp_eval,
                     )
                 else:
-                    opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+                    # No hand-crafted features — use random opponent
+                    # (novel games can't compete against default_eval from scratch)
+                    opponent = RandomOpponent(self.engine)
             else:
-                opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+                # Has hand-crafted features — check if this is a known game
+                hc_features = get_features(self.evaluator.game_name)
+                if not hc_features:
+                    # Novel game with line-based win but no features — use random
+                    opponent = RandomOpponent(self.engine)
+                else:
+                    opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
 
         # Effort allocator for training — cost-aware, adapts depth per position
         if not self.effort_allocator:

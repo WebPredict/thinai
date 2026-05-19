@@ -107,9 +107,18 @@ class EffortAllocator:
 
         # Cost check: estimate nodes = branching_factor ^ depth
         # Card games stay cheap; board games need depth 4+ to see threats
-        max_affordable_nodes = 1500 if analysis.is_card_game else 1000
+        max_affordable_nodes = 1500 if analysis.is_card_game else 2000
         bf = max(analysis.branching_factor, 2)
+        # With selective deepening, depth 3+ only considers top K moves
+        effective_bf = min(bf, 8)
         while depth > self.min_depth:
+            if depth <= 2:
+                estimated_nodes = bf ** depth
+            else:
+                estimated_nodes = bf * bf * (effective_bf ** (depth - 2))
+            if estimated_nodes <= max_affordable_nodes:
+                break
+            depth -= 1
             estimated_nodes = bf ** depth
             if estimated_nodes <= max_affordable_nodes:
                 break

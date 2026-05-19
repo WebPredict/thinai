@@ -42,6 +42,7 @@ def parse_natural(text: str) -> dict:
     setup = _extract_setup(text_lower, board, pieces)
     turn_order = _extract_turn_order(text_lower)
     state_vars = _extract_state_vars(text_lower, board)
+    cosmetics = _extract_cosmetics(text_lower)
 
     # Infer game name from first few words or board type
     name = _infer_name(text, board)
@@ -115,6 +116,9 @@ def parse_natural(text: str) -> dict:
     if is_card:
         deck_zone = "pond" if any(z["name"] == "pond" for z in board.get("zones", [])) else "deck"
         gdl["cards"] = {"deck": "standard52", "deck_zone": deck_zone}
+
+    if cosmetics:
+        gdl["_cosmetics"] = cosmetics
 
     gdl["_parse_info"] = {
         "understood": understood,
@@ -262,17 +266,19 @@ def _extract_pieces(text: str, board: dict) -> list[dict]:
 
     pieces = []
 
-    # "placing stones/marks/discs/pieces"
-    place_match = re.search(r'plac(?:e|ing)\s+(\w+?)s?\s+', text)
+    # "placing stones/marks/discs/pieces" — skip color adjectives and articles
+    _SKIP_WORDS = {'a', 'an', 'the', 'their', 'your', 'red', 'blue', 'green',
+                   'yellow', 'orange', 'purple', 'pink', 'black', 'white',
+                   'gold', 'silver', 'brown', 'dark', 'light', 'colored'}
+    place_match = re.search(r'plac(?:e|ing)\s+((?:\w+\s+){0,3}\w+?)s?\s+(?:on|in|at)', text)
     if place_match:
-        name = place_match.group(1)
-        if name in ('a', 'an', 'the', 'their', 'your'):
-            # Skip articles, look for the next word
-            place_match2 = re.search(r'plac(?:e|ing)\s+(?:a|an|the|their)\s+(\w+?)s?\s+', text)
-            if place_match2:
-                name = place_match2.group(1)
-            else:
-                name = 'mark'
+        words = place_match.group(1).split()
+        # Take the last non-skip word as the piece name
+        name = 'mark'
+        for w in reversed(words):
+            if w.lower().rstrip('s') not in _SKIP_WORDS:
+                name = w.lower().rstrip('s')
+                break
         pieces.append({
             "name": name,
             "owner": "each",
@@ -916,3 +922,52 @@ def _extract_state_vars(text: str, board: dict) -> list[dict]:
             ])
 
     return state_vars
+
+
+def _extract_cosmetics(text: str) -> dict:
+    """Extract visual/cosmetic preferences from text."""
+    cosmetics = {}
+
+    COLOR_MAP = {
+        'red': '#c83030', 'blue': '#2060d0', 'green': '#20a040',
+        'yellow': '#d4a020', 'orange': '#d08020', 'purple': '#8040c0',
+        'pink': '#d060a0', 'black': '#222222', 'white': '#f0e8d8',
+        'gold': '#d4a656', 'silver': '#a0a0a8', 'brown': '#8B4513',
+        'cyan': '#20c0c0', 'crimson': '#dc143c', 'navy': '#1a1a6e',
+    }
+
+    # Find colors mentioned with pieces/players
+    # "red and blue pieces" / "red vs green" / "player 1 is red"
+    piece_colors = []
+    for color, hex_val in COLOR_MAP.items():
+        if re.search(r'\b' + color + r'\b', text):
+            piece_colors.append({"name": color, "hex": hex_val})
+
+    if len(piece_colors) >= 2:
+        cosmetics["player1_color"] = piece_colors[0]["hex"]
+        cosmetics["player2_color"] = piece_colors[1]["hex"]
+    elif len(piece_colors) == 1:
+        cosmetics["player1_color"] = piece_colors[0]["hex"]
+
+    # Board color: "on a green board" / "blue board" / "wooden board"
+    # Try multiple patterns to catch "wooden 6x6 board" etc.
+    board_match = re.search(r'(wooden|wood|dark|light|white|' + '|'.join(COLOR_MAP.keys()) + r')\s+(?:\d+\s*[x×]\s*\d+\s+)?(?:board|grid|field)', text)
+    if board_match:
+        word = board_match.group(1)
+        if word in COLOR_MAP:
+            cosmetics["board_color"] = COLOR_MAP[word]
+        elif word in ('wooden', 'wood'):
+            cosmetics["board_color"] = '#a0784a'
+            cosmetics["board_style"] = 'wood'
+        elif word in ('dark'):
+            cosmetics["board_color"] = '#1a1a1a'
+        elif word in ('light', 'white'):
+            cosmetics["board_color"] = '#e8e0d0'
+
+    # Board pattern: checkerboard/chessboard
+    if any(w in text for w in ['checkerboard', 'chessboard', 'checkered',
+                                'alternating squares', 'chess board',
+                                'checker board']):
+        cosmetics["board_pattern"] = "checkerboard"
+
+    return cosmetics

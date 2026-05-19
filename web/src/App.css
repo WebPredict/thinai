@@ -1007,6 +1007,20 @@ header em {
   background: radial-gradient(circle at 35% 35%, var(--p2-color), #5a7a9a);
 }
 
+/* AI commentary */
+.ai-commentary {
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: rgba(212, 166, 86, 0.08);
+  border: 1px solid rgba(212, 166, 86, 0.2);
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  margin-top: 0.3rem;
+  text-align: center;
+  font-style: italic;
+}
+
 /* Hex board uses custom SVG component — no CSS needed */
 
 /* --- AI move highlight --- */

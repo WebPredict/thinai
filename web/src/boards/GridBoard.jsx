@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { icons } from '../icons/game-icons'
 
 function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
   const [hoverCol, setHoverCol] = useState(null)
@@ -12,6 +13,11 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
   const isTTT = gameType === 'tictactoe'
   const isReversi = gameType === 'reversi'
   const isHex = gameType === 'hex'
+  const cosmetics = state.cosmetics || {}
+  const p1Color = cosmetics.player1_color || '#d4a656'
+  const p2Color = cosmetics.player2_color || '#8ab4d6'
+  const boardColor = cosmetics.board_color || null
+  const isCheckerboard = cosmetics.board_pattern === 'checkerboard'
 
   // Determine which cell the AI last played
   const aiRow = aiLastMove?.target?.row ?? null
@@ -76,7 +82,18 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
       )
     }
 
-    // Generic stone piece for custom/unknown games
+    // Generic piece for custom/unknown games — try icon first, fall back to stone
+    const color = piece.owner === 'player1' ? p1Color : p2Color
+    const iconName = piece.name?.toLowerCase()
+    const iconFn = icons[iconName]
+    if (iconFn) {
+      return (
+        <div className="piece" style={{ width: 36, height: 36, filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.6))' }}
+             dangerouslySetInnerHTML={{ __html:
+               `<svg viewBox="0 0 24 24" width="36" height="36">${iconFn(color)}</svg>`
+             }} />
+      )
+    }
     return (
       <div className={`piece generic-stone ${piece.owner === 'player1' ? 'p1' : 'p2'}`}>
         <div className="disc-inner" />
@@ -105,6 +122,12 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
         (isC4 && aiCol === c && piece?.owner === 'player2')
       )
 
+      // Checkerboard pattern for custom games
+      const cellBg = isCheckerboard && (r + c) % 2 === 1
+        ? 'rgba(255,255,255,0.08)'
+        : boardColor && !isC4 && !isTTT && !isReversi
+          ? undefined : undefined
+
       rowCells.push(
         <div
           key={key}
@@ -116,6 +139,7 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
             isAiMove ? 'ai-last-move' : '',
             piece?.owner === 'player1' ? 'p1' : piece?.owner === 'player2' ? 'p2' : '',
           ].filter(Boolean).join(' ')}
+          style={isCheckerboard ? { background: (r + c) % 2 === 0 ? '#d4c8a0' : '#8a7a5a' } : boardColor && !isC4 && !isTTT && !isReversi ? { background: boardColor } : undefined}
           onClick={() => handleCellClick(r, c)}
           onMouseEnter={() => isC4 && setHoverCol(c)}
           onMouseLeave={() => isC4 && setHoverCol(null)}

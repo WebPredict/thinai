@@ -11,6 +11,7 @@ import WarBoard from './boards/WarBoard'
 import ChutesAndLaddersBoard from './boards/ChutesAndLaddersBoard'
 import BackgammonBoard from './boards/BackgammonBoard'
 import HexBoard from './boards/HexBoard'
+import TrackBoard from './boards/TrackBoard'
 import HeartsBoard from './boards/HeartsBoard'
 import GinRummyBoard from './boards/GinRummyBoard'
 import PokerBoard from './boards/PokerBoard'
@@ -311,6 +312,9 @@ function App() {
   const [parsing, setParsing] = useState(false)
   const [parsedGameId, setParsedGameId] = useState(null)
   const [customDisplayName, setCustomDisplayName] = useState(null)
+  const [customGameName, setCustomGameName] = useState('')
+  const [clarifications, setClarifications] = useState([])
+  const [clarAnswers, setClarAnswers] = useState({})
 
   const handleParse = async () => {
     if (!teachInput.trim()) return
@@ -330,7 +334,13 @@ function App() {
       }
       if (data.game_id) {
         setParsedGameId(data.game_id)
-        refreshGames() // Add new game to the list
+        refreshGames()
+      }
+      if (data.clarifications?.length > 0) {
+        setClarifications(data.clarifications)
+        setClarAnswers({})
+      } else {
+        setClarifications([])
       }
       if (data.error) {
         setParseError(data.error)
@@ -453,6 +463,7 @@ function App() {
             setAiThinking({
               confidence: aiData.ai_confidence,
               effort: aiData.ai_effort,
+              commentary: aiData.ai_commentary,
             })
             setTimeout(() => setAiLastMove(null), 2500)
           }
@@ -496,7 +507,7 @@ function App() {
       </header>
 
       {mode === 'train' ? (
-        <TrainingDashboard games={games} initialGame={selectedGame} onBack={() => { setMode('play'); startGame() }} />
+        <TrainingDashboard games={games} initialGame={selectedGame} customGameNames={customGameNames} onBack={() => { setMode('play'); startGame() }} />
       ) : mode === 'menu' || !sessionId ? (
         <div className="menu">
           <h2>Select a game</h2>
@@ -666,8 +677,63 @@ function App() {
                 <div className="parse-success-text">
                   <strong>Ready to learn!</strong> ThinAI understood your game rules — {parseResult.rules?.length || 0} move type{parseResult.rules?.length !== 1 ? 's' : ''}, {parseResult.end_conditions?.length || 0} end condition{parseResult.end_conditions?.length !== 1 ? 's' : ''}, on a {parseResult.board?.type === 'grid' ? `${parseResult.board.grid.rows}×${parseResult.board.grid.cols} grid` : parseResult.board?.type || 'board'}.
                 </div>
-                <button className="teach-btn teach-btn-learn" onClick={() => {
-                  const gid = parsedGameId || parseResult.meta?.name?.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'custom_game'
+                {clarifications.length > 0 && (
+                  <div style={{ margin: '0.75rem 0', padding: '0.75rem', background: 'rgba(212,166,86,0.06)', border: '1px solid rgba(212,166,86,0.2)', borderRadius: '6px' }}>
+                    <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.8rem', color: 'var(--accent)', marginBottom: '0.5rem', fontWeight: 600 }}>
+                      A few questions (optional — defaults are fine):
+                    </div>
+                    {clarifications.map(c => (
+                      <div key={c.id} style={{ marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                        <div style={{ color: 'var(--ink)', marginBottom: '0.25rem' }}>{c.question}</div>
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          {(c.options || []).map(opt => (
+                            <button key={opt}
+                              className="crazy8-draw-btn"
+                              style={{
+                                fontSize: '0.75rem', padding: '0.2rem 0.5rem',
+                                background: (clarAnswers[c.id] || c.default) === opt ? 'var(--accent)' : 'var(--bg)',
+                                color: (clarAnswers[c.id] || c.default) === opt ? 'var(--bg)' : 'var(--ink-dim)',
+                              }}
+                              onClick={() => setClarAnswers(prev => ({ ...prev, [c.id]: opt }))}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.5rem 0' }}>
+                  <label style={{ fontFamily: 'Menlo, monospace', fontSize: '0.85rem', color: 'var(--ink-dim)', whiteSpace: 'nowrap' }}>Name your game:</label>
+                  <input
+                    type="text"
+                    value={customGameName || parseResult.meta?.name || ''}
+                    onChange={e => setCustomGameName(e.target.value)}
+                    style={{
+                      flex: 1, padding: '0.4rem 0.6rem', background: 'var(--bg)',
+                      border: '1px solid var(--rule-bright)', borderRadius: '4px',
+                      color: 'var(--ink)', fontFamily: 'Menlo, monospace', fontSize: '0.85rem',
+                    }}
+                    placeholder="e.g. Wizard Battle"
+                  />
+                </div>
+                <button className="teach-btn teach-btn-learn" onClick={async () => {
+                  const name = customGameName || parseResult.meta?.name || 'custom_game'
+                  let gid = parsedGameId || name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'custom_game'
+                  if (customGameName) {
+                    // Re-save with custom name
+                    try {
+                      const res = await fetch(`${API}/parse`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: teachInput, name: customGameName }),
+                      })
+                      const data = await res.json()
+                      if (data.game_id) gid = data.game_id
+                      refreshGames()
+                    } catch (e) {}
+                  }
                   setSelectedGame(gid)
                   setMode('train')
                 }}>
@@ -693,7 +759,10 @@ function App() {
               <button className="rules-btn" onClick={() => setShowRulesModal(true)}>?</button>
             </div>
             {(() => {
-              const pi = PLAYER_INDICATOR[selectedGame] || { label: 'Gold', color: 'var(--accent)' }
+              const cos = gameState?.cosmetics || {}
+              const customColor = cos.player1_color
+              const colorNames = {'#c83030':'Red','#2060d0':'Blue','#20a040':'Green','#d4a020':'Yellow','#d08020':'Orange','#8040c0':'Purple','#d060a0':'Pink','#222222':'Black','#f0e8d8':'White','#d4a656':'Gold','#a0a0a8':'Silver','#8B4513':'Brown'}
+              const pi = PLAYER_INDICATOR[selectedGame] || { label: customColor ? (colorNames[customColor] || 'Player 1') : 'Gold', color: customColor || 'var(--accent)' }
               return (
                 <div className="player-indicator">
                   You are playing as <span className="player-indicator-label" style={{ color: pi.color }}>
@@ -713,6 +782,11 @@ function App() {
                 {aiThinking.effort && (
                   <span className="ai-thinking-effort">depth {aiThinking.effort.depth_used} · {aiThinking.effort.nodes_searched} positions</span>
                 )}
+              </div>
+            )}
+            {aiThinking?.commentary && (
+              <div className="ai-commentary">
+                💭 {aiThinking.commentary}
               </div>
             )}
           </div>
@@ -805,6 +879,12 @@ function App() {
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}
               aiLastMove={aiLastMove}
+            />
+          ) : gameState?.board_type === 'track' ? (
+            <TrackBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
             />
           ) : gameState?.board_type === 'card_zones' ? (
             <CrazyEightsBoard

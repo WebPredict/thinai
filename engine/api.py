@@ -154,6 +154,7 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
         "turn_number": state.turn_number,
         "legal_moves": legal_moves,
         "game_result": game_result,
+        "cosmetics": engine.gdl.get("_cosmetics") if hasattr(engine, 'gdl') else None,
     }
     # Ensure everything is JSON-safe (card objects, etc.)
     return _json.loads(_json.dumps(raw, default=str))
@@ -183,6 +184,7 @@ class TrainingRequest(BaseModel):
 
 class ParseRequest(BaseModel):
     text: str
+    name: Optional[str] = None
 
 
 # --- Parse Endpoint ---
@@ -210,6 +212,10 @@ def parse_rules(request: Request, req: ParseRequest):
         if errors:
             return {"gdl": gdl, "error": " ".join(errors), "warnings": errors}
 
+        # Apply custom name if provided
+        if req.name:
+            gdl["meta"]["name"] = req.name
+
         # Save to custom games directory so it becomes playable
         game_name = gdl.get("meta", {}).get("name", "custom_game")
         # Sanitize to filesystem-safe name
@@ -223,7 +229,12 @@ def parse_rules(request: Request, req: ParseRequest):
         with open(path, "w") as f:
             json.dump(gdl, f, indent=2)
 
-        return {"gdl": gdl, "error": None, "game_id": safe_name}
+        # Check for clarifications needed
+        from engine.parser.clarifier import find_clarifications
+        clarifications = find_clarifications(gdl, req.text)
+
+        return {"gdl": gdl, "error": None, "game_id": safe_name,
+                "clarifications": [c for c in clarifications]}
     except Exception as e:
         return {"gdl": None, "error": f"Parser error: {str(e)}"}
 
@@ -463,12 +474,18 @@ def ai_move(request: Request, session_id: str):
     if result and handler:
         handler.on_game_end(state, result)
 
+    # Capture commentary
+    ai_commentary = ""
+    if not is_chance and 'reasoner' in dir() and hasattr(reasoner, 'last_commentary'):
+        ai_commentary = reasoner.last_commentary
+
     import json as _json
     response = {
         "state": _state_to_dict(state, engine),
         "ai_move": ai_move_info,
         "ai_confidence": ai_confidence,
         "ai_effort": ai_effort,
+        "ai_commentary": ai_commentary,
     }
     return JSONResponse(content=_json.loads(_json.dumps(response, default=str)))
 
@@ -544,9 +561,12 @@ def start_training(request: Request, req: TrainingRequest):
         max_train_depth = 2 if is_custom else 3
         depth = 1
         while depth < max_train_depth:
-            # Estimate time per move: nodes * cost_per_node * moves_per_game
-            nodes_per_move = avg_bf ** (depth + 1)
-            time_per_move = nodes_per_move * 0.003
+            # Estimate time: depth 1-2 uses full bf, depth 3+ uses pruned ~8 moves
+            if depth + 1 <= 2:
+                nodes_per_move = avg_bf ** (depth + 1)
+            else:
+                nodes_per_move = avg_bf * avg_bf * (min(avg_bf, 8) ** (depth - 1))
+            time_per_move = nodes_per_move * 0.002  # cheaper with selective deepening
             if time_per_move > req.think_time:
                 break
             depth += 1

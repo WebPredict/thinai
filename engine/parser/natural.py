@@ -90,7 +90,7 @@ def parse_natural(text: str) -> dict:
         'move from': 'moving pieces between spaces', 'capture': 'capturing pieces',
     }
     for keyword, label in concept_keywords.items():
-        if keyword in text_lower and label not in str(understood):
+        if re.search(r'\b' + re.escape(keyword) + r'\b', text_lower) and label not in str(understood):
             unknown_concepts.append(label)
 
     if unknown_concepts:
@@ -312,6 +312,25 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
     if board.get("type") == "card_zones":
         return _extract_card_rules(text, board)
 
+    # Tile/L-shape/multi-cell placement (check before gravity since "column" may appear in win condition)
+    if any(w in text for w in ['tile', 'l-shape', 'l shape', 'domino', 'covers', 'tetris']):
+        tile_size = 3
+        if 'domino' in text:
+            tile_size = 2
+        elif re.search(r'covers?\s+(\d+)', text):
+            tile_size = int(re.search(r'covers?\s+(\d+)', text).group(1))
+        shape = "L" if any(w in text for w in ['l-shape', 'l shape', 'l-shaped']) else "line"
+        board["_tile_shape"] = shape
+        board["_tile_size"] = tile_size
+        rules.append({
+            "name": "place_tile",
+            "action": "place",
+            "params": [{"name": "tile_id", "select": "tile_placements"}],
+            "conditions": [],
+            "effects": ["place_tile(tile_id)"],
+        })
+        return rules
+
     # Gravity/column drop (Connect Four style)
     if ('drop' in text or 'falls' in text or 'column' in text) and board.get("type") == "grid":
         cols = board.get("grid", {}).get("cols", 7)
@@ -360,7 +379,9 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
         return rules
 
     # Flanking/Reversi style
-    if 'flank' in text or 'sandwich' in text or 'flip' in text:
+    if any(w in text for w in ['flank', 'sandwich', 'flip', 'surround to capture',
+                                'surround to flip', 'trap between', 'reversi', 'othello',
+                                'outflank', 'enclose']):
         rules.append({
             "name": f"place_{piece_name}",
             "action": "place",
@@ -373,6 +394,87 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
                 f"place {piece_name}(current_player) at target",
                 f"for d in directions[flanks(target, d, current_player)]: flip_line(target, d, current_player)",
             ],
+        })
+        return rules
+
+    # Movement/Capture: move pieces from one space to another
+    if any(w in text for w in ['move your piece', 'move one square', 'move a piece',
+                                'slide', 'step forward', 'jump over',
+                                'move diagonally', 'move orthogonally',
+                                'move to an adjacent', 'moves one space']):
+        # Determine movement type
+        is_diagonal = 'diagonal' in text
+        can_jump = 'jump' in text or 'capture' in text or 'hop' in text
+
+        rules.append({
+            "name": f"move_{piece_name}",
+            "action": "move",
+            "params": [
+                {"name": "from", "select": "own_pieces"},
+                {"name": "to", "select": "adjacent_empty"},
+            ],
+            "conditions": [],
+            "effects": [f"move_piece(from, to)"],
+        })
+        if can_jump:
+            rules.append({
+                "name": f"jump_{piece_name}",
+                "action": "move",
+                "params": [
+                    {"name": "from", "select": "own_pieces"},
+                    {"name": "to", "select": "jump_targets"},
+                ],
+                "conditions": [],
+                "effects": [f"jump_piece(from, to)"],
+            })
+        return rules
+
+    # Sowing/Mancala: pick up and distribute tokens
+    if any(w in text for w in ['sow', 'distribute', 'drop one in each',
+                                'pick up stones', 'pick up all', 'mancala',
+                                'drop one per', 'counter-clockwise',
+                                'clockwise', 'pick up seeds']):
+        num_pits = 6  # default
+        pit_match = re.search(r'(\d+)\s*pits?', text)
+        if pit_match:
+            num_pits = int(pit_match.group(1))
+
+        # Use track board if not already set
+        if board.get("type") != "track":
+            board["type"] = "track"
+            board["track"] = {"length": (num_pits + 1) * 2, "loop": True}
+
+        rules.append({
+            "name": "sow",
+            "action": "sow",
+            "params": [{"name": "pit", "select": "current_player_pits"}],
+            "conditions": ["count(pieces_at(pit)) > 0"],
+            "effects": ["sow_from(pit)"],
+        })
+        return rules
+
+    # Dice + placement: roll a die, place in constrained position
+    if ('roll' in text or 'die' in text or 'dice' in text) and board.get("type") == "grid":
+        rules.append({
+            "name": "roll_and_place",
+            "action": "chance",
+            "chance": True,
+            "params": [],
+            "conditions": [],
+            "effects": ["dice_place()"],
+        })
+        return rules
+
+    # Race: roll dice, move piece forward on a track
+    if any(w in text for w in ['race', 'finish line', 'reach the end', 'roll.*move',
+                                'move forward', 'move your piece']) and board.get("type") == "track":
+        rules.append({
+            "name": "roll_and_move",
+            "action": "chance",
+            "chance": True,
+            "params": [],
+            "conditions": [],
+            "effects": ["roll_and_move()"],
         })
         return rules
 
@@ -411,6 +513,26 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
             "condition": f"any d in directions: line_length({target_var}, d, current_player) >= {n}",
         })
 
+    # "capture all opponent pieces" / "no pieces left"
+    if any(w in text for w in ['capture all', 'no pieces left', 'eliminate all',
+                                'remove all opponent', "opponent can't move",
+                                'cannot move']):
+        conditions.append({
+            "type": "win",
+            "player": "current_player",
+            "condition": "opponent_has_no_pieces_or_moves(current_player)",
+        })
+
+    # Sowing: most stones in store wins
+    if any(w in text for w in ['most stones', 'most seeds', 'most in store',
+                                'most in your store', 'mancala']):
+        conditions.append({
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "one_side_empty()",
+            "score": "store_count(current_player)",
+        })
+
     # "last stone/piece wins" (Nim-style)
     if 'last' in text and ('win' in text or 'loses' in text):
         is_misere = 'loses' in text or 'last.*loses' in text
@@ -421,13 +543,23 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
                 "condition": "all s in spaces: count(pieces_at(s)) == 0",
             })
 
-    # "most pieces/discs/stones wins"
-    if 'most' in text and 'win' in text:
+    # "filling a row/column wins"
+    if any(w in text for w in ['fill a row', 'filling a row', 'complete a row',
+                                'fill a column', 'filling a column', 'complete a column',
+                                'fills a row', 'fills a column']):
+        conditions.append({
+            "type": "win",
+            "player": "current_player",
+            "condition": "row_or_col_filled(current_player)",
+        })
+
+    # "most pieces/tiles/discs/stones wins" or "placed more tiles wins"
+    if ('most' in text or 'more' in text) and 'win' in text:
         conditions.append({
             "type": "win",
             "player": "player_by_score",
-            "condition": "has_legal_move(player1) == false and has_legal_move(player2) == false",
-            "score": "count(pieces[owner == current_player])",
+            "condition": "no_legal_moves()",
+            "score": "count_my_pieces(current_player)",
         })
 
     # Draw: "board is full" / "all squares filled" / "no winner"
@@ -559,14 +691,36 @@ def _extract_card_end_conditions(text: str, board: dict) -> list[dict]:
     """Extract end conditions for card games."""
     conditions = []
 
-    # "empty hand wins" / "first to play all cards"
-    if any(w in text for w in ['empty hand', 'no cards left', 'all cards', 'first to play all',
-                                'gets rid of all']):
+    # "empty hand wins" / "first to play all cards" / "get rid of all"
+    if any(w in text for w in ['empty hand', 'no cards left', 'first to play all',
+                                'gets rid of all', 'empty your hand', 'shed all',
+                                'get rid of']):
         conditions.append({
             "type": "win",
             "player": "current_player",
             "condition": "crazy_eights_hand_empty(current_player)",
         })
+
+    # Trick-taking: lowest points / avoid points / fewest points
+    if any(w in text for w in ['avoid points', 'fewest points', 'lowest points',
+                                'least points', 'avoid hearts', 'avoid taking']):
+        conditions.append({
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "hearts_game_over()",
+            "score": "hearts_score(current_player)",
+        })
+        return conditions
+
+    # Trick-taking: most tricks wins
+    if any(w in text for w in ['most tricks', 'win the most tricks', 'wins more tricks']):
+        conditions.append({
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "hearts_game_over()",
+            "score": "hearts_score(current_player)",
+        })
+        return conditions
 
     # "most sets wins" / "most books"
     if any(w in text for w in ['most sets', 'most books', 'most groups', 'most collected']):
@@ -626,8 +780,9 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
     """Extract rules for a card game from natural language."""
     rules = []
 
-    # Go Fish style: ask for a rank
-    if any(w in text for w in ['ask', 'do you have', 'go fish', 'request']):
+    # 1. Collecting/Go Fish style: ask for a rank, collect sets
+    if any(w in text for w in ['ask', 'do you have', 'go fish', 'request',
+                                'collect set', 'book of', 'set of 4', 'sets of']):
         rules.append({
             "name": "ask_for_rank",
             "action": "ask",
@@ -637,9 +792,11 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
         })
         return rules
 
-    # Crazy Eights / Uno style: match suit or rank
-    if any(w in text for w in ['match', 'same suit', 'same rank', 'play a card',
-                                'matching', 'crazy eight', 'uno']):
+    # 2. Matching/Shedding: play matching card, empty hand wins
+    if any(w in text for w in ['match', 'same suit', 'same rank', 'matching',
+                                'play a card that matches', 'play a matching',
+                                'crazy eight', 'uno', 'empty hand', 'get rid of',
+                                'shed', 'discard matching']):
         rules.append({
             "name": "play_card",
             "action": "play",
@@ -656,7 +813,31 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
         })
         return rules
 
-    # War style: both flip cards
+    # 3. Trick-taking: play cards in tricks, follow suit, highest wins
+    if any(w in text for w in ['trick', 'follow suit', 'trump', 'lead',
+                                'wins the trick', 'take the trick',
+                                'avoid points', 'avoid hearts']):
+        # Add trick zone if not present
+        zones = board.get("zones", [])
+        zone_names = [z["name"] for z in zones]
+        if "trick" not in zone_names:
+            zones.append({"name": "trick", "visible_to": "all", "ordered": True})
+        if "taken_p1" not in zone_names:
+            zones.append({"name": "taken_p1", "owner": "player1", "visible_to": "all", "ordered": False})
+        if "taken_p2" not in zone_names:
+            zones.append({"name": "taken_p2", "owner": "player2", "visible_to": "all", "ordered": False})
+        board["zones"] = zones
+
+        rules.append({
+            "name": "play_card",
+            "action": "play",
+            "params": [{"name": "card_id", "select": "hearts_playable"}],
+            "conditions": [],
+            "effects": ["hearts_play(card_id)"],
+        })
+        return rules
+
+    # 4. War style: both flip cards
     if any(w in text for w in ['flip', 'war', 'compare cards']):
         rules.append({
             "name": "battle",

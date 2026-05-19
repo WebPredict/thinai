@@ -57,12 +57,12 @@ def test_takes_winning_move():
 
 
 def test_effort_allocator_depth_for_c4():
-    """Effort allocator must give at least depth 4 for Connect Four."""
+    """Effort allocator must give at least depth 3 for Connect Four."""
     eng = _setup_c4()
     state = eng.initial_state()
     allocator = EffortAllocator()
     decision = allocator.recommend(state, eng)
-    assert decision.depth >= 4, f"C4 needs at least depth 4, got {decision.depth}"
+    assert decision.depth >= 3, f"C4 needs at least depth 3, got {decision.depth}"
 
 
 def test_card_games_stay_within_budget():

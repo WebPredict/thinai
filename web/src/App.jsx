@@ -342,13 +342,13 @@ function App() {
   }
 
   useEffect(() => {
-    if (showGdlModal && selectedGame) {
+    if ((showGdlModal || showRulesModal) && selectedGame) {
       fetch(`${API}/game/${selectedGame}/gdl`)
         .then(r => r.json())
         .then(setGdlData)
         .catch(() => setGdlData(null))
     }
-  }, [showGdlModal, selectedGame])
+  }, [showGdlModal, showRulesModal, selectedGame])
 
   // Fetch which games have been trained
   const refreshLearned = () => {
@@ -369,11 +369,21 @@ function App() {
 
   useEffect(() => { refreshLearned() }, [mode])
 
+  const [customGameNames, setCustomGameNames] = useState({})
+
   const refreshGames = () => {
     fetch(`${API}/games`)
       .then(r => r.json())
       .then(d => {
-        const all = [...d.games, ...(d.custom_games || [])]
+        // Custom games have {id, name} — extract IDs and store display names
+        const customIds = (d.custom_games || []).map(c => typeof c === 'string' ? c : c.id)
+        const nameMap = {}
+        for (const c of (d.custom_games || [])) {
+          if (typeof c === 'object') nameMap[c.id] = c.name
+        }
+        setCustomGameNames(prev => ({ ...prev, ...nameMap }))
+
+        const all = [...d.games, ...customIds]
         const sorted = all.sort((a, b) => {
           const ai = GAME_ORDER.indexOf(a), bi = GAME_ORDER.indexOf(b)
           return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
@@ -469,7 +479,7 @@ function App() {
     setLoading(false)
   }, [sessionId, loading])
 
-  const gameName = GAME_LABELS[selectedGame] || customDisplayName || selectedGame
+  const gameName = GAME_LABELS[selectedGame] || customDisplayName || customGameNames[selectedGame] || selectedGame
   const isC4 = selectedGame === 'connect_four'
   const isTTT = selectedGame === 'tictactoe'
 
@@ -492,7 +502,7 @@ function App() {
           <h2>Select a game</h2>
           <div className="game-select">
             {games.map(g => {
-              const label = GAME_LABELS[g] || g
+              const label = GAME_LABELS[g] || customGameNames[g] || g
               const trained = learnedGames[label]
               return (
                 <button
@@ -561,17 +571,30 @@ function App() {
               <strong style={{ color: 'var(--accent)' }}>Current limitations:</strong> Works with grid placement games (N-in-a-row, territory) and simple card games. Complex movement rules (chess-like) are not yet supported for novel games. <em>Note: this is not an LLM — it uses pattern matching, so its vocabulary is limited to common game terms.</em>
             </div>
             <div className="teach-teaser-example">
-              <div className="teach-teaser-label">Example inputs</div>
-              <div className="teach-teaser-text">
-                "Two players take turns placing stones on a 5x5 grid. A player wins by
-                getting 4 in a row horizontally, vertically, or diagonally. If the board
-                is full with no winner, it's a draw."
-              </div>
-              <div className="teach-teaser-text" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-                "Two players are each dealt 5 cards. Players take turns playing one card.
-                The higher rank wins the round and scores a point. After all cards are
-                played, the player with more points wins."
-              </div>
+              <div className="teach-teaser-label">Example inputs — try any of these</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                <li className="teach-teaser-text" style={{ paddingLeft: '1rem', marginBottom: '0.8rem', paddingBottom: '0.8rem', borderBottom: '1px solid var(--ink-faint)' }}>
+                  "Two players take turns placing stones on a 5x5 grid. A player wins by
+                  getting 4 in a row horizontally, vertically, or diagonally. If the board
+                  is full with no winner, it's a draw."
+                </li>
+                <li className="teach-teaser-text" style={{ paddingLeft: '1rem', marginBottom: '0.8rem', paddingBottom: '0.8rem', borderBottom: '1px solid var(--ink-faint)' }}>
+                  "Two players are each dealt 5 cards. Players take turns playing one card.
+                  The higher rank wins the round. Each round is worth more points than the
+                  last (1, 2, 3, 4, 5). After all cards are played, the most points wins."
+                </li>
+                <li className="teach-teaser-text" style={{ paddingLeft: '1rem', marginBottom: '0.8rem', paddingBottom: '0.8rem', borderBottom: '1px solid var(--ink-faint)' }}>
+                  "Two players take turns rolling a die and placing a piece on a 5x5 grid.
+                  The number rolled determines which row you must place in. If that row is
+                  full, you lose your turn. First to get 3 in a row in any direction wins."
+                </li>
+                <li className="teach-teaser-text" style={{ paddingLeft: '1rem' }}>
+                  "Two players take turns placing L-shaped tiles on a 6x6 grid. Each tile
+                  covers 3 squares in an L shape. A player wins by completely filling a row
+                  or column. If no more tiles can be placed, the player who placed more
+                  tiles wins."
+                </li>
+              </ul>
             </div>
             <div className="teach-workspace">
               <div className="teach-input-col">
@@ -694,7 +717,8 @@ function App() {
             )}
           </div>
           {showRulesModal && (
-            <RulesModal gameType={selectedGame} onClose={() => setShowRulesModal(false)} customDescription={teachInput} />
+            <RulesModal gameType={selectedGame} onClose={() => setShowRulesModal(false)}
+              customDescription={teachInput || gdlData?.gdl?._original_description} />
           )}
           {selectedGame === 'mancala' ? (
             <MancalaBoard

@@ -216,6 +216,9 @@ def parse_rules(request: Request, req: ParseRequest):
         safe_name = re.sub(r'[^a-z0-9_]', '_', game_name.lower()).strip('_')
         if not safe_name:
             safe_name = "custom_game"
+        # Store original description for the rules modal
+        gdl["_original_description"] = req.text
+
         path = os.path.join(CUSTOM_DIR, f"{safe_name}.json")
         with open(path, "w") as f:
             json.dump(gdl, f, indent=2)
@@ -264,15 +267,22 @@ def list_games(request: Request):
     for f in os.listdir(EXAMPLES_DIR):
         if f.endswith(".json"):
             games.append(f.replace(".json", ""))
-    # Include custom/parsed games
+    # Include custom/parsed games with display names
     custom = []
     if os.path.exists(CUSTOM_DIR):
         for f in os.listdir(CUSTOM_DIR):
             if f.endswith(".json"):
-                name = f.replace(".json", "")
-                if name not in games:
-                    custom.append(name)
-    return {"games": sorted(games), "custom_games": sorted(custom)}
+                slug = f.replace(".json", "")
+                if slug not in games:
+                    # Read display name from GDL meta
+                    try:
+                        with open(os.path.join(CUSTOM_DIR, f)) as fh:
+                            meta = json.load(fh).get("meta", {})
+                            display = meta.get("name", slug)
+                    except Exception:
+                        display = slug
+                    custom.append({"id": slug, "name": display})
+    return {"games": sorted(games), "custom_games": sorted(custom, key=lambda c: c["id"])}
 
 
 @app.get("/api/game/{game_name}/gdl")

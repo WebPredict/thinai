@@ -275,6 +275,25 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
             player = ctx.state.current_player
         return _hex_connected(ctx.state, player)
 
+    # Dice placement / tile game built-ins
+    if name == "row_or_col_filled":
+        player = args[0] if args else ctx.state.current_player
+        if player == "current_player":
+            player = ctx.state.current_player
+        return _row_or_col_filled(ctx.state, player)
+    if name == "no_legal_moves":
+        # Check via engine if available, otherwise check board full
+        if isinstance(ctx.state.board, GridBoard):
+            for space in ctx.state.board.spaces:
+                if ctx.state.is_empty(space):
+                    return False
+        return True
+    if name == "count_my_pieces":
+        player = args[0] if args else ctx.state.current_player
+        if player == "current_player":
+            player = ctx.state.current_player
+        return sum(1 for p in ctx.state.all_pieces() if p.owner == player)
+
     # Compare/score card game built-ins (novel parsed games)
     if name == "compare_game_over":
         p1 = ctx.state.card_zones.get("hand_p1")
@@ -766,6 +785,15 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "gin_rummy_knock":
         args = [evaluate(a, ctx) for a in node.args]
         _gin_rummy_knock(ctx.state, int(args[0]))
+        return
+
+    # Dice placement / tile effects
+    if name == "dice_place":
+        _dice_place(ctx.state)
+        return
+    if name == "place_tile":
+        args = [evaluate(a, ctx) for a in node.args]
+        _place_tile(ctx.state, int(args[0]))
         return
 
     # Backgammon effects
@@ -2121,11 +2149,16 @@ def _compare_play(state: GameState, card_id: int):
         c1_str = f"{cards[0].rank}{SUIT_SYM.get(cards[0].suit, '')}"
         c2_str = f"{cards[1].rank}{SUIT_SYM.get(cards[1].suit, '')}"
 
+        # Escalating stakes: each round is worth more
+        round_num = state.state_vars.get("round_num", 0) + 1
+        state.state_vars["round_num"] = round_num
+        stakes = round_num  # round 1 = 1pt, round 2 = 2pts, etc.
+
         if winner:
-            state.state_vars[f"{winner}_score"] = state.state_vars.get(f"{winner}_score", 0) + 1
-            state.state_vars["last_play"] = f"You played {c1_str} vs AI's {c2_str} — {'You' if winner == 'p1' else 'AI'} won!"
+            state.state_vars[f"{winner}_score"] = state.state_vars.get(f"{winner}_score", 0) + stakes
+            state.state_vars["last_play"] = f"You played {c1_str} vs AI's {c2_str} — {'You' if winner == 'p1' else 'AI'} won round {round_num} ({stakes} pts)!"
         else:
-            state.state_vars["last_play"] = f"You played {c1_str} vs AI's {c2_str} — Tie!"
+            state.state_vars["last_play"] = f"You played {c1_str} vs AI's {c2_str} — Tie! (round {round_num}, {stakes} pts at stake)"
 
         # Move cards to taken pile
         taken = state.card_zones.get(f"taken_{winner}") if winner else None
@@ -2402,3 +2435,149 @@ def _backgammon_execute(state: GameState, move_id: int):
     else:
         state.state_vars["moves_remaining"] = ""
         state.state_vars["phase"] = "roll"
+
+
+# --- Dice placement game built-ins ---
+
+def _dice_place(state: GameState):
+    """Roll a die and place a piece in the rolled row."""
+    import random
+    from engine.gdl.board import GridBoard, GridSpace
+    
+    if not isinstance(state.board, GridBoard):
+        return
+    
+    die = random.randint(1, state.board.rows)
+    row = die - 1  # 0-indexed
+    
+    # Find empty column in this row
+    placed = False
+    cols = list(range(state.board.cols))
+    random.shuffle(cols)
+    for col in cols:
+        space = GridSpace(row, col)
+        if state.is_empty(space):
+            from engine.gdl.state import Piece
+            state.set_piece(space, Piece("mark", state.current_player))
+            state.last_placed = space
+            state.state_vars["last_play"] = f"Rolled {die}, placed at ({row+1},{col+1})"
+            state.state_vars["last_action"] = "place"
+            placed = True
+            break
+    
+    if not placed:
+        state.state_vars["last_play"] = f"Rolled {die} — row {die} is full, turn lost!"
+        state.state_vars["last_action"] = "skip"
+
+
+def _row_or_col_filled(state: GameState, player: str) -> bool:
+    """Check if player has filled any complete row or column."""
+    from engine.gdl.board import GridBoard, GridSpace
+    
+    if not isinstance(state.board, GridBoard):
+        return False
+    
+    rows, cols = state.board.rows, state.board.cols
+    
+    # Check rows
+    for r in range(rows):
+        if all(
+            (lambda p: p is not None and p.owner == player)(state.get_piece(GridSpace(r, c)))
+            for c in range(cols)
+        ):
+            return True
+
+    # Check columns
+    for c in range(cols):
+        if all(
+            (lambda p: p is not None and p.owner == player)(state.get_piece(GridSpace(r, c)))
+            for r in range(rows)
+        ):
+            return True
+    
+    return False
+
+
+# --- Tile placement game built-ins ---
+
+# L-shaped tile orientations (relative offsets from anchor point)
+_L_SHAPES = [
+    [(0,0), (1,0), (1,1)],   # ┘
+    [(0,0), (0,1), (1,0)],   # ┐
+    [(0,0), (0,1), (1,1)],   # └
+    [(0,0), (1,0), (1,-1)],  # ┌
+]
+
+_LINE_SHAPES = {
+    2: [[(0,0), (0,1)], [(0,0), (1,0)]],  # horizontal, vertical
+    3: [[(0,0), (0,1), (0,2)], [(0,0), (1,0), (2,0)]],
+}
+
+
+def _get_tile_placements(state: GameState, gdl: dict) -> list:
+    """Enumerate all valid tile placements."""
+    from engine.gdl.board import GridBoard, GridSpace
+    
+    if not isinstance(state.board, GridBoard):
+        return []
+    
+    rows, cols = state.board.rows, state.board.cols
+    tile_shape = gdl.get("board", {}).get("_tile_shape", "L")
+    tile_size = gdl.get("board", {}).get("_tile_size", 3)
+    
+    if tile_shape == "L":
+        shapes = _L_SHAPES
+    else:
+        shapes = _LINE_SHAPES.get(tile_size, [[(0,0)]])
+    
+    placements = []
+    tile_id = 0
+    
+    for r in range(rows):
+        for c in range(cols):
+            for shape in shapes:
+                cells = [(r + dr, c + dc) for dr, dc in shape]
+                # Check all cells are in bounds and empty
+                if all(
+                    0 <= cr < rows and 0 <= cc < cols and
+                    state.is_empty(GridSpace(cr, cc))
+                    for cr, cc in cells
+                ):
+                    placements.append(tile_id)
+                tile_id += 1
+    
+    return placements
+
+
+def _place_tile(state: GameState, tile_id: int):
+    """Place a tile on the board by tile_id."""
+    from engine.gdl.board import GridBoard, GridSpace
+    from engine.gdl.state import Piece
+    
+    if not isinstance(state.board, GridBoard):
+        return
+    
+    rows, cols = state.board.rows, state.board.cols
+    gdl = getattr(state, '_gdl', {})
+    tile_shape = "L"  # default
+    tile_size = 3
+    
+    if tile_shape == "L":
+        shapes = _L_SHAPES
+    else:
+        shapes = _LINE_SHAPES.get(tile_size, [[(0,0)]])
+    
+    # Decode tile_id back to (row, col, shape_idx)
+    idx = 0
+    for r in range(rows):
+        for c in range(cols):
+            for si, shape in enumerate(shapes):
+                if idx == tile_id:
+                    cells = [(r + dr, c + dc) for dr, dc in shape]
+                    for cr, cc in cells:
+                        state.set_piece(GridSpace(cr, cc), Piece("tile", state.current_player))
+                    state.last_placed = GridSpace(r, c)
+                    state.state_vars["last_play"] = f"Placed tile at ({r+1},{c+1})"
+                    state.state_vars["last_action"] = "place"
+                    return
+                idx += 1

@@ -332,6 +332,11 @@ class GameEngine:
                     for card in hand.cards:
                         yield card.id
 
+        elif select == "tile_placements":
+            from engine.gdl.expr_eval import _get_tile_placements
+            for tile_id in _get_tile_placements(state, self.gdl):
+                yield tile_id
+
         elif select == "backgammon_moves":
             from engine.gdl.expr_eval import _backgammon_get_moves
             for move_id in _backgammon_get_moves(state):

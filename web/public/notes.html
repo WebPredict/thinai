@@ -233,7 +233,19 @@
   <li><strong>0</strong> GPUs required</li>
 </ul>
 
-<h2>Recent Changes (May 19, 2026)</h2>
+<h2>Recent Changes (May 20, 2026)</h2>
+<ul>
+  <li><strong>Auto-discovery replaces hand-crafted features:</strong> Tic-Tac-Toe, Connect Four, and Chutes &amp; Ladders no longer use hand-coded evaluation features. Instead, the system auto-generates features from the game's rules (line_threats, center_control, position_lead, etc.) and learns their importance through self-play. This means these games show real learning curves — starting weak and improving — rather than being pre-programmed to play well.</li>
+  <li><strong>Smarter auto-features:</strong> For line-win games (N-in-a-row), the system now skips noisy features like edge_presence and corner_presence that don't help, keeping only relevant ones (center_control, longest_line, line_threats, mobility). Reduces noise-to-signal ratio during learning.</li>
+  <li><strong>Progressive search depth:</strong> Training now starts at depth 1 and deepens every 5 games, while the opponent stays at full depth (the "adult"). This mirrors how a kid learns — start with simple thinking, gradually look further ahead. The training curve shows both weight learning and depth progression.</li>
+  <li><strong>Luck detection:</strong> The system now identifies pure-luck games (like Chutes &amp; Ladders and War) using two checks — L0 analyzes the rules for absence of player decisions, L1 checks post-training for flat weights and ~50% win rate. Luck games show a notice instead of misleading self-assessment or mastery claims.</li>
+  <li><strong>Race game support:</strong> Track/race games with forward/backward choice and opponent bumping. AI evaluates positions by distance to finish. Track board UI with winding path, directional arrows, and roll/choice buttons.</li>
+  <li><strong>Parser reference:</strong> New modal overlay documenting all 12 supported game categories, recognized piece vocabulary (~60 words), colors, cosmetics, and tips for writing game descriptions.</li>
+  <li><strong>UI improvements:</strong> Game list split into "Trained" / "Not yet trained" groups. Training dashboard properly resets when switching games. "Back to Games" returns to menu. Server restart script (restart.sh).</li>
+  <li><strong>Stronger auto-priors:</strong> Line features start at 0.5 (was 0.15) and center control at 0.2 (was 0.05), giving the learner a better starting point for line-win games.</li>
+</ul>
+
+<h2>Changes (May 19, 2026)</h2>
 <ul>
   <li><strong>Selective deepening:</strong> At search depth 3+, only the top 8 most promising moves (scored by quick eval) are explored. This lets the AI look 3-4 moves ahead on large boards without exponential blowup — like a human focusing on "interesting" moves. All 20 AI competency tests pass.</li>
   <li><strong>AI commentary:</strong> After each AI move, a brief explanation appears — "Blocked opponent's 3-in-a-row threat", "Took a central position for control", "Best for center control (improved)". Generated from feature deltas and pattern detection.</li>
@@ -273,7 +285,7 @@
   <tr><td><strong>Comparing</strong> — compare hands for best rank</td><td>Poker, Blackjack, War</td><td><span class="status done">works</span></td><td>Hand ranking, hit/stand, draw/discard</td></tr>
   <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Spades, Bridge</td><td><span class="status done">works</span></td><td>Hearts implemented: follow suit, trick resolution, point avoidance</td></tr>
   <tr><td><strong>Auction/Bidding</strong> — bid resources for advantage</td><td>Bridge (bidding), Power Grid</td><td><span class="status todo">planned</span></td><td>Needs economic modeling</td></tr>
-  <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes & Ladders, Backgammon, Parcheesi</td><td><span class="status done">works</span></td><td>Backgammon: dice, hitting, bearing off, click-to-move</td></tr>
+  <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes & Ladders, Backgammon, Parcheesi</td><td><span class="status done">works</span></td><td>Backgammon, custom race games with forward/backward choice and bumping, luck detection for pure-chance races</td></tr>
   <tr><td><strong>Territory</strong> — control areas of the board</td><td>Go, Hex, Blokus</td><td><span class="status partial">partial</span></td><td>Hex works (7x7, connect sides). Go-level complexity is Phase 6</td></tr>
   <tr><td><strong>Word/Tile</strong> — form words or patterns with tiles</td><td>Scrabble, Bananagrams</td><td><span class="status todo">planned</span></td><td>Needs dictionary lookup, tile scoring</td></tr>
   <tr><td><strong>Partnership</strong> — teams of players cooperate</td><td>Bridge, Tichu, Euchre</td><td><span class="status todo">planned</span></td><td>Needs multi-agent cooperation model</td></tr>

@@ -455,6 +455,19 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         gdl = ctx.bindings.get("_gdl")
         return _chutes_and_ladders_winner(ctx.state, gdl)
 
+    # Race game built-ins
+    if name == "race_can_roll":
+        return ctx.state.state_vars.get("race_phase", "roll") == "roll"
+    if name == "race_can_move":
+        return ctx.state.state_vars.get("race_phase") == "move"
+    if name == "race_turn_done":
+        return ctx.state.state_vars.get("race_phase", "roll") == "roll"
+    if name == "race_won":
+        player = args[0] if args else ctx.state.current_player
+        if player == "current_player":
+            player = ctx.state.current_player
+        return _race_won(ctx.state, player)
+
     # Mancala-specific built-ins
     if name == "mancala_side_empty":
         return _mancala_side_empty(ctx.state)
@@ -858,6 +871,27 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
         _chutes_and_ladders_move(ctx.state, args[0], gdl)
         return
 
+    if name == "roll_and_move":
+        args = [evaluate(a, ctx) for a in node.args]
+        roll = args[0] if args else None
+        _roll_and_move(ctx.state, roll, bump=False)
+        return
+
+    if name == "race_roll":
+        _race_roll(ctx.state)
+        return
+    if name == "race_move_forward":
+        _race_move_choice(ctx.state, forward=True)
+        return
+    if name == "race_move_backward":
+        _race_move_choice(ctx.state, forward=False)
+        return
+    if name == "roll_and_move_bump":
+        args = [evaluate(a, ctx) for a in node.args]
+        roll = args[0] if args else None
+        _roll_and_move(ctx.state, roll, bump=True)
+        return
+
     raise NameError(f"Unknown effect function: {name}")
 
 
@@ -1078,6 +1112,67 @@ def _chutes_and_ladders_winner(state: GameState, gdl: dict = None) -> bool:
     if token_space is None:
         return False
     return token_space.index >= board_size
+
+
+# --- Race game built-ins ---
+
+def _roll_and_move(state: GameState, roll: int = None, bump: bool = False):
+    """Roll a die and move the current player's token forward.
+
+    If bump is True, landing on an opponent's space sends them back to start.
+    If the player reaches or passes the last space, they win.
+    """
+    import random
+
+    if roll is None:
+        roll = random.randint(1, 6)
+
+    player = state.current_player
+    token_space = _find_player_token(state, player)
+    if token_space is None:
+        return
+
+    current_idx = token_space.index
+    new_idx = current_idx + roll
+
+    # Get track length
+    track_length = state.board.length if isinstance(state.board, TrackBoard) else 20
+
+    # Cap at the end of the track
+    if new_idx >= track_length:
+        new_idx = track_length - 1
+
+    # Remove token from old position
+    token = Piece("token", player)
+    state.remove_piece(token_space, token)
+
+    # Check for opponent bump
+    bump_msg = ""
+    if bump:
+        opponent = state.opponent(player)
+        opp_token_space = _find_player_token(state, opponent)
+        if opp_token_space is not None and opp_token_space.index == new_idx and new_idx > 0:
+            opp_token = Piece("token", opponent)
+            state.remove_piece(opp_token_space, opp_token)
+            state.add_piece(TrackSpace(0), opp_token)
+            bump_msg = f" Bumped {opponent} back to start!"
+
+    # Place token at new position
+    state.add_piece(TrackSpace(new_idx), token)
+
+    state.state_vars["last_play"] = (
+        f"Rolled {roll}, moved from {current_idx} to {new_idx}.{bump_msg}"
+    )
+    state.state_vars["last_action"] = "move"
+
+
+def _race_won(state: GameState, player: str) -> bool:
+    """Check if a player's token has reached the last space on the track."""
+    token_space = _find_player_token(state, player)
+    if token_space is None:
+        return False
+    track_length = state.board.length if isinstance(state.board, TrackBoard) else 20
+    return token_space.index >= track_length - 1
 
 
 # --- Card game built-ins ---
@@ -2581,3 +2676,65 @@ def _place_tile(state: GameState, tile_id: int):
                     state.state_vars["last_action"] = "place"
                     return
                 idx += 1
+
+
+# --- Race with choice (forward/backward + bump) ---
+
+def _race_roll(state: GameState):
+    """Roll a die and store the result for the player to choose direction."""
+    import random
+    roll = random.randint(1, 6)
+    state.state_vars["race_roll"] = roll
+    state.state_vars["race_phase"] = "move"
+    state.state_vars["last_play"] = f"Rolled a {roll} — move forward or backward?"
+    state.state_vars["last_action"] = "roll"
+
+
+def _race_move_choice(state: GameState, forward: bool = True):
+    """Move the current player's token forward or backward, with bump."""
+    from engine.gdl.board import TrackSpace
+
+    roll = state.state_vars.get("race_roll", 1)
+    player = state.current_player
+    opponent = "player2" if player == "player1" else "player1"
+    track_length = state.board.length if hasattr(state.board, 'length') else 20
+
+    # Find current position
+    my_pos = 0
+    for i in range(track_length):
+        pieces = state.get_pieces(TrackSpace(i))
+        if any(p.owner == player for p in pieces):
+            my_pos = i
+            break
+
+    # Calculate new position
+    if forward:
+        new_pos = min(my_pos + roll, track_length - 1)
+    else:
+        new_pos = max(my_pos - roll, 0)
+
+    # Move token
+    old_space = TrackSpace(my_pos)
+    new_space = TrackSpace(new_pos)
+
+    my_piece = None
+    for p in state.get_pieces(old_space):
+        if p.owner == player:
+            my_piece = p
+            break
+    if my_piece:
+        state.remove_piece(old_space, my_piece)
+        state.add_piece(new_space, my_piece)
+
+    direction = "forward" if forward else "backward"
+    state.state_vars["last_play"] = f"Moved {direction} {roll} to space {new_pos + 1}"
+    state.state_vars["last_action"] = "move"
+    state.state_vars["race_phase"] = "roll"
+
+    # Check for bump — send opponent back to start
+    opp_pieces = [p for p in state.get_pieces(new_space) if p.owner == opponent]
+    if opp_pieces:
+        for op in opp_pieces:
+            state.remove_piece(new_space, op)
+            state.add_piece(TrackSpace(0), op)
+        state.state_vars["last_play"] += f" — bumped opponent back to start!"

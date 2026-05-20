@@ -29,20 +29,20 @@ def parse_natural(text: str) -> dict:
        removing any number of stones from one pile. The player
        who takes the last stone wins."
     """
-    text_lower = text.lower()
+    text = text.lower()
     sentences = _split_sentences(text)
 
     # Extract game components
-    players = _extract_players(text_lower)
-    board = _extract_board(text_lower)
+    players = _extract_players(text)
+    board = _extract_board(text)
     is_card = board.get("type") == "card_zones"
-    pieces = _extract_pieces(text_lower, board)
-    rules = _extract_rules(text_lower, board, pieces)
-    end_conditions = _extract_end_conditions(text_lower, board, rules)
-    setup = _extract_setup(text_lower, board, pieces)
-    turn_order = _extract_turn_order(text_lower)
-    state_vars = _extract_state_vars(text_lower, board)
-    cosmetics = _extract_cosmetics(text_lower)
+    pieces = _extract_pieces(text, board)
+    rules = _extract_rules(text, board, pieces)
+    end_conditions = _extract_end_conditions(text, board, rules)
+    setup = _extract_setup(text, board, pieces)
+    turn_order = _extract_turn_order(text)
+    state_vars = _extract_state_vars(text, board)
+    cosmetics = _extract_cosmetics(text)
 
     # Infer game name from first few words or board type
     name = _infer_name(text, board)
@@ -51,7 +51,7 @@ def parse_natural(text: str) -> dict:
     understood = []
     not_understood = []
 
-    if players != 2 or 'player' in text_lower:
+    if players != 2 or 'player' in text:
         understood.append(f"{players} players")
     else:
         understood.append("2 players (assumed)")
@@ -59,10 +59,12 @@ def parse_natural(text: str) -> dict:
     if board.get("type") == "card_zones":
         zone_names = [z["name"] for z in board.get("zones", [])]
         understood.append(f"card game with zones: {', '.join(zone_names)}")
-    elif board.get("type") == "grid" and any(w in text_lower for w in ['grid', 'board', 'x']):
+    elif board.get("type") == "grid" and any(w in text for w in ['grid', 'board', 'x']):
         g = board.get("grid", {})
         understood.append(f"{g.get('rows')}x{g.get('cols')} grid")
-    elif board.get("type") == "track" and any(w in text_lower for w in ['pile', 'track']):
+    elif board.get("type") == "track" and any(w in text for w in ['pile', 'track', 'race',
+                                                                          'reach the end', 'move forward',
+                                                                          'move along', 'first to reach']):
         understood.append(f"{board['track']['length']}-space track")
     else:
         not_understood.append("board structure (defaulted to 3x3 grid)")
@@ -91,19 +93,28 @@ def parse_natural(text: str) -> dict:
         'move from': 'moving pieces between spaces', 'capture': 'capturing pieces',
     }
     for keyword, label in concept_keywords.items():
-        if re.search(r'\b' + re.escape(keyword) + r'\b', text_lower) and label not in str(understood):
+        if re.search(r'\b' + re.escape(keyword) + r'\b', text) and label not in str(understood):
             unknown_concepts.append(label)
 
     if unknown_concepts:
         not_understood.extend(unknown_concepts)
 
+    # Choice race games need conditional turns (roll then choose)
+    has_race_choice = any(r.get("name") == "move_forward" for r in rules)
+    if has_race_choice:
+        turn_order = "conditional"
+
+    meta = {
+        "name": name,
+        "players": players,
+        "turn_order": turn_order,
+        "version": "1.0",
+    }
+    if has_race_choice:
+        meta["turn_rule"] = "if race_turn_done(): next_player else: same_player"
+
     gdl = {
-        "meta": {
-            "name": name,
-            "players": players,
-            "turn_order": turn_order,
-            "version": "1.0",
-        },
+        "meta": meta,
         "board": board,
         "pieces": pieces,
         "state_vars": state_vars,
@@ -212,6 +223,24 @@ def _extract_board(text: str) -> dict:
             "track": {"length": int(track_match.group(1)), "loop": False},
         }
 
+    # Race / track detection: "first to space N", "reach space N", "first to reach the end"
+    race_keywords = ['race', 'finish line', 'reach the end', 'move forward',
+                     'move along', 'first to reach', 'first to the end']
+    if any(w in text for w in race_keywords):
+        # Try to extract track length from "space N" / "N spaces" / "space N wins"
+        space_n = re.search(r'(?:space|position)\s+(\d+)', text)
+        n_spaces = re.search(r'(\d+)\s+spaces?', text)
+        if space_n:
+            length = int(space_n.group(1))
+        elif n_spaces:
+            length = int(n_spaces.group(1))
+        else:
+            length = 20  # default race track length
+        return {
+            "type": "track",
+            "track": {"length": length, "loop": False},
+        }
+
     # Default: 3x3 grid
     if 'grid' in text or 'board' in text:
         return {
@@ -286,8 +315,21 @@ def _extract_pieces(text: str, board: dict) -> list[dict]:
         })
         return pieces
 
-    # "stones" in pile/Nim context
+    # Race / track-with-tokens context
     if board.get("type") == "track":
+        race_keywords = ['race', 'finish line', 'reach the end', 'first to reach',
+                         'first to the end', 'move forward', 'move along']
+        is_race = (any(w in text for w in race_keywords)
+                   or re.search(r'roll\b.*\bmove\b', text))
+        if is_race:
+            pieces.append({
+                "name": "token",
+                "owner": "each",
+                "display": "token",
+            })
+            return pieces
+
+        # Nim/pile context
         stone_match = re.search(r'(?:piles?\s+of\s+)?(\w+?)s?\s*\(', text)
         if stone_match and stone_match.group(1) not in ('pile', 'player'):
             name = stone_match.group(1)
@@ -472,16 +514,53 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
         return rules
 
     # Race: roll dice, move piece forward on a track
-    if any(w in text for w in ['race', 'finish line', 'reach the end', 'roll.*move',
-                                'move forward', 'move your piece']) and board.get("type") == "track":
-        rules.append({
-            "name": "roll_and_move",
-            "action": "chance",
-            "chance": True,
-            "params": [],
-            "conditions": [],
-            "effects": ["roll_and_move()"],
-        })
+    race_keywords = ['race', 'finish line', 'reach the end', 'move forward',
+                     'move along', 'first to reach', 'first to the end']
+    is_race = (any(w in text for w in race_keywords)
+               or re.search(r'roll\b.*\bmove\b', text))
+    if is_race and board.get("type") == "track":
+        has_bump = any(w in text for w in ['send them back', 'send back',
+                                           'back to start', 'bump',
+                                           "opponent's space",
+                                           "opponent space"])
+        has_choice = any(w in text for w in ['forward or backward', 'backward or forward',
+                                              'choose to move', 'move forward or backward',
+                                              'either direction'])
+
+        if has_choice:
+            # Two-phase: roll (chance), then choose direction (strategy)
+            rules.append({
+                "name": "roll_dice",
+                "action": "chance",
+                "chance": True,
+                "params": [],
+                "conditions": ["race_can_roll()"],
+                "effects": ["race_roll()"],
+            })
+            rules.append({
+                "name": "move_forward",
+                "action": "move",
+                "params": [],
+                "conditions": ["race_can_move()"],
+                "effects": ["race_move_forward()"],
+            })
+            rules.append({
+                "name": "move_backward",
+                "action": "move",
+                "params": [],
+                "conditions": ["race_can_move()"],
+                "effects": ["race_move_backward()"],
+            })
+        else:
+            effect_fn = "roll_and_move_bump(roll)" if has_bump else "roll_and_move(roll)"
+            rules.append({
+                "name": "roll_and_move",
+                "action": "chance",
+                "chance": True,
+                "params": [{"name": "roll", "select": "int_range(1, 6)"}],
+                "conditions": [],
+                "effects": [effect_fn],
+            })
         return rules
 
     # Default: simple placement on empty space (TTT style)
@@ -548,6 +627,18 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
                 "player": "current_player" if not is_misere else "opponent",
                 "condition": "all s in spaces: count(pieces_at(s)) == 0",
             })
+
+    # Race: first to reach the end / finish line
+    race_keywords = ['race', 'finish line', 'reach the end', 'first to reach',
+                     'first to the end', 'first to space', 'move forward',
+                     'move along']
+    is_race = any(w in text for w in race_keywords) or re.search(r'roll\b.*\bmove\b', text)
+    if is_race and board.get("type") == "track":
+        conditions.append({
+            "type": "win",
+            "player": "current_player",
+            "condition": "race_won(current_player)",
+        })
 
     # "filling a row/column wins"
     if any(w in text for w in ['fill a row', 'filling a row', 'complete a row',
@@ -622,6 +713,15 @@ def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
 
         return setup
 
+    # Race game setup: place tokens for each player at start
+    race_keywords = ['race', 'finish line', 'reach the end', 'first to reach',
+                     'first to the end', 'move forward', 'move along']
+    is_race = (any(w in text for w in race_keywords)
+               or re.search(r'roll\b.*\bmove\b', text))
+    if is_race and board.get("type") == "track":
+        setup.append({"action": "race_setup"})
+        return setup
+
     # Nim-style: fill piles with specific counts
     pile_sizes = board.get("_pile_sizes", [])
     if pile_sizes and board.get("type") == "track":
@@ -659,34 +759,39 @@ def _infer_name(text: str, board: dict) -> str:
         return called_match.group(1).title()
 
     # Infer from game type
-    text_lower = text.lower()
-    if 'pile' in text_lower and ('take' in text_lower or 'remov' in text_lower):
+    text = text.lower()
+    if 'pile' in text and ('take' in text or 'remov' in text):
         return "Custom Nim"
-    if 'in a row' in text_lower:
-        n = re.search(r'(\d+)\s+in\s+a\s+row', text_lower)
-        grid = re.search(r'(\d+)\s*x\s*(\d+)', text_lower)
+    if 'in a row' in text:
+        n = re.search(r'(\d+)\s+in\s+a\s+row', text)
+        grid = re.search(r'(\d+)\s*x\s*(\d+)', text)
         if n and grid:
             return f"{n.group(1)}-in-a-Row ({grid.group(1)}x{grid.group(2)})"
         elif n:
             return f"{n.group(1)}-in-a-Row"
-    if 'flank' in text_lower or ('flip' in text_lower and 'card' not in text_lower):
+    if 'flank' in text or ('flip' in text and 'card' not in text):
         return "Custom Reversi"
 
+    race_keywords = ['race', 'finish line', 'reach the end', 'first to reach',
+                     'first to the end', 'move forward', 'move along']
+    if any(w in text for w in race_keywords) or re.search(r'roll\b.*\bmove\b', text):
+        return "Custom Race"
+
     # Card game names
-    if _is_card_game(text_lower):
-        if 'go fish' in text_lower:
+    if _is_card_game(text):
+        if 'go fish' in text:
             return "Custom Go Fish"
-        if 'crazy eight' in text_lower:
+        if 'crazy eight' in text:
             return "Custom Crazy Eights"
-        if 'war' in text_lower:
+        if 'war' in text:
             return "Custom War"
-        if 'ask' in text_lower and ('rank' in text_lower or 'card' in text_lower):
+        if 'ask' in text and ('rank' in text or 'card' in text):
             return "Custom Fishing Game"
-        if 'set' in text_lower or 'collect' in text_lower:
+        if 'set' in text or 'collect' in text:
             return "Custom Collection Game"
-        if 'match' in text_lower and ('suit' in text_lower or 'rank' in text_lower):
+        if 'match' in text and ('suit' in text or 'rank' in text):
             return "Custom Card Match"
-        if 'wild' in text_lower or 'eight' in text_lower:
+        if 'wild' in text or 'eight' in text:
             return "Custom Crazy Eights"
         return "Custom Card Game"
 
@@ -892,6 +997,25 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
 def _extract_state_vars(text: str, board: dict) -> list[dict]:
     """Extract state variables needed for the game."""
     state_vars = []
+
+    # Race game state vars
+    race_keywords = ['race', 'finish line', 'reach the end', 'first to reach',
+                     'first to the end', 'move forward', 'move along']
+    is_race = (any(w in text for w in race_keywords)
+               or re.search(r'roll\b.*\bmove\b', text))
+    if is_race and board.get("type") == "track":
+        has_choice = any(w in text for w in ['forward or backward', 'backward or forward',
+                                              'choose to move', 'either direction'])
+        state_vars.extend([
+            {"name": "last_play", "type": "string", "scope": "global", "initial": ""},
+            {"name": "last_action", "type": "string", "scope": "global", "initial": ""},
+        ])
+        if has_choice:
+            state_vars.extend([
+                {"name": "race_phase", "type": "string", "scope": "global", "initial": "roll"},
+                {"name": "race_roll", "type": "int", "scope": "global", "initial": 0},
+            ])
+        return state_vars
 
     if board.get("type") == "card_zones":
         # Go Fish needs extra_turn tracking

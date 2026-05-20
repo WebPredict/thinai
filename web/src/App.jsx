@@ -254,6 +254,93 @@ const GAME_RULES = {
   },
 }
 
+function ParserReference({ onClose }) {
+  const categories = [
+    { name: 'Grid Placement', desc: 'Place pieces on a grid to form lines, surround territory, or control area', examples: ['5×5 grid, 4 in a row to win', 'Place stones, surround opponent pieces to capture'], keywords: 'grid, board, row, column, diagonal, place, in a row, surround, capture' },
+    { name: 'Flanking / Reversi', desc: 'Place pieces to flip opponent pieces between yours', examples: ['Flip opponent pieces by surrounding them'], keywords: 'flip, sandwich, surround, flank, convert, reversi, othello' },
+    { name: 'Nim / Take-away', desc: 'Remove objects from piles; last to take wins or loses', examples: ['3 piles of 5 stones, take 1-3 per turn'], keywords: 'pile, heap, take, remove, last, stones, sticks, objects' },
+    { name: 'Card — Matching / Shedding', desc: 'Match cards by suit or rank, first to empty hand wins', examples: ['Match by suit or rank, draw if you can\'t play'], keywords: 'match, suit, rank, hand, draw, discard, wild, skip, reverse' },
+    { name: 'Card — Collecting', desc: 'Ask for cards, collect sets', examples: ['Ask for ranks, collect sets of 4'], keywords: 'ask, collect, set, book, pairs, fish' },
+    { name: 'Card — Comparing', desc: 'Compare cards head-to-head, highest wins the round', examples: ['Each player flips a card, highest wins'], keywords: 'compare, higher, lower, flip, war, battle, score, points' },
+    { name: 'Card — Trick-taking', desc: 'Play cards in tricks, follow suit, avoid or collect points', examples: ['Follow suit, avoid hearts and Queen of Spades'], keywords: 'trick, follow suit, lead, trump, hearts, spades, avoid' },
+    { name: 'Dice Placement', desc: 'Roll a die, place in a constrained position based on the roll', examples: ['Roll a die, place in that row, 3 in a row wins'], keywords: 'roll, die, dice, place, row, column' },
+    { name: 'Tile Placement', desc: 'Place multi-cell tiles (L-shapes, dominoes) on a grid', examples: ['Place L-shaped tiles on a 6×6 grid, fill a row to win'], keywords: 'tile, L-shape, domino, covers, tetris, block' },
+    { name: 'Race / Track', desc: 'Roll dice and race to the finish line, with optional bumping', examples: ['Roll a die, race to space 20, bump opponents back to start'], keywords: 'race, track, finish line, reach the end, forward, backward, bump, roll' },
+    { name: 'Movement / Capture', desc: 'Move pieces on a board, capture by jumping', examples: ['Pieces move diagonally, jump to capture'], keywords: 'move, jump, capture, diagonal, hop, slide, checkers' },
+    { name: 'Sowing (Mancala)', desc: 'Pick up seeds from a pit and distribute around the board', examples: ['Pick up seeds, sow counter-clockwise, most in store wins'], keywords: 'sow, seeds, pit, store, mancala, counter-clockwise' },
+  ]
+
+  const pieceWords = [
+    'stone', 'disc', 'chip', 'marker', 'token', 'counter', 'checker', 'piece', 'meeple',
+    'pawn', 'knight', 'bishop', 'rook', 'queen', 'king',
+    'soldier', 'warrior', 'archer', 'general', 'army', 'tank', 'ship', 'cannon',
+    'wizard', 'dragon', 'ghost', 'zombie', 'phoenix', 'unicorn', 'fairy', 'goblin',
+    'tree', 'flower', 'mushroom', 'seed', 'leaf', 'crystal', 'flame', 'star',
+    'coin', 'gem', 'diamond', 'ruby', 'emerald', 'gold', 'treasure', 'crown',
+    'robot', 'alien', 'ninja', 'pirate', 'hero', 'villain',
+    'car', 'rocket', 'boat', 'plane',
+  ]
+
+  const colorWords = ['red', 'blue', 'green', 'white', 'black', 'gold', 'silver', 'purple', 'orange', 'pink', 'crimson', 'emerald', 'amber', 'ivory', 'obsidian']
+
+  const boardStyles = ['checkerboard', 'chessboard', 'wood', 'wooden']
+
+  return (
+    <div className="rules-overlay" onClick={onClose}>
+      <div className="rules-modal parser-ref-modal" onClick={e => e.stopPropagation()}>
+        <div className="rules-modal-header">
+          <span className="rules-modal-title">Parser Reference</span>
+          <button className="rules-modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <p style={{ fontSize: '0.9rem', color: 'var(--ink-dim)', lineHeight: 1.5, marginBottom: '1rem' }}>
+          ThinAI's parser uses pattern matching (not an LLM) to translate plain English into game definitions.
+          Here's what it understands.
+        </p>
+
+        <h4 style={{ color: 'var(--accent)', fontFamily: 'Georgia, serif', fontWeight: 400, fontSize: '1.05rem', marginBottom: '0.5rem' }}>Game Types</h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.25rem' }}>
+          {categories.map(cat => (
+            <div key={cat.name} style={{ background: 'var(--bg-deep)', borderRadius: '6px', padding: '0.6rem 0.8rem', border: '1px solid var(--rule-dim)' }}>
+              <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.85rem', color: 'var(--accent)', marginBottom: '0.2rem' }}>{cat.name}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--ink-dim)', marginBottom: '0.3rem' }}>{cat.desc}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--ink-faint)' }}>
+                <strong>Keywords:</strong> {cat.keywords}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <h4 style={{ color: 'var(--accent)', fontFamily: 'Georgia, serif', fontWeight: 400, fontSize: '1.05rem', marginBottom: '0.5rem' }}>Piece Vocabulary</h4>
+        <p style={{ fontSize: '0.8rem', color: 'var(--ink-dim)', marginBottom: '0.4rem' }}>
+          Use any of these words to name pieces — the parser recognizes them and assigns appropriate icons:
+        </p>
+        <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.75rem', color: 'var(--ink)', lineHeight: 1.8, marginBottom: '1.25rem', background: 'var(--bg-deep)', padding: '0.6rem 0.8rem', borderRadius: '6px', border: '1px solid var(--rule-dim)' }}>
+          {pieceWords.join(' · ')}
+        </div>
+
+        <h4 style={{ color: 'var(--accent)', fontFamily: 'Georgia, serif', fontWeight: 400, fontSize: '1.05rem', marginBottom: '0.5rem' }}>Colors & Cosmetics</h4>
+        <p style={{ fontSize: '0.8rem', color: 'var(--ink-dim)', marginBottom: '0.4rem' }}>
+          Describe piece colors or board styles:
+        </p>
+        <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.75rem', color: 'var(--ink)', lineHeight: 1.8, marginBottom: '0.4rem', background: 'var(--bg-deep)', padding: '0.6rem 0.8rem', borderRadius: '6px', border: '1px solid var(--rule-dim)' }}>
+          <div><strong style={{ color: 'var(--accent)' }}>Colors:</strong> {colorWords.join(' · ')}</div>
+          <div style={{ marginTop: '0.3rem' }}><strong style={{ color: 'var(--accent)' }}>Board:</strong> {boardStyles.join(' · ')}</div>
+        </div>
+
+        <h4 style={{ color: 'var(--accent)', fontFamily: 'Georgia, serif', fontWeight: 400, fontSize: '1.05rem', marginTop: '1rem', marginBottom: '0.5rem' }}>Tips</h4>
+        <ul style={{ fontSize: '0.8rem', color: 'var(--ink-dim)', paddingLeft: '1.2rem', lineHeight: 1.7, margin: 0 }}>
+          <li>Specify board size explicitly: "5×5 grid", "7×7 hexagonal board"</li>
+          <li>State win conditions clearly: "4 in a row to win", "most pieces wins"</li>
+          <li>Mention draw conditions: "if the board is full, it's a draw"</li>
+          <li>For card games, mention hand size and deck type</li>
+          <li>For race games, mention track length and any bumping rules</li>
+          <li>Combine mechanics: "roll a die, then choose to move forward or backward"</li>
+        </ul>
+      </div>
+    </div>
+  )
+}
+
 function RulesModal({ gameType, onClose, customDescription }) {
   const rules = GAME_RULES[gameType]
 
@@ -305,6 +392,7 @@ function App() {
   const [showRulesModal, setShowRulesModal] = useState(false)
   const rulesShownRef = useRef({})
   const [showGdlModal, setShowGdlModal] = useState(false)
+  const [showParserRef, setShowParserRef] = useState(false)
   const [gdlData, setGdlData] = useState(null)
   const [teachInput, setTeachInput] = useState('')
   const [parseResult, setParseResult] = useState(null)
@@ -507,12 +595,20 @@ function App() {
       </header>
 
       {mode === 'train' ? (
-        <TrainingDashboard games={games} initialGame={selectedGame} customGameNames={customGameNames} onBack={() => { setMode('play'); startGame() }} />
+        <TrainingDashboard games={games} initialGame={selectedGame} customGameNames={customGameNames} onBack={() => { setMode('menu') }} />
       ) : mode === 'menu' || !sessionId ? (
         <div className="menu">
           <h2>Select a game</h2>
-          <div className="game-select">
-            {games.map(g => {
+          {(() => {
+            const trainedGames = games.filter(g => {
+              const label = GAME_LABELS[g] || customGameNames[g] || g
+              return learnedGames[label]
+            })
+            const untrainedGames = games.filter(g => {
+              const label = GAME_LABELS[g] || customGameNames[g] || g
+              return !learnedGames[label]
+            })
+            const GameButton = ({ g }) => {
               const label = GAME_LABELS[g] || customGameNames[g] || g
               const trained = learnedGames[label]
               return (
@@ -522,11 +618,28 @@ function App() {
                   onClick={() => setSelectedGame(g)}
                 >
                   {label}
-                  {trained && <span className="trained-badge" title={`${trained.generation} games trained`}>&#10003;</span>}
                 </button>
               )
-            })}
-          </div>
+            }
+            return <>
+              {trainedGames.length > 0 && (
+                <>
+                  <div className="game-group-label">Trained</div>
+                  <div className="game-select">
+                    {trainedGames.map(g => <GameButton key={g} g={g} />)}
+                  </div>
+                </>
+              )}
+              {untrainedGames.length > 0 && (
+                <>
+                  <div className="game-group-label">{trainedGames.length > 0 ? 'Not yet trained' : ''}</div>
+                  <div className="game-select">
+                    {untrainedGames.map(g => <GameButton key={g} g={g} />)}
+                  </div>
+                </>
+              )}
+            </>
+          })()}
 
           <div className="menu-actions">
             <button className="action-btn action-btn-primary" onClick={() => { setMode('train') }}>
@@ -580,7 +693,17 @@ function App() {
               lineHeight: '1.6'
             }}>
               <strong style={{ color: 'var(--accent)' }}>Current limitations:</strong> Works with grid placement games (N-in-a-row, territory) and simple card games. Complex movement rules (chess-like) are not yet supported for novel games. <em>Note: this is not an LLM — it uses pattern matching, so its vocabulary is limited to common game terms.</em>
+              <div style={{ marginTop: '0.5rem' }}>
+                <button onClick={() => setShowParserRef(true)} style={{
+                  background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
+                  fontFamily: 'Menlo, monospace', fontSize: '0.85rem', padding: 0, textDecoration: 'underline',
+                  textUnderlineOffset: '3px',
+                }}>
+                  View full parser reference →
+                </button>
+              </div>
             </div>
+            {showParserRef && <ParserReference onClose={() => setShowParserRef(false)} />}
             <div className="teach-teaser-example">
               <div className="teach-teaser-label">Example inputs — try any of these</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>

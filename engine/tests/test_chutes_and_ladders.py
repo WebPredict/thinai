@@ -158,16 +158,17 @@ class TestWinCondition:
 
 
 class TestFeatures:
-    def test_features_registered(self):
+    def test_features_auto_discovered(self):
+        """Chutes & Ladders uses auto-discovery, not hand-crafted features."""
         from engine.reasoner.features import get_features
-        features = get_features("Chutes and Ladders")
-        assert len(features) == 2
+        # No hand-crafted features in registry
+        assert len(get_features("Chutes and Ladders")) == 0
+        # Auto-features should generate track-relevant features from GDL
+        import json
+        from pathlib import Path
+        from engine.reasoner.auto_features import generate_features
+        gdl = json.loads(Path("engine/games/examples/chutes_and_ladders.json").read_text())
+        features = generate_features(gdl)
+        assert len(features) >= 2
         names = [f.name for f in features]
-        assert "position_lead" in names
-        assert "progress" in names
-
-    def test_initial_progress_zero(self, state):
-        from engine.reasoner.features import get_features
-        features = get_features("Chutes and Ladders")
-        progress = next(f for f in features if f.name == "progress")
-        assert progress.extract(state, "player1") == 0.0
+        assert "position_lead" in names or "avg_position" in names

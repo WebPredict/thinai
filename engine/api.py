@@ -369,8 +369,17 @@ def make_move(request: Request, session_id: str, req: MoveRequest):
         else:
             params[k] = v
 
+    # Extract wild_color before building the Move (not a game param)
+    wild_color = params.pop("wild_color", None)
+
     move = Move(req.rule, params)
     state = engine.apply_move(state, move)
+
+    # Override wild card color if user chose one
+    if wild_color and state.state_vars.get("active_color") is not None:
+        state.state_vars["active_color"] = wild_color
+        state.state_vars["last_play"] = f"Wild → {wild_color}"
+
     session["state"] = state
 
     # Observe human's move for opponent modeling
@@ -422,10 +431,13 @@ def ai_move(request: Request, session_id: str):
     engine = session["engine"]
     state = session["state"]
 
-    # For chance games (like Chutes & Ladders), AI rolls randomly
-    is_chance = any(r.get("chance") for r in engine.gdl.get("rules", []))
-    if is_chance:
-        ai_moves = engine.legal_moves(state)
+    # Check if the current legal moves are chance moves (dice rolls)
+    ai_moves = engine.legal_moves(state)
+    is_chance_move = ai_moves and any(
+        r.get("chance") and r["name"] == ai_moves[0].rule_name
+        for r in engine.gdl.get("rules", [])
+    )
+    if is_chance_move:
         move = random.choice(ai_moves) if ai_moves else None
     else:
         from engine.metacognition.effort import EffortAllocator
@@ -459,7 +471,7 @@ def ai_move(request: Request, session_id: str):
         session["state"] = state
 
         # Capture metacognition info (only for non-chance games)
-        if not is_chance and 'reasoner' in dir():
+        if not is_chance_move and 'reasoner' in dir():
             if hasattr(reasoner, 'last_confidence') and reasoner.last_confidence:
                 ai_confidence = reasoner.last_confidence.to_dict()
             if hasattr(reasoner, 'last_effort_reason'):
@@ -476,7 +488,7 @@ def ai_move(request: Request, session_id: str):
 
     # Capture commentary
     ai_commentary = ""
-    if not is_chance and 'reasoner' in dir() and hasattr(reasoner, 'last_commentary'):
+    if not is_chance_move and 'reasoner' in dir() and hasattr(reasoner, 'last_commentary'):
         ai_commentary = reasoner.last_commentary
 
     import json as _json

@@ -3,6 +3,8 @@ import { useState } from 'react'
 const SUIT_SYMBOLS = { hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663', spades: '\u2660' }
 
 function CrazyEightsBoard({ state, onMove, disabled }) {
+  const [pendingWild, setPendingWild] = useState(null) // card awaiting color choice
+
   if (!state) return null
 
   const zones = state.card_zones || {}
@@ -33,8 +35,26 @@ function CrazyEightsBoard({ state, onMove, disabled }) {
 
   const handlePlay = (cardId) => {
     if (disabled) return
+    // For Uno: if the card is a Wild, show color picker first
+    if (isUnoGame) {
+      const card = myHand.find(c => c.id === cardId)
+      if (card && (card.suit === 'wild')) {
+        setPendingWild(cardId)
+        return
+      }
+    }
     const move = state.legal_moves?.find(m => m.params.card_id === cardId)
     if (move) onMove(move.rule, move.params)
+  }
+
+  const handleWildColorChoice = (color) => {
+    if (!pendingWild) return
+    const move = state.legal_moves?.find(m => m.params.card_id === pendingWild)
+    if (move) {
+      // Play the card — the engine auto-picks color, but we'll override via state
+      onMove(move.rule, { ...move.params, wild_color: color })
+    }
+    setPendingWild(null)
   }
 
   const handleDraw = () => {
@@ -122,6 +142,41 @@ function CrazyEightsBoard({ state, onMove, disabled }) {
           <button className="crazy8-draw-btn" onClick={handleDraw}>
             Draw from deck
           </button>
+        )}
+
+        {/* Uno wild card color picker */}
+        {pendingWild && (
+          <div style={{
+            margin: '0.75rem 0', padding: '0.75rem', textAlign: 'center',
+            background: 'rgba(212,166,86,0.1)', border: '1px solid rgba(212,166,86,0.3)',
+            borderRadius: '8px',
+          }}>
+            <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.9rem', color: 'var(--ink)', marginBottom: '0.5rem' }}>
+              Choose a color:
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+              {[
+                { name: 'red', color: '#d42020', bg: '#fff0f0' },
+                { name: 'blue', color: '#1050cc', bg: '#f0f4ff' },
+                { name: 'green', color: '#18883a', bg: '#f0fff4' },
+                { name: 'yellow', color: '#cc8800', bg: '#fffcf0' },
+              ].map(c => (
+                <button key={c.name} onClick={() => handleWildColorChoice(c.name)}
+                  style={{
+                    width: '50px', height: '50px', borderRadius: '8px',
+                    background: c.bg, border: `3px solid ${c.color}`,
+                    cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold',
+                    color: c.color, fontFamily: 'Menlo, monospace',
+                  }}>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setPendingWild(null)}
+              style={{ marginTop: '0.4rem', background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', fontSize: '0.8rem' }}>
+              Cancel
+            </button>
+          </div>
         )}
       </div>
     </div>

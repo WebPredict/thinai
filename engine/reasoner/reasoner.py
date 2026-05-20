@@ -249,9 +249,25 @@ def default_eval(state: GameState, player: str, engine: GameEngine) -> float:
 
     Counts partial lines (2-in-a-row, 3-in-a-row) weighted by length.
     Works for tic-tac-toe and connect four.
+    Also handles track/race games by measuring position progress.
     """
-    from engine.gdl.board import GridBoard, GridSpace
+    from engine.gdl.board import GridBoard, GridSpace, TrackBoard, TrackSpace
     from engine.gdl.expr_eval import _line_length
+
+    # Track/race games: score by position progress toward finish
+    if isinstance(state.board, TrackBoard):
+        opponent = state.opponent(player)
+        track_len = state.board.length
+        my_pos = 0
+        opp_pos = 0
+        for space in state.board.spaces:
+            for piece in state.get_pieces(space):
+                if piece.owner == player:
+                    my_pos = max(my_pos, space.index)
+                elif piece.owner == opponent:
+                    opp_pos = max(opp_pos, space.index)
+        # Normalize to [-10, 10] range for consistency with grid eval
+        return (my_pos - opp_pos) / max(track_len, 1) * 10.0
 
     if not isinstance(state.board, GridBoard):
         return 0.0

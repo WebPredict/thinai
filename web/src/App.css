@@ -141,10 +141,29 @@ header em {
   box-shadow: 0 0 12px rgba(212, 166, 86, 0.08);
 }
 
+.game-group-label {
+  font-family: Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.game-group-label:first-child {
+  margin-top: 0;
+}
+
 .trained-badge {
-  margin-left: 0.4rem;
+  margin-left: 0.35rem;
   color: #4aba5a;
-  font-size: 0.8rem;
+  font-size: 0.55rem;
+  font-family: Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  opacity: 0.8;
 }
 
 .menu-actions {
@@ -215,6 +234,12 @@ header em {
 .gdl-modal {
   max-width: 600px;
   max-height: 80vh;
+  overflow-y: auto;
+}
+
+.parser-ref-modal {
+  max-width: 640px;
+  max-height: 85vh;
   overflow-y: auto;
 }
 

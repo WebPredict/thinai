@@ -117,6 +117,23 @@ def _grid_commentary(state_before, state_after, move, player, engine):
         if not reasons:
             reasons.append("Secured a corner position")
 
+    # Hex: check connection progress
+    if board.topology == "hex6" if hasattr(board, 'topology') else False:
+        try:
+            from engine.gdl.expr_eval import _hex_connected
+            from engine.reasoner.features import _hex_connection_progress
+            prog_before = _hex_connection_progress(state_before, player)
+            prog_after = _hex_connection_progress(state_after, player)
+            if prog_after > prog_before + 0.1:
+                reasons = [f"Extended connection ({prog_after:.0%} across)"]
+            elif not reasons:
+                opp = state_before.opponent(player)
+                opp_prog = _hex_connection_progress(state_before, opp)
+                if opp_prog > 0.4:
+                    reasons = ["Blocking opponent's connection path"]
+        except Exception:
+            pass
+
     return reasons[:1]  # keep it brief
 
 
@@ -166,6 +183,7 @@ def _card_commentary(state_before, state_after, move, player):
     last_action = state_after.state_vars.get("last_action", "")
     last_play = state_after.state_vars.get("last_play", "")
 
+    # Gin Rummy
     if "knock" in last_action:
         reasons.append("Deadwood is low enough to knock!")
     elif "gin" in last_action:
@@ -174,5 +192,48 @@ def _card_commentary(state_before, state_after, move, player):
         reasons.append("Took from discard — that card helps build melds")
     elif "draw_deck" in last_action:
         reasons.append("Drew from deck — discard pile card wasn't useful")
+
+    # Uno/Crazy Eights
+    elif last_action == "skip":
+        reasons.append("Skip! Opponent loses their turn")
+    elif last_action == "reverse":
+        reasons.append("Reverse! Direction changes")
+    elif last_action == "draw2":
+        reasons.append("Draw Two! Opponent picks up 2 cards")
+    elif last_action == "wild_draw4":
+        reasons.append("Wild Draw Four! Opponent picks up 4")
+    elif last_action == "wild":
+        color = state_after.state_vars.get("active_color", "")
+        reasons.append(f"Played Wild — chose {color}" if color else "Played Wild")
+
+    # Hearts
+    elif last_action == "trick_won":
+        points = 0
+        for word in last_play.split():
+            try:
+                points = int(word)
+            except ValueError:
+                pass
+        if points > 0:
+            reasons.append(f"Won the trick but took {points} penalty points")
+        else:
+            reasons.append("Won the trick — no penalty points!")
+    elif last_action == "play":
+        # Check if dumping hearts/queen
+        if "♥" in last_play or "hearts" in last_play.lower():
+            reasons.append("Dumped a heart — giving opponent penalty points")
+        elif "Q♠" in last_play:
+            reasons.append("Dumped the Queen of Spades — 13 points to opponent!")
+
+    # Compare/score games
+    elif last_action == "round_complete":
+        reasons.append(last_play if last_play else "Round complete")
+
+    # Backgammon
+    if state_after.state_vars.get("phase") == "move":
+        if "Hit" in last_play:
+            reasons.append("Hit an opponent's blot — sent to the bar!")
+        elif "Bear off" in last_play:
+            reasons.append("Bearing off — getting closer to winning")
 
     return reasons

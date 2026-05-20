@@ -304,7 +304,7 @@ class TestReasonerMetacognition:
         """Training loop should work with metacognition components."""
         random.seed(42)
         engine = GameEngine.from_file(os.path.join(EXAMPLES_DIR, "tictactoe.json"))
-        evaluator = LearnableEval("Tic-Tac-Toe")
+        evaluator = LearnableEval("Tic-Tac-Toe", gdl=engine.gdl)
         allocator = EffortAllocator(min_depth=1, max_depth=3)
         conf_tracker = DecisionConfidenceTracker()
         assessor = SelfAssessor()

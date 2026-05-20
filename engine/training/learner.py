@@ -27,6 +27,7 @@ class LearningSnapshot:
     duration_ms: float
     rolling_win_rate: float  # over last N games
     weights: list[float]
+    depth: int = 1  # current search depth
 
 
 @dataclass
@@ -43,6 +44,7 @@ class LearningResults:
     stopped_early: bool = False
     stop_reason: str = ""
     final_depth: int = 0
+    strategy_assessment: str = ""  # "strategic", "mostly_luck", "pure_luck"
 
     @property
     def win_rate(self) -> float:
@@ -86,6 +88,7 @@ class LearningResults:
             "stopped_early": self.stopped_early,
             "stop_reason": self.stop_reason,
             "final_depth": self.final_depth,
+            "strategy_assessment": self.strategy_assessment,
             "snapshots": [
                 {
                     "game": s.game_number,
@@ -166,13 +169,9 @@ class LearningRunner:
                     # (novel games can't compete against default_eval from scratch)
                     opponent = RandomOpponent(self.engine)
             else:
-                # Has hand-crafted features — check if this is a known game
-                hc_features = get_features(self.evaluator.game_name)
-                if not hc_features:
-                    # Novel game with line-based win but no features — use random
-                    opponent = RandomOpponent(self.engine)
-                else:
-                    opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+                # Line-win or flank game — default_eval is the "adult" opponent
+                # Fixed at max depth — consistent challenge for the learner
+                opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
 
         # Effort allocator for training — cost-aware, adapts depth per position
         if not self.effort_allocator:
@@ -187,7 +186,19 @@ class LearningRunner:
 
         recent_outcomes = []
 
+        # Pre-check: is this a luck-based game? (L0 check)
+        is_luck_game = _is_pure_luck_l0(self.engine, self._gdl)
+
+        # Progressive depth: start shallow, deepen over time
+        # Kid learns by naturally thinking deeper — increase depth every few games
+        current_depth = 1
+        depth_increase_interval = 5  # try deeper thinking every N games
+
         for i in range(num_games):
+            # Update learner's depth (opponent stays fixed — the "adult")
+            if self.effort_allocator:
+                self.effort_allocator.max_depth = current_depth
+
             start = time.monotonic()
             outcome, num_moves, trace = self._play_and_trace(opponent)
             duration = (time.monotonic() - start) * 1000
@@ -224,15 +235,24 @@ class LearningRunner:
                 duration_ms=duration,
                 rolling_win_rate=rolling_wr,
                 weights=list(self.evaluator.weights),
+                depth=current_depth,
             )
             results.snapshots.append(snapshot)
 
             if progress_callback:
                 progress_callback(snapshot, results)
 
-            # Early stopping: consistent dominance (not just a lucky streak)
-            # Need 90%+ rolling win rate AND 5 wins in a row
-            if (len(recent_outcomes) >= 10
+            # Progressive depth: increase every N games
+            # Always deepen if we have budget — deeper thinking is always better
+            if (current_depth < self.max_depth
+                    and (i + 1) % depth_increase_interval == 0):
+                current_depth += 1
+
+            # Early stopping: consistent dominance at max depth
+            # Don't early-stop luck games — winning streaks are just variance
+            if (not is_luck_game
+                    and current_depth >= self.max_depth
+                    and len(recent_outcomes) >= 10
                     and rolling_wr >= 0.9
                     and all(o > 0 for o in recent_outcomes[-5:])):
                 results.stopped_early = True
@@ -244,6 +264,9 @@ class LearningRunner:
         results.final_depth = getattr(self.effort_allocator, 'total_decisions', 0) and \
             self.effort_allocator.recommend(self.engine.initial_state(), self.engine).depth \
             if self.effort_allocator else self.max_depth
+
+        # Assess whether the game involves strategy or is luck-based
+        results.strategy_assessment = _assess_strategy(self.engine, self._gdl, results)
 
         # Let effort allocator learn from this training batch
         if self.effort_allocator:
@@ -338,6 +361,66 @@ def run_learning(
             print(f"  {item['feature']:25s} {item['weight']:+.4f}  ({item['description']})")
 
     return results
+
+
+def _is_pure_luck_l0(engine: GameEngine, gdl: dict) -> bool:
+    """L0 check: does the game have any strategic decisions?"""
+    if not gdl:
+        return False
+    rules = gdl.get("rules", [])
+    non_chance_rules = [r for r in rules if not r.get("chance")]
+    if not non_chance_rules:
+        return True
+    # Check if non-chance rules ever offer >1 choice
+    try:
+        import random as _rng
+        state = engine.initial_state()
+        chance_rule_names = {r["name"] for r in rules if r.get("chance")}
+        for _ in range(50):
+            moves = engine.legal_moves(state)
+            if not moves:
+                break
+            player_moves = [m for m in moves if m.rule_name not in chance_rule_names]
+            if len(player_moves) > 1:
+                return False  # found a real choice
+            state = engine.apply_move(state, _rng.choice(moves))
+            if engine.check_terminal(state):
+                break
+        return True  # never found a real choice
+    except Exception:
+        return False
+
+
+def _assess_strategy(engine: GameEngine, gdl: dict, results: LearningResults) -> str:
+    """Assess whether a game involves strategy or is luck-based.
+
+    L0: Check GDL rules — are all player-facing moves chance-based or forced?
+    L1: Check post-training signals — did weights converge? Did win rate stay ~50%?
+
+    Returns: "strategic", "mostly_luck", or "pure_luck"
+    """
+    # --- L0: GDL structure check ---
+    if _is_pure_luck_l0(engine, gdl):
+        return "pure_luck"
+
+    # --- L1: Post-training signal check ---
+    if results.total_games >= 10:
+        # Check if weights stayed near zero (nothing was predictive)
+        max_weight = max(abs(w) for w in results.final_weights) if results.final_weights else 0
+        weights_flat = max_weight < 0.3
+
+        # Check if win rate stayed near 50% (no learnable advantage)
+        curve = results.win_rate_curve()
+        if len(curve) >= 10:
+            late_wr = sum(curve[-10:]) / 10
+            wr_flat = 0.35 <= late_wr <= 0.65
+        else:
+            wr_flat = 0.35 <= results.win_rate <= 0.65
+
+        if weights_flat and wr_flat:
+            return "mostly_luck"
+
+    return "strategic"
 
 
 if __name__ == "__main__":

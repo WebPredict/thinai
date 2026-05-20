@@ -137,54 +137,60 @@ class TestReversiFeatures:
 
 class TestLearnableEval:
     def test_create_with_defaults(self):
-        ev = LearnableEval("Tic-Tac-Toe")
-        assert len(ev.features) == 4
-        assert len(ev.weights) == 4
+        ev = LearnableEval("Reversi")
+        assert len(ev.features) == 5
+        assert len(ev.weights) == 5
         assert ev.generation == 0
+
+    def test_create_with_gdl_auto_features(self):
+        """Games without L0 features should auto-generate from GDL."""
+        import json
+        from pathlib import Path
+        gdl = json.loads(Path("engine/games/examples/tictactoe.json").read_text())
+        ev = LearnableEval("Tic-Tac-Toe", gdl=gdl)
+        assert len(ev.features) >= 4  # auto-features generate several
+        assert len(ev.weights) == len(ev.features)
 
     def test_unknown_game_raises(self):
         with pytest.raises(ValueError):
             LearnableEval("Unknown Game")
 
     def test_zero_weights_near_zero_eval(self):
-        ev = LearnableEval("Tic-Tac-Toe", weights=[0, 0, 0, 0])
-        state = GameState(GridBoard(3, 3))
+        ev = LearnableEval("Reversi", weights=[0, 0, 0, 0, 0])
+        state = GameState(GridBoard(8, 8))
         assert ev(state, "player1") == 0.0
 
     def test_eval_changes_with_state(self):
-        ev = LearnableEval("Tic-Tac-Toe", weights=[1.0, 0.5, 0.3, 0.2])
-        state = GameState(GridBoard(3, 3))
+        ev = LearnableEval("Reversi", weights=[1.0, 0.5, 0.3, 0.2, 0.1])
+        state = GameState(GridBoard(8, 8))
         score_empty = ev(state, "player1")
 
-        state.set_piece(GridSpace(1, 1), Piece("mark", "player1"))
-        score_center = ev(state, "player1")
-        # Owning center should increase score (center_control weight = 1.0)
-        assert score_center > score_empty
+        state.set_piece(GridSpace(0, 0), Piece("disc", "player1"))
+        score_corner = ev(state, "player1")
+        # Owning a corner should change score
+        assert score_corner != score_empty
 
     def test_update_weights_win(self):
-        ev = LearnableEval("Tic-Tac-Toe", weights=[0, 0, 0, 0], learning_rate=0.5)
+        ev = LearnableEval("Reversi", weights=[0, 0, 0, 0, 0], learning_rate=0.5)
         trace = [
-            {"features": [1.0, 0.5, 0.0, 0.0], "move_index": 4, "total_moves": 5},
+            {"features": [1.0, 0.5, 0.0, 0.0, 0.0], "move_index": 4, "total_moves": 5},
         ]
         ev.update_weights(trace, outcome=1.0)
-        # Center_control feature was 1.0 and we won → weight should increase
         assert ev.weights[0] > 0
-        # Corner_count feature was 0.5 → should also increase
         assert ev.weights[1] > 0
         assert ev.generation == 1
 
     def test_update_weights_loss(self):
-        ev = LearnableEval("Tic-Tac-Toe", weights=[0.5, 0.5, 0.5, 0.5], learning_rate=0.5)
+        ev = LearnableEval("Reversi", weights=[0.5, 0.5, 0.5, 0.5, 0.5], learning_rate=0.5)
         trace = [
-            {"features": [1.0, 0.5, 0.0, 0.0], "move_index": 4, "total_moves": 5},
+            {"features": [1.0, 0.5, 0.0, 0.0, 0.0], "move_index": 4, "total_moves": 5},
         ]
         ev.update_weights(trace, outcome=-1.0)
-        # Lost with center_control active → weight should decrease
         assert ev.weights[0] < 0.5
 
     def test_history_recorded(self):
-        ev = LearnableEval("Tic-Tac-Toe", weights=[0, 0, 0, 0])
-        trace = [{"features": [1.0, 0.0, 0.0, 0.0], "move_index": 0, "total_moves": 1}]
+        ev = LearnableEval("Reversi", weights=[0, 0, 0, 0, 0])
+        trace = [{"features": [1.0, 0.0, 0.0, 0.0, 0.0], "move_index": 0, "total_moves": 1}]
         ev.update_weights(trace, 1.0)
         ev.update_weights(trace, -1.0)
         assert len(ev.history) == 2
@@ -192,31 +198,31 @@ class TestLearnableEval:
         assert ev.history[1]["generation"] == 2
 
     def test_extract_features(self):
-        ev = LearnableEval("Tic-Tac-Toe")
-        state = GameState(GridBoard(3, 3))
+        ev = LearnableEval("Reversi")
+        state = GameState(GridBoard(8, 8))
         feats = ev.extract_features(state, "player1")
-        assert len(feats) == 4
+        assert len(feats) == 5
         assert all(isinstance(f, float) for f in feats)
 
     def test_weight_summary(self):
-        ev = LearnableEval("Tic-Tac-Toe", weights=[0.8, -0.2, 0.5, 0.1])
+        ev = LearnableEval("Reversi", weights=[0.8, -0.2, 0.5, 0.1, 0.0])
         summary = ev.weight_summary()
-        assert len(summary) == 4
-        # Sorted by abs weight, so center_control (0.8) should be first
+        assert len(summary) == 5
         assert summary[0]["weight"] == 0.8
 
     def test_serialization_roundtrip(self):
-        ev = LearnableEval("Tic-Tac-Toe", weights=[0.1, 0.2, 0.3, 0.4])
+        ev = LearnableEval("Reversi", weights=[0.1, 0.2, 0.3, 0.4, 0.5])
         ev.generation = 10
         data = ev.to_dict()
         ev2 = LearnableEval.from_dict(data)
         assert ev2.weights == ev.weights
         assert ev2.generation == 10
-        assert ev2.game_name == "Tic-Tac-Toe"
+        assert ev2.game_name == "Reversi"
 
     def test_feature_registry(self):
-        assert len(get_features("Tic-Tac-Toe")) == 4
-        assert len(get_features("Connect Four")) == 4
+        # TTT, C4, Chutes & Ladders use auto-discovery (not in registry)
+        assert len(get_features("Tic-Tac-Toe")) == 0
+        assert len(get_features("Connect Four")) == 0
         assert len(get_features("Mancala (Kalah)")) == 5
         assert len(get_features("Reversi")) == 5
         assert len(get_features("Unknown")) == 0

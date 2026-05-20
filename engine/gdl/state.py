@@ -255,6 +255,13 @@ def _apply_setup_action(action: dict, state: GameState, gdl: dict):
     elif action_type == "set":
         state.state_vars[action["var"]] = action["value"]
 
+    elif action_type == "race_setup":
+        # Place one token per player at position 0
+        from engine.gdl.board import TrackSpace
+        for i in range(1, state.players + 1):
+            player = f"player{i}"
+            state.add_piece(TrackSpace(0), Piece(name="token", owner=player))
+
     elif action_type == "checkers_setup":
         from engine.gdl.checkers import setup_checkers
         setup_checkers(state)

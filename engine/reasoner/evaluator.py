@@ -120,15 +120,42 @@ class LearnableEval:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "LearnableEval":
+    def from_dict(cls, data: dict, gdl: Optional[dict] = None) -> "LearnableEval":
         """Deserialize from storage."""
         features = get_features(data["game_name"])
+        saved_weights = data["weights"]
+
+        if not features:
+            # No hand-crafted features — try auto-generation from GDL
+            if not gdl:
+                try:
+                    import os
+                    from engine.engine import GameEngine
+                    examples_dir = os.path.join(os.path.dirname(__file__), "..", "games", "examples")
+                    slug = data["game_name"].lower().replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "")
+                    no_sep = slug.replace("_", "")
+                    for candidate in [slug, slug.replace("__", "_"), no_sep]:
+                        path = os.path.join(examples_dir, f"{candidate}.json")
+                        if os.path.exists(path):
+                            gdl = GameEngine.from_file(path).gdl
+                            break
+                except Exception:
+                    pass
+            if gdl:
+                from engine.reasoner.auto_features import generate_features
+                features = generate_features(gdl)
+
+        # If feature count changed (e.g. switched from L0 to auto), reset weights
+        if features and len(features) != len(saved_weights):
+            saved_weights = None
+
         evaluator = cls(
             game_name=data["game_name"],
-            features=features,
-            weights=data["weights"],
+            features=features if features else None,
+            weights=saved_weights,
             learning_rate=data["learning_rate"],
+            gdl=gdl,
         )
-        evaluator.generation = data["generation"]
-        evaluator.history = data.get("history", [])
+        evaluator.generation = data["generation"] if saved_weights else 0
+        evaluator.history = data.get("history", []) if saved_weights else []
         return evaluator

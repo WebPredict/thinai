@@ -150,6 +150,134 @@ GAME_OBJECTS: dict[str, dict] = {
     "village": {"category": "board", "display": "house",  "color": "default"},
     "city":    {"category": "board", "display": "castle", "color": "default"},
 
+    # ── Animals (~25) ──────────────────────────────────────────────────
+    "horse":      {"category": "nature", "display": "horse",      "color": "brown"},
+    "wolf":       {"category": "nature", "display": "wolf",       "color": "gray"},
+    "bear":       {"category": "nature", "display": "bear",       "color": "brown"},
+    "cat":        {"category": "nature", "display": "cat",        "color": "default"},
+    "dog":        {"category": "nature", "display": "dog",        "color": "brown"},
+    "rabbit":     {"category": "nature", "display": "rabbit",     "color": "white"},
+    "lion":       {"category": "nature", "display": "lion",       "color": "gold"},
+    "tiger":      {"category": "nature", "display": "tiger",      "color": "gold"},
+    "elephant":   {"category": "nature", "display": "elephant",   "color": "gray"},
+    "eagle":      {"category": "nature", "display": "eagle",      "color": "brown"},
+    "fox":        {"category": "nature", "display": "fox",        "color": "brown"},
+    "deer":       {"category": "nature", "display": "deer",       "color": "brown"},
+    "owl":        {"category": "nature", "display": "owl",        "color": "brown"},
+    "shark":      {"category": "nature", "display": "shark",      "color": "gray"},
+    "dolphin":    {"category": "nature", "display": "dolphin",    "color": "blue"},
+    "frog":       {"category": "nature", "display": "frog",       "color": "green"},
+    "mouse":      {"category": "nature", "display": "mouse",      "color": "gray"},
+    "monkey":     {"category": "nature", "display": "monkey",     "color": "brown"},
+    "penguin":    {"category": "nature", "display": "penguin",    "color": "black"},
+    "bee":        {"category": "nature", "display": "bee",        "color": "gold"},
+    "ant":        {"category": "nature", "display": "ant",        "color": "black"},
+    "spider":     {"category": "nature", "display": "spider",     "color": "black"},
+    "crab":       {"category": "nature", "display": "crab",       "color": "red"},
+    "whale":      {"category": "nature", "display": "whale",      "color": "blue"},
+    "turtle":     {"category": "nature", "display": "turtle",     "color": "green"},
+
+    # ── Fantasy/RPG (~18) ─────────────────────────────────────────────
+    "elf":        {"category": "character", "display": "elf",       "color": "green"},
+    "dwarf":      {"category": "character", "display": "dwarf",     "color": "brown"},
+    "orc":        {"category": "character", "display": "orc",       "color": "green"},
+    "mage":       {"category": "character", "display": "mage",      "color": "blue"},
+    "cleric":     {"category": "character", "display": "cleric",    "color": "white"},
+    "paladin":    {"category": "character", "display": "paladin",   "color": "gold"},
+    "ranger":     {"category": "character", "display": "ranger",    "color": "green"},
+    "barbarian":  {"category": "character", "display": "barbarian", "color": "brown"},
+    "demon":      {"category": "character", "display": "demon",     "color": "red"},
+    "angel":      {"category": "character", "display": "angel",     "color": "white"},
+    "unicorn":    {"category": "character", "display": "unicorn",   "color": "white"},
+    "phoenix":    {"category": "character", "display": "phoenix",   "color": "red"},
+    "ogre":       {"category": "character", "display": "ogre",      "color": "green"},
+    "vampire":    {"category": "character", "display": "vampire",   "color": "red"},
+    "werewolf":   {"category": "character", "display": "werewolf",  "color": "gray"},
+    "golem":      {"category": "character", "display": "golem",     "color": "gray"},
+    "fairy":      {"category": "character", "display": "fairy",     "color": "purple"},
+    "imp":        {"category": "character", "display": "imp",       "color": "red"},
+
+    # ── Vehicles (~10) ─────────────────────────────────────────────────
+    "car":        {"category": "vehicle", "display": "car",        "color": "default"},
+    "truck":      {"category": "vehicle", "display": "truck",      "color": "default"},
+    "plane":      {"category": "vehicle", "display": "plane",      "color": "default"},
+    "helicopter": {"category": "vehicle", "display": "helicopter", "color": "default"},
+    "boat":       {"category": "vehicle", "display": "boat",       "color": "blue"},
+    "submarine":  {"category": "vehicle", "display": "submarine",  "color": "gray"},
+    "rocket":     {"category": "vehicle", "display": "rocket",     "color": "red"},
+    "train":      {"category": "vehicle", "display": "train",      "color": "default"},
+    "bicycle":    {"category": "vehicle", "display": "bicycle",    "color": "default"},
+    "motorcycle": {"category": "vehicle", "display": "motorcycle", "color": "default"},
+
+    # ── Sports/Toys (~8) ──────────────────────────────────────────────
+    "goal":       {"category": "board",  "display": "goal",    "color": "default"},
+    "net":        {"category": "board",  "display": "net",     "color": "default"},
+    "hoop":       {"category": "board",  "display": "hoop",    "color": "default"},
+    "bat":        {"category": "piece",  "display": "bat",     "color": "brown"},
+    "racket":     {"category": "piece",  "display": "racket",  "color": "default"},
+    "arrow":      {"category": "military", "display": "arrow", "color": "default"},
+    "target":     {"category": "board",  "display": "target",  "color": "red"},
+
+    # ── Food (~10) ────────────────────────────────────────────────────
+    "apple":      {"category": "resource", "display": "apple",    "color": "red"},
+    "bread":      {"category": "resource", "display": "bread",    "color": "brown"},
+    "cake":       {"category": "resource", "display": "cake",     "color": "default"},
+    "pie":        {"category": "resource", "display": "pie",      "color": "brown"},
+    "candy":      {"category": "resource", "display": "candy",    "color": "default"},
+    "cookie":     {"category": "resource", "display": "cookie",   "color": "brown"},
+    "mushroom":   {"category": "resource", "display": "mushroom", "color": "brown"},
+    "berry":      {"category": "resource", "display": "berry",    "color": "red"},
+    "carrot":     {"category": "resource", "display": "carrot",   "color": "default"},
+    "corn":       {"category": "resource", "display": "corn",     "color": "gold"},
+
+    # ── Space/Sci-fi (~10) ────────────────────────────────────────────
+    "planet":     {"category": "nature", "display": "planet",    "color": "blue"},
+    "alien":      {"category": "nature", "display": "alien",     "color": "green"},
+    "robot":      {"category": "nature", "display": "robot",     "color": "gray"},
+    "asteroid":   {"category": "nature", "display": "asteroid",  "color": "gray"},
+    "satellite":  {"category": "nature", "display": "satellite", "color": "gray"},
+    "laser":      {"category": "nature", "display": "laser",     "color": "red"},
+    "spaceship":  {"category": "nature", "display": "spaceship", "color": "gray"},
+    "meteor":     {"category": "nature", "display": "meteor",    "color": "red"},
+    "ufo":        {"category": "nature", "display": "ufo",       "color": "green"},
+    "comet":      {"category": "nature", "display": "comet",     "color": "blue"},
+
+    # ── Weather/Elements (~8) ─────────────────────────────────────────
+    "lightning":  {"category": "nature", "display": "lightning", "color": "gold"},
+    "ice":        {"category": "nature", "display": "ice",       "color": "blue"},
+    "cloud":      {"category": "nature", "display": "cloud",     "color": "white"},
+    "rain":       {"category": "nature", "display": "rain",      "color": "blue"},
+    "wind":       {"category": "nature", "display": "wind",      "color": "default"},
+    "storm":      {"category": "nature", "display": "storm",     "color": "gray"},
+    "lava":       {"category": "nature", "display": "lava",      "color": "red"},
+    "thunder":    {"category": "nature", "display": "thunder",   "color": "gold"},
+
+    # ── Buildings (~10) ───────────────────────────────────────────────
+    "temple":     {"category": "board", "display": "temple",     "color": "gold"},
+    "church":     {"category": "board", "display": "church",     "color": "white"},
+    "pyramid":    {"category": "board", "display": "pyramid",    "color": "gold"},
+    "lighthouse": {"category": "board", "display": "lighthouse", "color": "white"},
+    "barn":       {"category": "board", "display": "barn",       "color": "red"},
+    "factory":    {"category": "board", "display": "factory",    "color": "gray"},
+    "mine":       {"category": "board", "display": "mine",       "color": "brown"},
+    "well":       {"category": "board", "display": "well",       "color": "gray"},
+    "windmill":   {"category": "board", "display": "windmill",   "color": "default"},
+    "tent":       {"category": "board", "display": "tent",       "color": "brown"},
+
+    # ── Tools (~12) ───────────────────────────────────────────────────
+    "hammer":     {"category": "resource", "display": "hammer",  "color": "brown"},
+    "axe":        {"category": "resource", "display": "axe",     "color": "gray"},
+    "pickaxe":    {"category": "resource", "display": "pickaxe", "color": "gray"},
+    "shovel":     {"category": "resource", "display": "shovel",  "color": "brown"},
+    "rope":       {"category": "resource", "display": "rope",    "color": "brown"},
+    "ladder":     {"category": "resource", "display": "ladder",  "color": "brown"},
+    "bell":       {"category": "resource", "display": "bell",    "color": "gold"},
+    "book":       {"category": "resource", "display": "book",    "color": "brown"},
+    "candle":     {"category": "resource", "display": "candle",  "color": "gold"},
+    "lantern":    {"category": "resource", "display": "lantern", "color": "gold"},
+    "compass":    {"category": "resource", "display": "compass", "color": "default"},
+    "map":        {"category": "resource", "display": "map",     "color": "brown"},
+
     # ── Card-related (~10) ─────────────────────────────────────────────
     "card":  {"category": "card", "display": "card", "color": "default"},
     "hand":  {"category": "card", "display": "card", "color": "default"},
@@ -193,6 +321,31 @@ _REGULAR_PLURALS = [
     "scroll", "crown", "potion", "key", "chest",
     "wall", "bridge", "path", "door", "gate", "tower", "castle",
     "house", "village", "card", "deck", "pile",
+    # Animals
+    "horse", "wolf", "bear", "cat", "dog", "rabbit", "lion", "tiger",
+    "elephant", "eagle", "fox", "owl", "shark", "dolphin", "frog",
+    "monkey", "penguin", "bee", "ant", "spider", "crab", "whale", "turtle",
+    # Fantasy/RPG
+    "elf", "dwarf", "orc", "mage", "cleric", "paladin", "ranger",
+    "barbarian", "demon", "angel", "unicorn", "ogre", "vampire",
+    "werewolf", "golem", "imp",
+    # Vehicles
+    "car", "truck", "plane", "helicopter", "boat", "submarine",
+    "rocket", "train", "bicycle", "motorcycle",
+    # Sports/Toys
+    "goal", "net", "hoop", "bat", "racket", "arrow", "target",
+    # Food
+    "apple", "bread", "cake", "pie", "cookie", "mushroom", "carrot",
+    # Space/Sci-fi
+    "planet", "alien", "robot", "asteroid", "satellite", "laser",
+    "spaceship", "meteor", "comet",
+    # Weather/Elements
+    "cloud", "storm",
+    # Buildings
+    "temple", "church", "pyramid", "lighthouse", "barn", "tent",
+    # Tools
+    "hammer", "axe", "pickaxe", "shovel", "rope", "ladder", "bell",
+    "book", "candle", "lantern", "compass",
 ]
 for _w in _REGULAR_PLURALS:
     _add_alias(_w + "s", _w)
@@ -207,7 +360,7 @@ _add_alias("fortresses", "fortress")
 _add_alias("fishes", "fish")
 _add_alias("trophies", "trophy")
 _add_alias("leaves", "leaf")
-_add_alias("wolves", "wool")     # keep wool discoverable
+_add_alias("wools", "wool")
 _add_alias("heroes", "hero")
 _add_alias("villains", "villain")
 _add_alias("villains", "villain")
@@ -222,16 +375,38 @@ _add_alias("ranks", "rank")
 _add_alias("bricks", "brick")
 _add_alias("minis", "mini")
 
+# Irregular plurals for new entries
+_add_alias("wolves", "wolf")
+# "deer" is both singular and plural — already a canonical entry
+_add_alias("mice", "mouse")
+_add_alias("monkeys", "monkey")
+_add_alias("foxes", "fox")
+_add_alias("elves", "elf")
+_add_alias("dwarves", "dwarf")
+_add_alias("phoenixes", "phoenix")
+_add_alias("fairies", "fairy")
+_add_alias("berries", "berry")
+_add_alias("candies", "candy")
+_add_alias("factories", "factory")
+_add_alias("mines", "mine")
+_add_alias("wells", "well")
+_add_alias("windmills", "windmill")
+_add_alias("axes", "axe")
+_add_alias("pickaxes", "pickaxe")
+_add_alias("books", "book")
+_add_alias("maps", "map")
+_add_alias("ufos", "ufo")
+_add_alias("pies", "pie")
+_add_alias("corns", "corn")
+
 # --- common synonyms ---
 _add_alias("stones", "stone")
 _add_alias("x", "cross")        # tic-tac-toe X
 _add_alias("o", "circle")       # tic-tac-toe O
 _add_alias("nought", "circle")
 _add_alias("noughts", "circle")
-_add_alias("boat", "ship")
-_add_alias("boats", "ship")
-_add_alias("horse", "knight")
-_add_alias("horses", "knight")
+# "boat" and "horse" are now canonical entries (vehicle/nature).
+# Keep "boats" and "horses" as regular plurals (added below).
 _add_alias("fort", "fortress")
 _add_alias("forts", "fortress")
 _add_alias("troop", "soldier")

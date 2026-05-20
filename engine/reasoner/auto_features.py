@@ -28,20 +28,25 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
     board_spec = gdl.get("board", {})
     board_type = board_spec.get("type", "")
 
+    # Detect game characteristics for smarter feature selection
+    end_conditions = gdl.get("end_conditions", [])
+    rules = gdl.get("rules", [])
+    rules_text = str(rules)
+    has_line_win = any("line_length" in str(ec.get("condition", ""))
+                       for ec in end_conditions)
+    has_capture = any(w in rules_text for w in ["capture", "remove", "jump", "flank"])
+    is_placement = any(r.get("name") in ("place", "place_piece") for r in rules)
+
     # === Universal features (board games only — not card games) ===
 
     if board_type != "card_zones":
-        features.append(FeatureSpec(
-            "my_piece_count",
-            "Number of my pieces on the board",
-            _my_piece_count,
-        ))
-
-        features.append(FeatureSpec(
-            "piece_advantage",
-            "My pieces minus opponent's pieces",
-            _piece_advantage,
-        ))
+        # Piece advantage is only useful in capture games
+        if has_capture:
+            features.append(FeatureSpec(
+                "piece_advantage",
+                "My pieces minus opponent's pieces",
+                _piece_advantage,
+            ))
 
         features.append(FeatureSpec(
             "mobility",
@@ -52,37 +57,33 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
     # === Grid-specific features ===
 
     if board_type == "grid":
-        rows = board_spec.get("grid", {}).get("rows", 0)
-        cols = board_spec.get("grid", {}).get("cols", 0)
-
         features.append(FeatureSpec(
             "center_control",
             "How many of my pieces are near the center",
             _center_control,
         ))
 
-        features.append(FeatureSpec(
-            "edge_presence",
-            "How many of my pieces are on edges",
-            _edge_presence,
-        ))
+        # Edge/corner/spread are useful for territory games but noise for line games
+        if not has_line_win:
+            features.append(FeatureSpec(
+                "edge_presence",
+                "How many of my pieces are on edges",
+                _edge_presence,
+            ))
 
-        features.append(FeatureSpec(
-            "corner_presence",
-            "How many of my pieces are in corners",
-            _corner_presence,
-        ))
+            features.append(FeatureSpec(
+                "corner_presence",
+                "How many of my pieces are in corners",
+                _corner_presence,
+            ))
 
-        features.append(FeatureSpec(
-            "spread",
-            "How spread out my pieces are on the board",
-            _spread,
-        ))
+            features.append(FeatureSpec(
+                "spread",
+                "How spread out my pieces are on the board",
+                _spread,
+            ))
 
-        # If the game has line-based win conditions, add line features
-        end_conditions = gdl.get("end_conditions", [])
-        has_line_win = any("line_length" in str(ec.get("condition", ""))
-                          for ec in end_conditions)
+        # Line-based win conditions: add line features
         if has_line_win:
             features.append(FeatureSpec(
                 "longest_line",
@@ -110,6 +111,12 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
             "total_pieces",
             "Total pieces on the board",
             _total_pieces_track,
+        ))
+
+        features.append(FeatureSpec(
+            "position_lead",
+            "Average position of my pieces vs opponent's",
+            _position_lead_track,
         ))
 
     # === Card game features ===
@@ -385,6 +392,24 @@ def _total_pieces_track(state: GameState, player: str) -> float:
     """Total pieces on track, normalized."""
     total = sum(state.count_pieces_at(s) for s in state.board.spaces)
     return total / max(state.board.length * 4, 1)
+
+
+def _position_lead_track(state: GameState, player: str) -> float:
+    """Average position of my pieces minus opponent's, normalized by track length."""
+    opponent = state.opponent(player)
+    my_total, my_count = 0, 0
+    opp_total, opp_count = 0, 0
+    for space in state.board.spaces:
+        for piece in state.get_pieces(space):
+            if piece.owner == player:
+                my_total += space.index
+                my_count += 1
+            elif piece.owner == opponent:
+                opp_total += space.index
+                opp_count += 1
+    my_avg = my_total / max(my_count, 1)
+    opp_avg = opp_total / max(opp_count, 1)
+    return (my_avg - opp_avg) / max(state.board.length, 1)
 
 
 def _make_state_var_feature(var_name: str):

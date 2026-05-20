@@ -773,12 +773,12 @@ POKER_FEATURES = [
 
 
 FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
-    "Tic-Tac-Toe": TTT_FEATURES,
-    "Connect Four": C4_FEATURES,
+    # Games with auto-discoverable features (TTT, C4, Chutes & Ladders)
+    # are intentionally omitted — they use L1 auto-discovery via
+    # auto_features.generate_features() to demonstrate learning.
     "Mancala (Kalah)": MANCALA_FEATURES,
     "Reversi": REVERSI_FEATURES,
     "Nim": NIM_FEATURES,
-    "Chutes and Ladders": CL_FEATURES,
     "Go Fish": GOFISH_FEATURES,
     "Checkers": CHECKERS_FEATURES,
     "Hex": HEX_FEATURES,

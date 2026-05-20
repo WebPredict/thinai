@@ -153,7 +153,8 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
                 setSelectedGame(g)
                 setTrainingId(null)
                 setStatus(null)
-                const d = DEFAULTS[g] || { games: 40, depth: 1 }
+                setDerivedFeatures(null)
+                const d = DEFAULTS[g] || { games: 40, thinkTime: 2 }
                 setNumGames(d.games)
                 setThinkTime(d.thinkTime)
               }}
@@ -279,15 +280,31 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
               {status.results.stop_reason}
             </div>
           )}
-          {status.status === 'complete' && status.results?.final_depth > 0 && (
+          {status.status === 'complete' && status.results?.strategy_assessment && status.results.strategy_assessment !== 'strategic' && (
+            <div className="training-luck-notice" style={{
+              fontFamily: 'Menlo, monospace', fontSize: '0.9rem',
+              color: 'var(--ink-dim)', textAlign: 'center',
+              padding: '0.6rem 1rem', margin: '0.5rem auto',
+              background: 'rgba(212,166,86,0.08)',
+              border: '1px solid rgba(212,166,86,0.2)',
+              borderRadius: '6px', maxWidth: '600px',
+            }}>
+              {status.results.strategy_assessment === 'pure_luck'
+                ? '🎲 This game appears to be pure luck — no strategic decisions detected. Win rate reflects chance, not learning.'
+                : '🎲 This game appears to be mostly luck — feature weights did not converge to meaningful values.'}
+            </div>
+          )}
+          {status.status === 'complete' && status.results?.final_depth > 0 && status.results?.strategy_assessment !== 'pure_luck' && (
             <div className="training-depth-report">
               Search depth settled at: <strong>{status.results.final_depth} moves ahead</strong>
             </div>
           )}
-          {status.self_assessment && (
+          {status.self_assessment && status.results?.strategy_assessment !== 'pure_luck' && (
             <SelfAssessmentPanel assessment={status.self_assessment} />
           )}
-          <WeightInspector weights={status.weights} generation={status.generation} />
+          {status.results?.strategy_assessment !== 'pure_luck' && (
+            <WeightInspector weights={status.weights} generation={status.generation} />
+          )}
           {status.effort_stats && status.confidence_stats && (
             <MetacognitionPanel effort={status.effort_stats} confidence={status.confidence_stats} />
           )}

@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 /**
  * Generic track/race board for novel games.
- * Renders a winding path of numbered spaces with pieces on them.
+ * Renders a horizontal winding track with arrows showing direction.
  */
 function TrackBoard({ state, onMove, disabled }) {
   if (!state) return null
@@ -12,8 +12,8 @@ function TrackBoard({ state, onMove, disabled }) {
   const spaces = state.spaces || {}
   const legalMoves = state.legal_moves || []
   const isMyTurn = state.current_player === 'player1'
+  const lastPlay = state.state_vars?.last_play || ''
 
-  // Parse pieces at each space
   const getCheckers = (idx) => {
     const key = String(idx)
     const pieces = spaces[key]
@@ -23,30 +23,19 @@ function TrackBoard({ state, onMove, disabled }) {
     return []
   }
 
-  // Legal move targets
-  const canRoll = legalMoves.some(m => m.rule === 'roll_and_move' || m.params?.chance)
-  const moveTargets = new Set()
-  for (const m of legalMoves) {
-    if (m.params?.target?.index != null) moveTargets.add(m.params.target.index)
-    if (m.params?.space?.index != null) moveTargets.add(m.params.space.index)
-  }
-
-  const handleMove = (idx) => {
-    if (disabled || !isMyTurn) return
-    const move = legalMoves.find(m =>
-      m.params?.target?.index === idx || m.params?.space?.index === idx
-    )
-    if (move) onMove(move.rule, move.params)
-  }
-
   const handleRoll = () => {
     if (disabled) return
-    const move = legalMoves.find(m => m.rule === 'roll_and_move' || m.params?.chance)
-    if (move) onMove(move.rule, move.params)
+    const rollMoves = legalMoves.filter(m => m.rule === 'roll_and_move' || m.rule === 'roll_dice')
+    if (rollMoves.length > 0) {
+      const move = rollMoves[Math.floor(Math.random() * rollMoves.length)]
+      onMove(move.rule, move.params)
+    }
   }
 
-  // Layout: 5 columns, winding path
-  const COLS = Math.min(5, trackLength)
+  const canRoll = legalMoves.some(m => m.rule === 'roll_and_move' || m.rule === 'roll_dice')
+
+  // Layout: rows of 10, snaking
+  const COLS = 10
   const rows = []
   let idx = 0
   let rowNum = 0
@@ -56,67 +45,107 @@ function TrackBoard({ state, onMove, disabled }) {
       row.push(idx)
       idx++
     }
-    // Reverse every other row for snake pattern
     if (rowNum % 2 === 1) row.reverse()
     rows.push(row)
     rowNum++
   }
 
-  const lastPlay = state.state_vars?.last_play || ''
+  const CW = 56, CH = 56
 
   return (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ display: 'inline-block', background: 'var(--bg-raised)', borderRadius: '8px', padding: '12px', border: '1px solid var(--rule-bright)' }}>
+    <div style={{ textAlign: 'center', width: '100%', overflowX: 'auto' }}>
+      <div style={{ display: 'inline-block', padding: '8px' }}>
         {rows.map((row, ri) => (
-          <div key={ri} style={{ display: 'flex', gap: '3px', marginBottom: '3px' }}>
-            {row.map(spaceIdx => {
-              const checkers = getCheckers(spaceIdx)
-              const isTarget = moveTargets.has(spaceIdx)
-              const isStart = spaceIdx === 0
-              const isEnd = spaceIdx === trackLength - 1
-              return (
-                <div key={spaceIdx}
-                  onClick={() => isTarget && handleMove(spaceIdx)}
-                  style={{
-                    width: '52px', height: '52px',
-                    background: isEnd ? 'rgba(60,160,80,0.2)' : isStart ? 'rgba(212,166,86,0.15)' : 'var(--bg)',
-                    border: `1px solid ${isTarget ? 'var(--accent)' : 'var(--rule-bright)'}`,
-                    borderRadius: '6px',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    cursor: isTarget ? 'pointer' : 'default',
-                    position: 'relative',
-                  }}>
-                  <span style={{ fontSize: '0.6rem', color: 'var(--ink-faint)', position: 'absolute', top: '2px', left: '4px' }}>
-                    {spaceIdx + 1}
-                  </span>
-                  {checkers.map((p, i) => (
-                    <div key={i} style={{
-                      width: '16px', height: '16px', borderRadius: '50%',
-                      background: p.owner === 'player1' ? 'var(--accent)' : 'var(--p2-color)',
-                      border: `1.5px solid ${p.owner === 'player1' ? '#8a6d36' : '#5a7a9a'}`,
-                    }} />
-                  ))}
-                  {isEnd && checkers.length === 0 && (
-                    <span style={{ fontSize: '0.7rem', color: '#5cba6e' }}>END</span>
-                  )}
-                </div>
-              )
-            })}
+          <div key={ri}>
+            <div style={{ display: 'flex', gap: '0px', alignItems: 'center' }}>
+              {row.map((spaceIdx, ci) => {
+                const checkers = getCheckers(spaceIdx)
+                const isStart = spaceIdx === 0
+                const isEnd = spaceIdx === trackLength - 1
+                const isLastInRow = ci === row.length - 1
+                const goesRight = ri % 2 === 0
+
+                return (
+                  <div key={spaceIdx} style={{ display: 'flex', alignItems: 'center' }}>
+                    <div style={{
+                      width: `${CW}px`, height: `${CH}px`,
+                      background: isEnd ? 'rgba(60,160,80,0.3)' : isStart ? 'rgba(212,166,86,0.2)' : 'var(--bg-raised)',
+                      border: `2px solid ${isEnd ? '#5cba6e' : isStart ? 'var(--accent-dim)' : 'var(--rule-bright)'}`,
+                      borderRadius: '8px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      gap: '3px', position: 'relative',
+                    }}>
+                      {isStart && checkers.length === 0 && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--accent)', fontFamily: 'Menlo, monospace' }}>START</span>
+                      )}
+                      {isEnd && checkers.length === 0 && (
+                        <span style={{ fontSize: '0.6rem', color: '#5cba6e', fontFamily: 'Menlo, monospace', fontWeight: 'bold' }}>FINISH</span>
+                      )}
+                      {checkers.map((p, i) => (
+                        <div key={i} style={{
+                          width: '22px', height: '22px', borderRadius: '50%',
+                          background: p.owner === 'player1' ? 'var(--accent)' : 'var(--p2-color)',
+                          border: `2px solid ${p.owner === 'player1' ? '#8a6d36' : '#5a7a9a'}`,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        }} />
+                      ))}
+                    </div>
+                    {/* Arrow between cells in same row */}
+                    {!isLastInRow && (
+                      <span style={{ color: 'var(--ink-faint)', fontSize: '1.6rem', margin: '0 2px', userSelect: 'none' }}>
+                        {goesRight ? '→' : '←'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {/* Down arrow between rows */}
+            {ri < rows.length - 1 && (
+              <div style={{
+                textAlign: ri % 2 === 0 ? 'right' : 'left',
+                padding: ri % 2 === 0 ? '0 20px 0 0' : '0 0 0 20px',
+                color: 'var(--ink-faint)', fontSize: '1.8rem', lineHeight: '1',
+                userSelect: 'none',
+              }}>
+                ↓
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       {lastPlay && (
-        <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.85rem', color: 'var(--ink-dim)', marginTop: '0.5rem' }}>
+        <div style={{
+          fontFamily: 'Menlo, monospace', fontSize: '0.9rem',
+          color: 'var(--ink)', marginTop: '0.5rem',
+        }}>
           {lastPlay}
         </div>
       )}
 
       {canRoll && isMyTurn && (
-        <button className="crazy8-draw-btn" onClick={handleRoll} style={{ display: 'block', margin: '0.5rem auto' }}>
-          Roll dice
+        <button className="crazy8-draw-btn" onClick={handleRoll}
+          style={{ display: 'block', margin: '0.75rem auto', fontSize: '1rem', padding: '0.5rem 2rem' }}>
+          🎲 Roll dice
         </button>
+      )}
+
+      {isMyTurn && legalMoves.some(m => m.rule === 'move_forward') && (
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', margin: '0.5rem 0' }}>
+          <button className="crazy8-draw-btn" onClick={() => {
+            const m = legalMoves.find(mv => mv.rule === 'move_forward')
+            if (m) onMove(m.rule, m.params)
+          }} style={{ fontSize: '1rem', padding: '0.5rem 1.5rem' }}>
+            ⬆ Move Forward
+          </button>
+          <button className="crazy8-draw-btn" onClick={() => {
+            const m = legalMoves.find(mv => mv.rule === 'move_backward')
+            if (m) onMove(m.rule, m.params)
+          }} style={{ fontSize: '1rem', padding: '0.5rem 1.5rem' }}>
+            ⬇ Move Backward
+          </button>
+        </div>
       )}
     </div>
   )

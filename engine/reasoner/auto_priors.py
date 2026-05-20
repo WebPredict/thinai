@@ -165,12 +165,12 @@ def _prior_for_feature(feature_name: str, signals: dict) -> float:
         if "advantage" in name:
             return 0.1
 
-    # Line-related features
+    # Line-related features — stronger priors since these directly relate to winning
     if signals["lines_matter"]:
         if any(w in name for w in ["three_in_row", "longest_line", "line_threat"]):
-            return 0.15  # building lines toward the win condition
+            return 0.5  # building lines toward the win condition
         if any(w in name for w in ["two_in_row"]):
-            return 0.1  # partial progress
+            return 0.3  # partial progress
 
     # Set/collection features
     if signals["sets_matter"]:
@@ -191,9 +191,9 @@ def _prior_for_feature(feature_name: str, signals: dict) -> float:
         if "mobility" in name:
             return 0.1
 
-    # Center control — very mild
+    # Center control — moderate bias, usually helpful
     if "center" in name:
-        return 0.05
+        return 0.2
 
     # Corner features — depends on game, stay neutral
     if "corner" in name:

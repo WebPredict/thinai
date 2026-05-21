@@ -164,48 +164,6 @@
   <li><strong><a href="https://en.wikipedia.org/wiki/Self-play" style="color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint);">Self-play</a> training</strong> — learns feature weights through win/loss reinforcement over ~40 games, similar to how a human improves by playing practice matches</li>
 </ul>
 
-<h2>Games Implemented</h2>
-<table>
-  <tr><th>Game</th><th>Type</th><th>Status</th><th>Notes</th></tr>
-  <tr><td>Tic-Tac-Toe</td><td>Grid</td><td><span class="status done">works</span></td><td>Plays perfectly (solved game)</td></tr>
-  <tr><td>Connect Four</td><td>Grid</td><td><span class="status done">works</span></td><td>Learns to block threats, control center</td></tr>
-  <tr><td>Reversi</td><td>Grid</td><td><span class="status done">works</span></td><td>Learns corner control, edge play</td></tr>
-  <tr><td>Mancala</td><td>Track</td><td><span class="status done">works</span></td><td>Learns capture and extra-turn strategies</td></tr>
-  <tr><td>Checkers</td><td>Grid</td><td><span class="status done">works</span></td><td>Full rules: jumps, kings, mandatory capture</td></tr>
-  <tr><td>Nim</td><td>Track</td><td><span class="status done">works</span></td><td>Mathematical game, limited learning signal</td></tr>
-  <tr><td>Chutes & Ladders</td><td>Track</td><td><span class="status done">works</span></td><td>Pure chance — no strategy to learn</td></tr>
-  <tr><td>War</td><td>Card</td><td><span class="status done">works</span></td><td>Pure chance — validates card infrastructure</td></tr>
-  <tr><td>Go Fish</td><td>Card</td><td><span class="status partial">noisy</span></td><td>High luck variance; training curves unstable</td></tr>
-  <tr><td>Crazy Eights</td><td>Card</td><td><span class="status done">works</span></td><td>Learns suit/rank matching</td></tr>
-  <tr><td>Blackjack</td><td>Card</td><td><span class="status done">works</span></td><td>Learns hit/stand thresholds</td></tr>
-  <tr><td>Uno</td><td>Card</td><td><span class="status done">works</span></td><td>Action cards (skip, reverse, draw) working</td></tr>
-  <tr><td>Gin Rummy</td><td>Card</td><td><span class="status done">works</span></td><td>Meld detection, deadwood scoring, knock/gin, AI hand reveal</td></tr>
-  <tr><td>Five-Card Draw</td><td>Card</td><td><span class="status done">works</span></td><td>Hand ranking, discard/draw, showdown with hand names</td></tr>
-  <tr><td>Hearts</td><td>Card (trick)</td><td><span class="status done">works</span></td><td>First trick-taking game: follow suit, avoid points, Queen of Spades</td></tr>
-  <tr><td>Hex</td><td>Grid (territory)</td><td><span class="status done">works</span></td><td>7x7 hex board, connect top-bottom vs left-right. SVG hexagons</td></tr>
-  <tr><td>Backgammon</td><td>Track (race+dice)</td><td><span class="status done">works</span></td><td>24-point board, dice, hitting, bearing off. Click-to-move UI</td></tr>
-</table>
-
-<h2>What Works Well</h2>
-<ul>
-  <li><strong>Board games:</strong> The system consistently learns to play Connect Four, Reversi, Checkers, and Mancala at a reasonable level within 40 training games. It blocks threats, controls key positions, and improves over time.</li>
-  <li><strong>Novel game parsing:</strong> The end-to-end loop works — paste a plain English description like "5x5 grid, 4 in a row wins" and the system parses it, generates features, trains, and lets you play. No game-specific code needed.</li>
-  <li><strong>Auto-features:</strong> The system can generate reasonable evaluation features from the GDL structure alone, without hand-crafted knowledge. This is key for novel games.</li>
-  <li><strong>Speed:</strong> Training 40 games takes 10-60 seconds on a laptop. Playing a move takes under 1 second. No GPU needed.</li>
-  <li><strong>Card infrastructure:</strong> 9 card games work with hidden hands, melds, action cards, trick-taking, and multi-phase turns.</li>
-  <li><strong>AI commentary:</strong> The AI explains its reasoning after each move — blocking threats, extending lines, positional play, feature-driven decisions.</li>
-  <li><strong>Visual customization:</strong> Novel games can specify piece colors, board patterns (checkerboard, wood), and piece types (238 recognized objects, 58 with SVG icons).</li>
-</ul>
-
-<h2>What Needs Work</h2>
-<ul>
-  <li><strong>Card game training:</strong> Card games with high luck variance (Go Fish especially) show noisy training curves. The learner and opponent share features, creating a ceiling around 50%. Better opponent selection or more training games may help.</li>
-  <li><strong>Belief-state reasoning:</strong> The sampling-based search is implemented but its impact on play quality is not yet measured. The AI doesn't yet track what the opponent's plays reveal about their hand.</li>
-  <li><strong>Opponent modeling:</strong> The opponent model infrastructure exists but isn't actively used during play. Integrating it with the sampling reasoner could improve card game performance.</li>
-  <li><strong>Novel card games:</strong> The parser can describe card games but the engine can't execute arbitrary card game rules from parsed descriptions yet. Only grid-based novel games work end-to-end.</li>
-  <li><strong>Search depth vs evaluation quality:</strong> The system currently relies on depth 4-5 search to play competently. A smarter evaluation function could achieve the same quality at depth 2-3, matching how humans actually think.</li>
-</ul>
-
 <h2>Phase Status</h2>
 <table>
   <tr><th>Phase</th><th>Description</th><th>Status</th></tr>
@@ -214,26 +172,79 @@
   <tr><td>2</td><td>More games — Nim, Chutes & Ladders, benchmarks</td><td><span class="status done">done</span></td></tr>
   <tr><td>3</td><td>Corrections — rule revision, error detection</td><td><span class="status done">done</span></td></tr>
   <tr><td>4</td><td>Metacognition — adaptive search, confidence, self-assessment</td><td><span class="status done">done</span></td></tr>
-  <tr><td>5</td><td>Card games — hidden information, 9 card games, sampling search, opponent modeling</td><td><span class="status partial">~90%</span></td></tr>
-  <tr><td>6</td><td>Harder games — chess-level complexity, stress testing</td><td><span class="status todo">not started</span></td></tr>
-  <tr><td>7</td><td>Visualization — game-specific UIs, demo infrastructure</td><td><span class="status partial">started</span></td></tr>
-  <tr><td>8</td><td>Writing — documentation, research notes, landing page</td><td><span class="status partial">started</span></td></tr>
+  <tr><td>5</td><td>Card games — hidden information, 11 card games, sampling search, opponent modeling</td><td><span class="status done">done</span></td></tr>
+  <tr><td>6</td><td>New game types — Hex, Backgammon, Wizard, Scrabble, race games, novel game pipeline</td><td><span class="status done">done</span></td></tr>
+  <tr><td>7</td><td>Auto-discovery — feature auto-generation, luck detection, progressive depth, training transparency</td><td><span class="status done">done</span></td></tr>
+  <tr><td>8</td><td>Visualization — 16 board components, SVG boards, commentary, parser reference</td><td><span class="status partial">~90%</span></td></tr>
+  <tr><td>9</td><td>Polish — chess support, opponent modeling in training, partnership games</td><td><span class="status todo">planned</span></td></tr>
 </table>
 
 <h2>Key Numbers</h2>
 <ul>
-  <li><strong>17</strong> playable games</li>
-  <li><strong>336</strong> automated tests (including 20 AI competency tests)</li>
-  <li><strong>~10,000</strong> lines of engine code</li>
+  <li><strong>20</strong> playable games across 13 categories</li>
+  <li><strong>381</strong> automated tests</li>
+  <li><strong>~12,000</strong> lines of engine code</li>
+  <li><strong>~2,700</strong> word Scrabble dictionary</li>
   <li><strong>40</strong> training games to reach competence (board games)</li>
-  <li><strong>< 2 seconds</strong> per AI move (typically under 1 second for most games)</li>
-  <li><strong>1,500 / 2,000</strong> max nodes per move (card / board games, with selective deepening)</li>
-  <li><strong>238</strong> game objects recognized by the parser (58 with SVG icons)</li>
-  <li><strong>26</strong> parser tests covering 10 game categories</li>
+  <li><strong>< 2 seconds</strong> per AI move (typically under 1 second)</li>
+  <li><strong>1,500 / 2,000</strong> max nodes per move (card / board games)</li>
+  <li><strong>350+</strong> game objects recognized by the parser (58 with SVG icons)</li>
   <li><strong>0</strong> GPUs required</li>
 </ul>
 
-<h2>Recent Changes (May 20, 2026)</h2>
+<h2>Recent Changes (May 21, 2026)</h2>
+<ul>
+  <li><strong>Wizard (new game):</strong> Trick-taking card game with trump suit and bidding. Players bid how many of 5 tricks they'll win, then play. Trump beats non-trump. Scoring rewards accurate prediction. Multi-round with cumulative scoring.</li>
+  <li><strong>Simplified Scrabble (new game):</strong> Word/tile placement on a 9×9 board with bonus squares (DL, TL, DW, TW). ~2,700 word dictionary with cross-word validation. Click-to-place UI with word suggestions as fallback.</li>
+  <li><strong>Training transparency:</strong> Training results now show the training partner's strategy (e.g., "Counts lines and patterns, looks 3 moves ahead" or "Plays random valid moves") so users understand what the AI is learning against.</li>
+  <li><strong>Smarter training opponents:</strong> Dice games (Backgammon) train at depth 1 since dice randomness limits the value of deep search. Novel/custom games train against a random opponent since the built-in line evaluator is too strong for a fresh learner. Known games face a competent fixed opponent.</li>
+</ul>
+
+<h2>Games Implemented (20)</h2>
+<table>
+  <tr><th>Game</th><th>Type</th><th>Training Quality</th><th>Notes</th></tr>
+  <tr><td>Reversi</td><td>Flanking</td><td><span class="status done">strong</span></td><td>Learns corner strategy, mobility. Consistently good play.</td></tr>
+  <tr><td>Connect Four</td><td>Placement</td><td><span class="status done">strong</span></td><td>Auto-discovered features. Blocks threats, plays center.</td></tr>
+  <tr><td>Checkers</td><td>Movement</td><td><span class="status done">strong</span></td><td>Captures, kings, advancement. Solid play.</td></tr>
+  <tr><td>Hex</td><td>Territory</td><td><span class="status partial">decent</span></td><td>Connection progress + center control. Developing.</td></tr>
+  <tr><td>Backgammon</td><td>Race + Dice</td><td><span class="status partial">decent</span></td><td>Pip advantage, blot safety. Depth-1 training (dice variance).</td></tr>
+  <tr><td>Mancala</td><td>Sowing</td><td><span class="status done">strong</span></td><td>Store lead, captures, extra turns. Reliable.</td></tr>
+  <tr><td>Hearts</td><td>Trick-taking</td><td><span class="status partial">decent</span></td><td>Follows suit, avoids points. Reasonable play.</td></tr>
+  <tr><td>Wizard</td><td>Trick-taking + Bidding</td><td><span class="status partial">decent</span></td><td>Trump + bidding. Learns to bid based on hand strength.</td></tr>
+  <tr><td>Scrabble</td><td>Word/Tile</td><td><span class="status partial">decent</span></td><td>Simplified 9×9. Finds valid words, uses bonus squares.</td></tr>
+  <tr><td>Gin Rummy</td><td>Collecting</td><td><span class="status partial">decent</span></td><td>Deadwood, melds, knocking. Hidden information.</td></tr>
+  <tr><td>Five-Card Draw</td><td>Comparing</td><td><span class="status partial">decent</span></td><td>Hand strength evaluation. Discard decisions.</td></tr>
+  <tr><td>Uno</td><td>Shedding</td><td><span class="status partial">decent</span></td><td>~55% win rate. Mostly luck, some card management.</td></tr>
+  <tr><td>Crazy Eights</td><td>Shedding</td><td><span class="status partial">decent</span></td><td>Similar to Uno. Color/rank matching.</td></tr>
+  <tr><td>Blackjack</td><td>Comparing</td><td><span class="status done">strong</span></td><td>Hit/stand decisions. Learns basic strategy.</td></tr>
+  <tr><td>Go Fish</td><td>Collecting</td><td><span class="status done">strong</span></td><td>Near-sets, pairs tracking. 70%+ win rate.</td></tr>
+  <tr><td>War</td><td>Comparing</td><td><span class="status done">luck</span></td><td>Pure luck. Detected and flagged automatically.</td></tr>
+  <tr><td>Tic-Tac-Toe</td><td>Placement</td><td><span class="status partial">decent</span></td><td>Auto-features. Learning against strong opponent.</td></tr>
+  <tr><td>Nim</td><td>Take-away</td><td><span class="status done">strong</span></td><td>Pile balance, single-pile detection.</td></tr>
+  <tr><td>Chutes &amp; Ladders</td><td>Race</td><td><span class="status done">luck</span></td><td>Pure luck. Detected and flagged automatically.</td></tr>
+  <tr><td>Custom/Novel Games</td><td>Various</td><td><span class="status partial">varies</span></td><td>Parser-generated. Auto-features, trains vs random.</td></tr>
+</table>
+
+<h2>What Works Well</h2>
+<ul>
+  <li><strong>Learning from scratch:</strong> Games like Reversi, Mancala, Go Fish, and Checkers show clear improvement from zero knowledge to competent play in 20-40 training games.</li>
+  <li><strong>Feature auto-discovery:</strong> For line-win games (Connect Four, Tic-Tac-Toe, novel grid games), the system automatically identifies center_control, longest_line, and line_threats without any hand-coded knowledge.</li>
+  <li><strong>Luck detection:</strong> Pure-luck games (War, Chutes &amp; Ladders) are automatically identified and flagged — no false "mastery" claims.</li>
+  <li><strong>Game variety:</strong> 20 games across 13 categories, from simple (Nim) to complex (Backgammon, Scrabble). Hidden information, dice, bidding, word formation.</li>
+  <li><strong>Novel game pipeline:</strong> Describe a game in English → parse → auto-generate features → train → play. Works end-to-end for grid placement, card, race, and tile games.</li>
+  <li><strong>Interpretable AI:</strong> Every decision can be traced to feature weights. Commentary explains moves. Training partner strength is disclosed.</li>
+</ul>
+
+<h2>What Needs Work</h2>
+<ul>
+  <li><strong>Progressive depth instability:</strong> When the learner's search depth increases during training, weights learned at shallow depths don't always transfer well to deeper search. Causes nosedives in learning curves (visible in Connect Four, Backgammon).</li>
+  <li><strong>Novel game play quality:</strong> Custom/novel games train against random opponents and rarely exceed beginner level. Need better auto-opponents or self-play.</li>
+  <li><strong>Opponent modeling:</strong> Card games (especially Uno, Hearts) would benefit from tracking what opponents' plays reveal about their hand. Infrastructure exists but isn't wired to training.</li>
+  <li><strong>Scrabble word placement:</strong> The click-to-place UI occasionally doesn't match a valid move the engine recognizes. Word suggestions sometimes show duplicates.</li>
+  <li><strong>Missing game mechanics:</strong> Chess-like movement, auction/bidding (beyond Wizard), partnership play, and complex real-time mechanics are not yet supported.</li>
+</ul>
+
+<h2>Changes (May 20, 2026)</h2>
 <ul>
   <li><strong>Auto-discovery replaces hand-crafted features:</strong> Tic-Tac-Toe, Connect Four, and Chutes &amp; Ladders no longer use hand-coded evaluation features. Instead, the system auto-generates features from the game's rules (line_threats, center_control, position_lead, etc.) and learns their importance through self-play. This means these games show real learning curves — starting weak and improving — rather than being pre-programmed to play well.</li>
   <li><strong>Smarter auto-features:</strong> For line-win games (N-in-a-row), the system now skips noisy features like edge_presence and corner_presence that don't help, keeping only relevant ones (center_control, longest_line, line_threats, mobility). Reduces noise-to-signal ratio during learning.</li>
@@ -277,24 +288,22 @@
   <tr><th>Category</th><th>Examples</th><th>Status</th><th>Coverage</th></tr>
   <tr><td><strong>Placement</strong> — place pieces on a grid</td><td>Tic-Tac-Toe, Connect Four, Go, Gomoku</td><td><span class="status done">works</span></td><td>Handles any N-in-a-row or territory game</td></tr>
   <tr><td><strong>Flipping/Flanking</strong> — capture by surrounding</td><td>Reversi, Othello</td><td><span class="status done">works</span></td><td>Fully supported</td></tr>
-  <tr><td><strong>Movement/Capture</strong> — move pieces, capture opponents</td><td>Checkers, Chess, Shogi</td><td><span class="status partial">partial</span></td><td>Checkers works; chess-level complexity is Phase 6</td></tr>
+  <tr><td><strong>Movement/Capture</strong> — move pieces, capture opponents</td><td>Checkers, Chess, Shogi</td><td><span class="status partial">partial</span></td><td>Checkers works; chess-level complexity is a stretch goal</td></tr>
   <tr><td><strong>Sowing/Mancala</strong> — distribute tokens around a track</td><td>Mancala, Oware, Kalah</td><td><span class="status done">works</span></td><td>Standard mancala variants supported</td></tr>
   <tr><td><strong>Nim-like</strong> — remove items from piles</td><td>Nim, Wythoff's, Sprouts</td><td><span class="status done">works</span></td><td>Any take-away game</td></tr>
   <tr><td><strong>Matching/Shedding</strong> — match cards, empty your hand</td><td>Crazy Eights, Uno, Rummy</td><td><span class="status done">works</span></td><td>Color/rank matching, action cards, melds</td></tr>
   <tr><td><strong>Collecting</strong> — gather sets of cards</td><td>Go Fish, Rummy, Canasta</td><td><span class="status done">works</span></td><td>Set detection, asking, drawing</td></tr>
   <tr><td><strong>Comparing</strong> — compare hands for best rank</td><td>Poker, Blackjack, War</td><td><span class="status done">works</span></td><td>Hand ranking, hit/stand, draw/discard</td></tr>
-  <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Spades, Bridge</td><td><span class="status done">works</span></td><td>Hearts implemented: follow suit, trick resolution, point avoidance</td></tr>
-  <tr><td><strong>Auction/Bidding</strong> — bid resources for advantage</td><td>Bridge (bidding), Power Grid</td><td><span class="status todo">planned</span></td><td>Needs economic modeling</td></tr>
-  <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes & Ladders, Backgammon, Parcheesi</td><td><span class="status done">works</span></td><td>Backgammon, custom race games with forward/backward choice and bumping, luck detection for pure-chance races</td></tr>
-  <tr><td><strong>Territory</strong> — control areas of the board</td><td>Go, Hex, Blokus</td><td><span class="status partial">partial</span></td><td>Hex works (7x7, connect sides). Go-level complexity is Phase 6</td></tr>
-  <tr><td><strong>Word/Tile</strong> — form words or patterns with tiles</td><td>Scrabble, Bananagrams</td><td><span class="status todo">planned</span></td><td>Needs dictionary lookup, tile scoring</td></tr>
+  <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Wizard, Spades, Bridge</td><td><span class="status done">works</span></td><td>Hearts + Wizard (with trump suit and bidding). Follow suit, trick resolution.</td></tr>
+  <tr><td><strong>Auction/Bidding</strong> — bid resources for advantage</td><td>Bridge (bidding), Power Grid</td><td><span class="status partial">partial</span></td><td>Wizard has per-round bidding. Full auction mechanics planned.</td></tr>
+  <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes &amp; Ladders, Backgammon, Parcheesi</td><td><span class="status done">works</span></td><td>Backgammon, custom race games with forward/backward choice and bumping, luck detection</td></tr>
+  <tr><td><strong>Territory</strong> — control areas of the board</td><td>Go, Hex, Blokus</td><td><span class="status partial">partial</span></td><td>Hex works (7×7, connect sides). Go-level complexity is a stretch goal</td></tr>
+  <tr><td><strong>Word/Tile</strong> — form words or patterns with tiles</td><td>Scrabble, Bananagrams</td><td><span class="status done">works</span></td><td>Simplified Scrabble: 9×9 board, ~2,700 word dictionary, bonus squares, cross-word scoring</td></tr>
   <tr><td><strong>Partnership</strong> — teams of players cooperate</td><td>Bridge, Tichu, Euchre</td><td><span class="status todo">planned</span></td><td>Needs multi-agent cooperation model</td></tr>
 </table>
 
 <h3>Estimated coverage of popular games</h3>
-<p>Of the ~50 most commonly played tabletop/card games worldwide, ThinAI's current architecture can represent roughly <strong>75-80%</strong> with its existing game types (grid placement, card matching/shedding/collecting/comparing, trick-taking, territory, race+dice, movement/capture). The remaining ~20% require auction/bidding, word/dictionary lookup, or complex partnership dynamics that are outside the current scope.</p>
-
-<p>The natural language parser can already handle novel grid-based games end-to-end. Extending it to fully support card game descriptions from English is a near-term goal.</p>
+<p>Of the ~50 most commonly played tabletop/card games worldwide, ThinAI can represent roughly <strong>85%</strong> with its existing game types. The remaining ~15% require partnership dynamics, real-time mechanics, or negotiation.</p>
 
 <h2>Technical Decisions</h2>
 <h3>Why not neural networks?</h3>

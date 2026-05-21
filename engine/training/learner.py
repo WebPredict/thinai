@@ -45,6 +45,7 @@ class LearningResults:
     stop_reason: str = ""
     final_depth: int = 0
     strategy_assessment: str = ""  # "strategic", "mostly_luck", "pure_luck"
+    opponent_description: str = ""  # human-readable description of training partner
 
     @property
     def win_rate(self) -> float:
@@ -89,6 +90,7 @@ class LearningResults:
             "stop_reason": self.stop_reason,
             "final_depth": self.final_depth,
             "strategy_assessment": self.strategy_assessment,
+            "opponent_description": self.opponent_description,
             "snapshots": [
                 {
                     "game": s.game_number,
@@ -123,6 +125,11 @@ class LearningRunner:
         self.confidence_tracker = confidence_tracker
         self._gdl = gdl
         self.self_assessor = self_assessor
+        # Fast training mode for high-branching games (Scrabble)
+        # Pick randomly from top moves instead of searching
+        self._use_fast_training = gdl and any(
+            r.get("name") == "place_word" for r in gdl.get("rules", [])
+        )
 
     def train(
         self,
@@ -137,19 +144,21 @@ class LearningRunner:
         - Later games: use effort allocator to decide depth per position
         - Opponent is fixed at a consistent level throughout
         """
+        opponent_desc = ""
         if opponent is None:
-            # For games where default_eval is meaningless (non-line games
-            # like checkers, card games), use features+priors opponent.
-            # For grid games with line-based wins, default_eval works well.
+            # High branching factor games (Scrabble): use random opponent
+            if self._gdl and any(r.get("name") == "place_word" for r in self._gdl.get("rules", [])):
+                opponent = RandomOpponent(self.engine)
+                opponent_desc = "Plays random valid words"
+
+        if opponent is None:
             from engine.reasoner.features import get_features
             use_feature_opponent = False
             if self._gdl:
                 end_conds = str(self._gdl.get("end_conditions", []))
                 rules_str = str(self._gdl.get("rules", []))
                 has_line_win = "line_length" in end_conds
-                has_flank = "flank" in rules_str  # Reversi-style
-                # default_eval counts grid lines — good for line-win and flank games
-                # Everything else needs feature-based opponent
+                has_flank = "flank" in rules_str
                 if not has_line_win and not has_flank:
                     use_feature_opponent = True
 
@@ -161,17 +170,26 @@ class LearningRunner:
                         features=opp_features,
                         gdl=self._gdl,
                     )
+                    has_dice = any(r.get("chance") for r in self._gdl.get("rules", []))
+                    opp_depth = 1 if has_dice else self.max_depth
                     opponent = ReasonerOpponent(
-                        self.engine, max_depth=self.max_depth, eval_fn=opp_eval,
+                        self.engine, max_depth=opp_depth, eval_fn=opp_eval,
                     )
+                    if has_dice:
+                        opponent_desc = "Uses game intuition, 1 move ahead (dice limit deeper planning)"
+                    else:
+                        opponent_desc = f"Uses game intuition, looks {opp_depth} move{'s' if opp_depth != 1 else ''} ahead"
                 else:
-                    # No hand-crafted features — use random opponent
-                    # (novel games can't compete against default_eval from scratch)
                     opponent = RandomOpponent(self.engine)
+                    opponent_desc = "Plays random valid moves"
             else:
-                # Line-win or flank game — default_eval is the "adult" opponent
-                # Fixed at max depth — consistent challenge for the learner
-                opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+                is_novel = self._gdl and self._gdl.get("_original_description")
+                if is_novel:
+                    opponent = RandomOpponent(self.engine)
+                    opponent_desc = "Plays random valid moves"
+                else:
+                    opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
+                    opponent_desc = f"Counts lines and patterns, looks {self.max_depth} move{'s' if self.max_depth != 1 else ''} ahead"
 
         # Effort allocator for training — cost-aware, adapts depth per position
         if not self.effort_allocator:
@@ -188,6 +206,9 @@ class LearningRunner:
 
         # Pre-check: is this a luck-based game? (L0 check)
         is_luck_game = _is_pure_luck_l0(self.engine, self._gdl)
+
+        # Dice games: stay at depth 1 (can't predict future rolls, depth doesn't help)
+        has_dice = self._gdl and any(r.get("chance") for r in self._gdl.get("rules", []))
 
         # Progressive depth: start shallow, deepen over time
         # Kid learns by naturally thinking deeper — increase depth every few games
@@ -243,8 +264,9 @@ class LearningRunner:
                 progress_callback(snapshot, results)
 
             # Progressive depth: increase every N games
-            # Always deepen if we have budget — deeper thinking is always better
-            if (current_depth < self.max_depth
+            # Skip for dice games — can't predict future rolls, depth doesn't help
+            if (not has_dice
+                    and current_depth < self.max_depth
                     and (i + 1) % depth_increase_interval == 0):
                 current_depth += 1
 
@@ -267,6 +289,7 @@ class LearningRunner:
 
         # Assess whether the game involves strategy or is luck-based
         results.strategy_assessment = _assess_strategy(self.engine, self._gdl, results)
+        results.opponent_description = opponent_desc
 
         # Let effort allocator learn from this training batch
         if self.effort_allocator:
@@ -308,7 +331,19 @@ class LearningRunner:
                     "move_index": num_moves,
                     "total_moves": 0,  # filled in at end
                 })
-                move = reasoner.choose_move(state)
+                if self._use_fast_training:
+                    # Fast mode: moves already sorted by score from placement engine
+                    # Pick from top few with slight randomness for exploration
+                    import random as _rng
+                    state.state_vars["_search_mode"] = True
+                    moves = self.engine.legal_moves(state)
+                    if moves:
+                        k = min(3, len(moves))
+                        move = _rng.choice(moves[:k])
+                    else:
+                        move = None
+                else:
+                    move = reasoner.choose_move(state)
             else:
                 move = opponent.choose_move(state)
 

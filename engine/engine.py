@@ -384,6 +384,47 @@ class GameEngine:
                             for card in hand.cards:
                                 yield card.id
 
+        elif select == "wizard_bid_options":
+            # Yield bid values 0 through hand_size
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+            hand_size = hand.size if hand else 5
+            for i in range(hand_size + 1):
+                yield i
+
+        elif select == "wizard_playable":
+            if state.card_zones:
+                suffix = "p1" if state.current_player == "player1" else "p2"
+                hand = state.card_zones.get(f"hand_{suffix}")
+                trick = state.card_zones.get("trick")
+                lead_suit = state.state_vars.get("lead_suit", "")
+                is_leading = not trick or trick.is_empty
+
+                if hand:
+                    if is_leading:
+                        # Leading: can play any card
+                        for card in hand.cards:
+                            yield card.id
+                    else:
+                        # Following: must follow suit if possible
+                        matching = [c for c in hand.cards if c.suit == lead_suit]
+                        if matching:
+                            for card in matching:
+                                yield card.id
+                        else:
+                            # Void in lead suit — play anything (including trump)
+                            for card in hand.cards:
+                                yield card.id
+
+        elif select == "scrabble_placements":
+            from engine.gdl.scrabble_engine import get_valid_placements
+            # Use quick mode during search (training), full mode for top-level
+            quick = state.state_vars.get("_search_mode", False)
+            placements = get_valid_placements(state, state.current_player, quick=quick)
+            state.state_vars["_has_placements"] = len(placements) > 0
+            for p in placements:
+                yield p['id']
+
         elif select == "checkers_moves":
             from engine.gdl.checkers import get_all_moves
             moves = get_all_moves(state)

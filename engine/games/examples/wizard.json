@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "name": "Wizard",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if wizard_trick_complete(): wizard_trick_winner() else: next_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "deck", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "trick", "visible_to": "all", "ordered": true },
+      { "name": "taken_p1", "owner": "player1", "visible_to": "all", "ordered": false },
+      { "name": "taken_p2", "owner": "player2", "visible_to": "all", "ordered": false },
+      { "name": "trump_card", "visible_to": "all", "ordered": false }
+    ]
+  },
+
+  "cards": {
+    "deck": "standard52",
+    "deck_zone": "deck"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "lead_suit", "type": "string", "scope": "global", "initial": "" },
+    { "name": "trump_suit", "type": "string", "scope": "global", "initial": "" },
+    { "name": "phase", "type": "string", "scope": "global", "initial": "bid_p1" },
+    { "name": "p1_bid", "type": "int", "scope": "global", "initial": -1 },
+    { "name": "p2_bid", "type": "int", "scope": "global", "initial": -1 },
+    { "name": "p1_tricks_won", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_tricks_won", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p1_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "round_number", "type": "int", "scope": "global", "initial": 1 },
+    { "name": "tricks_played", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "trick_winner", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_play", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "deck" },
+    { "action": "deal", "from": "deck", "to": "hand_p1", "count": 5 },
+    { "action": "deal", "from": "deck", "to": "hand_p2", "count": 5 },
+    { "action": "deal", "from": "deck", "to": "trump_card", "count": 1 }
+  ],
+
+  "rules": [
+    {
+      "name": "bid",
+      "action": "bid",
+      "params": [
+        { "name": "bid_value", "select": "wizard_bid_options" }
+      ],
+      "conditions": ["wizard_can_bid()"],
+      "effects": [
+        "wizard_bid(bid_value)"
+      ]
+    },
+    {
+      "name": "play_card",
+      "action": "play",
+      "params": [
+        { "name": "card_id", "select": "wizard_playable" }
+      ],
+      "conditions": ["wizard_can_play()"],
+      "effects": [
+        "wizard_play(card_id)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "wizard_game_over()",
+      "score": "wizard_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Simplified 2-player Wizard: 5 cards each, one card flipped for trump suit. Players bid how many tricks they'll win (0-5), then play 5 tricks. Must follow suit if possible; trump beats non-trump; highest of led suit wins otherwise. Scoring: exact bid = 20 + 10*tricks, miss = -10 * |tricks - bid|. Multiple rounds, highest cumulative score wins."
+  }
+}

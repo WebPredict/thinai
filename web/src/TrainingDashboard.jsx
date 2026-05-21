@@ -52,11 +52,13 @@ const GAME_LABELS = {
   hex: 'Hex',
   backgammon: 'Backgammon',
   hearts: 'Hearts',
+  wizard: 'Wizard',
+  scrabble: 'Scrabble',
   gin_rummy: 'Gin Rummy',
   five_card_draw: 'Five-Card Draw',
 }
 
-export default function TrainingDashboard({ games, initialGame, customGameNames, onBack }) {
+export default function TrainingDashboard({ games, initialGame, customGameNames, onBack, onPlay }) {
   // Smart defaults per game: low depth so the system starts weak
   // and the learned evaluation actually drives improvement
   const DEFAULTS = {
@@ -195,8 +197,8 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
                   ? 'Retry Training'
                   : 'Start Training'}
           </button>
-          {status?.status === 'complete' && onBack && (
-            <button className="action-btn" onClick={onBack}>
+          {status?.status === 'complete' && onPlay && (
+            <button className="action-btn" onClick={() => onPlay(selectedGame)}>
               Play vs ThinAI &rarr;
             </button>
           )}
@@ -275,6 +277,19 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
         <div className="train-results">
           <LearningCurve snapshots={status.snapshots} totalGames={status.total_games}
             wins={status.results?.wins} losses={status.results?.losses} draws={status.results?.draws} />
+          {status.results?.opponent_description && (
+            <div style={{
+              fontFamily: 'Menlo, monospace', fontSize: '0.85rem',
+              color: 'var(--ink)', textAlign: 'center',
+              padding: '0.5rem 1rem', margin: '0.5rem auto',
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--rule-bright)',
+              borderRadius: '6px', maxWidth: '500px',
+            }}>
+              <strong style={{ color: 'var(--accent)' }}>Training partner:</strong>{' '}
+              {status.results.opponent_description}
+            </div>
+          )}
           {status.results?.stopped_early && (
             <div className="training-stopped-early">
               {status.results.stop_reason}
@@ -296,7 +311,7 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
           )}
           {status.status === 'complete' && status.results?.final_depth > 0 && status.results?.strategy_assessment !== 'pure_luck' && (
             <div className="training-depth-report">
-              Search depth settled at: <strong>{status.results.final_depth} moves ahead</strong>
+              Search depth settled at: <strong>{status.results.final_depth} move{status.results.final_depth !== 1 ? 's' : ''} ahead</strong>
             </div>
           )}
           {status.self_assessment && status.results?.strategy_assessment !== 'pure_luck' && (

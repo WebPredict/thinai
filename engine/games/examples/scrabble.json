@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "name": "Simplified Scrabble",
+    "players": 2,
+    "turn_order": "alternating",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "grid",
+    "grid": { "rows": 9, "cols": 9, "topology": "rect4" }
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "rack_p1", "type": "list", "scope": "global", "initial": [] },
+    { "name": "rack_p2", "type": "list", "scope": "global", "initial": [] },
+    { "name": "bag", "type": "list", "scope": "global", "initial": [] },
+    { "name": "p1_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "consecutive_passes", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "first_move", "type": "bool", "scope": "global", "initial": true },
+    { "name": "last_play", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "scrabble_setup" }
+  ],
+
+  "rules": [
+    {
+      "name": "place_word",
+      "action": "play",
+      "params": [
+        { "name": "word_id", "select": "scrabble_placements" }
+      ],
+      "conditions": [],
+      "effects": [
+        "scrabble_place(word_id)"
+      ]
+    },
+    {
+      "name": "pass_turn",
+      "action": "pass",
+      "params": [],
+      "conditions": ["scrabble_can_pass()"],
+      "effects": [
+        "scrabble_pass()"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "scrabble_game_over()",
+      "score": "scrabble_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "Simplified 2-player Scrabble on a 9x9 board. Each player has a rack of 5 letter tiles drawn from a bag of ~70 tiles. Place words connecting to existing tiles (first word must cross center). Words must be valid from a ~2700 word dictionary. Bonus squares: DL, TL, DW, TW. Game ends when bag is empty and a player uses all tiles, or both players pass consecutively."
+  }
+}

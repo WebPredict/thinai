@@ -95,6 +95,12 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
             from engine.gdl.checkers import get_all_moves
             checkers_move_details = get_all_moves(state)
 
+        # For Scrabble, get word placement details
+        scrabble_placements = None
+        if engine.meta.get("name") == "Simplified Scrabble":
+            from engine.gdl.scrabble_engine import get_valid_placements
+            scrabble_placements = get_valid_placements(state, state.current_player)
+
         for m in engine.legal_moves(state):
             move_dict = {"rule": m.rule_name, "params": {}}
             for k, v in m.params.items():
@@ -114,6 +120,16 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
                     move_dict["from"] = {"row": cm.steps[0][0].row, "col": cm.steps[0][0].col}
                     move_dict["to"] = {"row": cm.steps[-1][1].row, "col": cm.steps[-1][1].col}
                     move_dict["is_jump"] = cm.is_jump
+
+            # Add Scrabble word details
+            if m.rule_name == "place_word" and scrabble_placements:
+                word_id = m.params.get("word_id", -1)
+                for p in scrabble_placements:
+                    if p['id'] == word_id:
+                        move_dict["params"]["_word"] = p['word']
+                        move_dict["params"]["_score"] = p['score']
+                        move_dict["params"]["_dir"] = p['direction']
+                        break
 
             legal_moves.append(move_dict)
 
@@ -149,7 +165,7 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
         "spaces": spaces,
         "card_zones": card_zones,
         "state_vars": {k: v for k, v in state.state_vars.items()
-                       if isinstance(v, (str, int, float, bool, type(None)))} if state.state_vars else None,
+                       if isinstance(v, (str, int, float, bool, list, type(None)))} if state.state_vars else None,
         "current_player": state.current_player,
         "turn_number": state.turn_number,
         "legal_moves": legal_moves,
@@ -570,7 +586,13 @@ def start_training(request: Request, req: TrainingRequest):
         # Custom/parsed games cap at depth 2 — deeper makes fixed-eval opponents
         # too strong for a learner starting from scratch
         is_custom = os.path.exists(os.path.join(CUSTOM_DIR, f"{req.game}.json"))
-        max_train_depth = 2 if is_custom else 3
+        # Scrabble: massive branching, just pick highest-scoring word (depth 1)
+        if game_name == "Simplified Scrabble":
+            max_train_depth = 1
+        elif is_custom:
+            max_train_depth = 2
+        else:
+            max_train_depth = 3
         depth = 1
         while depth < max_train_depth:
             # Estimate time: depth 1-2 uses full bf, depth 3+ uses pruned ~8 moves

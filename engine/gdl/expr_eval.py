@@ -319,6 +319,49 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         # Lower points is better — return negative
         return -ctx.state.state_vars.get(f"{suffix}_points", 0)
 
+    # Wizard built-ins
+    if name == "wizard_can_bid":
+        phase = ctx.state.state_vars.get("phase", "")
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        return phase == f"bid_{suffix}"
+    if name == "wizard_can_play":
+        return ctx.state.state_vars.get("phase", "") == "play"
+    if name == "wizard_trick_complete":
+        return ctx.state.state_vars.get("last_action") == "trick_won"
+    if name == "wizard_trick_winner":
+        winner = ctx.state.state_vars.get("trick_winner", "")
+        return winner if winner in ("player1", "player2") else ctx.state.current_player
+    if name == "wizard_round_over":
+        return ctx.state.state_vars.get("tricks_played", 0) >= 5
+    if name == "wizard_game_over":
+        return (ctx.state.state_vars.get("phase") == "game_over"
+                or ctx.state.state_vars.get("round_number", 1) > 5)
+    if name == "wizard_score":
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        suffix = "p1" if player == "player1" else "p2"
+        return ctx.state.state_vars.get(f"{suffix}_score", 0)
+
+    # Scrabble built-ins
+    if name == "scrabble_game_over":
+        bag = ctx.state.state_vars.get("bag", [])
+        rack_p1 = ctx.state.state_vars.get("rack_p1", [])
+        rack_p2 = ctx.state.state_vars.get("rack_p2", [])
+        passes = ctx.state.state_vars.get("consecutive_passes", 0)
+        return passes >= 2 or (not bag and (not rack_p1 or not rack_p2))
+    if name == "scrabble_score":
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        suffix = "p1" if player == "player1" else "p2"
+        return ctx.state.state_vars.get(f"{suffix}_score", 0)
+    if name == "scrabble_can_pass":
+        # Only allow pass when no word placements exist
+        # Use cached result if available (set during legal_moves enumeration)
+        cached = ctx.state.state_vars.get("_has_placements")
+        if cached is not None:
+            return not cached
+        from engine.gdl.scrabble_engine import get_valid_placements
+        placements = get_valid_placements(ctx.state, ctx.state.current_player)
+        return len(placements) == 0
+
     # Poker built-ins
     if name == "poker_can_discard":
         phase = ctx.state.state_vars.get("phase", "")
@@ -828,6 +871,27 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "hearts_play":
         args = [evaluate(a, ctx) for a in node.args]
         _hearts_play(ctx.state, int(args[0]))
+        return
+
+    # Wizard effects
+    if name == "wizard_bid":
+        args = [evaluate(a, ctx) for a in node.args]
+        _wizard_bid(ctx.state, int(args[0]))
+        return
+    if name == "wizard_play":
+        args = [evaluate(a, ctx) for a in node.args]
+        _wizard_play(ctx.state, int(args[0]))
+        return
+
+    # Scrabble effects
+    if name == "scrabble_place":
+        args = [evaluate(a, ctx) for a in node.args]
+        _scrabble_place(ctx.state, int(args[0]))
+        return
+    if name == "scrabble_pass":
+        ctx.state.state_vars["consecutive_passes"] = ctx.state.state_vars.get("consecutive_passes", 0) + 1
+        ctx.state.state_vars["last_play"] = "Passed"
+        ctx.state.state_vars["last_action"] = "pass"
         return
 
     # Poker effects
@@ -2190,6 +2254,247 @@ def _hearts_trick_loser(state: GameState) -> str:
     if winner in ("player1", "player2"):
         return winner
     return state.current_player
+
+
+# --- Wizard card game built-ins ---
+
+_RANK_ORDER = {"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"J":11,"Q":12,"K":13,"A":14}
+SUIT_SYMBOLS = {"hearts": "\u2665", "diamonds": "\u2666", "clubs": "\u2663", "spades": "\u2660"}
+
+
+def _wizard_bid(state: GameState, bid_value: int):
+    """Record a player's bid in Wizard."""
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    state.state_vars[f"{suffix}_bid"] = bid_value
+    state.state_vars["last_play"] = f"{'You' if suffix == 'p1' else 'AI'} bid {bid_value} trick{'s' if bid_value != 1 else ''}"
+    state.state_vars["last_action"] = "bid"
+
+    # Advance phase: bid_p1 → bid_p2 → play
+    if suffix == "p1":
+        state.state_vars["phase"] = "bid_p2"
+    else:
+        state.state_vars["phase"] = "play"
+
+
+def _wizard_play(state: GameState, card_id: int):
+    """Play a card in Wizard."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    trick = state.card_zones.get("trick")
+    if not hand or not trick:
+        return
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    hand.remove(card)
+    trick.add(card)
+
+    state.state_vars["last_play"] = f"{card.rank}{SUIT_SYMBOLS.get(card.suit, card.suit)}"
+    state.state_vars["last_action"] = "play"
+
+    # If leading, set lead suit
+    if trick.size == 1:
+        state.state_vars["lead_suit"] = card.suit
+        state.state_vars["lead_player"] = state.current_player
+
+    # If trick complete (2 cards), resolve
+    if trick.size == 2:
+        _wizard_resolve_trick(state)
+
+
+def _wizard_resolve_trick(state: GameState):
+    """Resolve a completed Wizard trick — trump beats non-trump."""
+    trick = state.card_zones.get("trick")
+    if not trick or trick.size != 2:
+        return
+
+    lead_suit = state.state_vars.get("lead_suit", "")
+    trump_suit = state.state_vars.get("trump_suit", "")
+    lead_player = state.state_vars.get("lead_player", "player1")
+    follow_player = "player2" if lead_player == "player1" else "player1"
+
+    cards = list(trick.cards)
+    lead_card = cards[0]
+    follow_card = cards[1]
+
+    lead_val = _RANK_ORDER.get(lead_card.rank, 0)
+    follow_val = _RANK_ORDER.get(follow_card.rank, 0)
+
+    # Determine winner with trump logic
+    lead_is_trump = lead_card.suit == trump_suit
+    follow_is_trump = follow_card.suit == trump_suit
+
+    if lead_is_trump and follow_is_trump:
+        # Both trump — highest rank wins
+        winner = follow_player if follow_val > lead_val else lead_player
+    elif follow_is_trump:
+        # Only follower played trump — they win
+        winner = follow_player
+    elif lead_is_trump:
+        # Only leader played trump — they win
+        winner = lead_player
+    elif follow_card.suit == lead_suit and follow_val > lead_val:
+        # Follower played higher card of lead suit
+        winner = follow_player
+    else:
+        # Leader wins (follower didn't follow suit or played lower)
+        winner = lead_player
+
+    # Move cards to winner's taken pile
+    winner_suffix = "p1" if winner == "player1" else "p2"
+    taken = state.card_zones.get(f"taken_{winner_suffix}")
+    if taken:
+        for card in list(trick.cards):
+            trick.remove(card)
+            taken.add(card)
+    else:
+        trick.cards.clear()
+
+    state.state_vars[f"{winner_suffix}_tricks_won"] = state.state_vars.get(f"{winner_suffix}_tricks_won", 0) + 1
+    state.state_vars["tricks_played"] = state.state_vars.get("tricks_played", 0) + 1
+    state.state_vars["lead_suit"] = ""
+    state.state_vars["trick_winner"] = winner
+    state.state_vars["last_action"] = "trick_won"
+
+    tricks_won = state.state_vars[f"{winner_suffix}_tricks_won"]
+    state.state_vars["last_play"] = f"{'You' if winner == 'player1' else 'AI'} won trick #{state.state_vars['tricks_played']}"
+
+    # Check if round is over (5 tricks)
+    if state.state_vars["tricks_played"] >= 5:
+        _wizard_score_round(state)
+
+
+def _wizard_score_round(state: GameState):
+    """Score the round and set up next round or end game."""
+    for suffix in ("p1", "p2"):
+        bid = state.state_vars.get(f"{suffix}_bid", 0)
+        tricks = state.state_vars.get(f"{suffix}_tricks_won", 0)
+        if tricks == bid:
+            points = 20 + 10 * tricks
+        else:
+            points = -10 * abs(tricks - bid)
+        state.state_vars[f"{suffix}_score"] = state.state_vars.get(f"{suffix}_score", 0) + points
+
+    p1_score = state.state_vars["p1_score"]
+    p2_score = state.state_vars["p2_score"]
+    round_num = state.state_vars.get("round_number", 1)
+
+    state.state_vars["last_play"] = (
+        f"Round {round_num} complete! "
+        f"You: {'+' if state.state_vars.get('p1_bid',0) == state.state_vars.get('p1_tricks_won',0) else ''}"
+        f"{p1_score} pts, "
+        f"AI: {'+' if state.state_vars.get('p2_bid',0) == state.state_vars.get('p2_tricks_won',0) else ''}"
+        f"{p2_score} pts"
+    )
+
+    # Check if game is over (5 rounds)
+    if round_num >= 5:
+        state.state_vars["phase"] = "game_over"
+        state.state_vars["last_action"] = "game_over"
+        return
+
+    # Start new round
+    _wizard_new_round(state)
+
+
+def _wizard_new_round(state: GameState):
+    """Set up a new round: collect cards, shuffle, re-deal, flip trump."""
+    # Collect all cards back to deck
+    deck = state.card_zones.get("deck")
+    if not deck:
+        return
+    for zone_name in ("hand_p1", "hand_p2", "trick", "taken_p1", "taken_p2", "trump_card"):
+        zone = state.card_zones.get(zone_name)
+        if zone:
+            for card in list(zone.cards):
+                zone.remove(card)
+                deck.add(card)
+
+    # Shuffle and re-deal
+    deck.shuffle()
+    for suffix in ("p1", "p2"):
+        hand = state.card_zones.get(f"hand_{suffix}")
+        if hand:
+            for _ in range(5):
+                card = deck.draw()
+                if card:
+                    hand.add(card)
+
+    # Flip trump card
+    trump_zone = state.card_zones.get("trump_card")
+    if trump_zone:
+        trump = deck.draw()
+        if trump:
+            trump_zone.add(trump)
+            state.state_vars["trump_suit"] = trump.suit
+
+    # Reset round state
+    state.state_vars["round_number"] = state.state_vars.get("round_number", 1) + 1
+    state.state_vars["p1_bid"] = -1
+    state.state_vars["p2_bid"] = -1
+    state.state_vars["p1_tricks_won"] = 0
+    state.state_vars["p2_tricks_won"] = 0
+    state.state_vars["tricks_played"] = 0
+    state.state_vars["trick_winner"] = ""
+    state.state_vars["lead_suit"] = ""
+    state.state_vars["phase"] = "bid_p1"
+    # Signal new round — trick_won so turn rule gives control to "winner" (player1)
+    state.state_vars["last_action"] = "trick_won"
+    state.state_vars["trick_winner"] = "player1"
+
+
+# --- Scrabble built-ins ---
+
+def _scrabble_place(state: GameState, word_id: int):
+    """Place a word on the Scrabble board."""
+    from engine.gdl.scrabble_engine import get_valid_placements
+    from engine.gdl.scrabble_tiles import draw_tiles
+
+    player = state.current_player
+    suffix = "p1" if player == "player1" else "p2"
+    placements = get_valid_placements(state, player)
+
+    placement = None
+    for p in placements:
+        if p['id'] == word_id:
+            placement = p
+            break
+    if not placement:
+        return
+
+    # Place tiles on board
+    rack = state.state_vars.get(f"rack_{suffix}", [])
+    used_letters = [t['letter'] for t in placement['tiles_used']]
+
+    for tile in placement['tiles_used']:
+        space = GridSpace(tile['row'], tile['col'])
+        state.set_piece(space, Piece(name=tile['letter'], owner=player))
+        # Remove used tile from rack
+        for i, rt in enumerate(rack):
+            if rt['letter'] == tile['letter']:
+                rack.pop(i)
+                break
+
+    # Update score
+    state.state_vars[f"{suffix}_score"] = state.state_vars.get(f"{suffix}_score", 0) + placement['score']
+
+    # Draw replacement tiles
+    bag = state.state_vars.get("bag", [])
+    drawn = draw_tiles(bag, len(placement['tiles_used']))
+    rack.extend(drawn)
+
+    state.state_vars["consecutive_passes"] = 0
+    state.state_vars["first_move"] = False
+    state.state_vars["last_play"] = f"{placement['word']} ({placement['score']} pts)"
+    state.state_vars["last_action"] = "place"
 
 
 # --- Compare/Score card game built-ins (novel parsed games) ---

@@ -772,6 +772,119 @@ POKER_FEATURES = [
 ]
 
 
+# ============================================================
+# Wizard features
+# ============================================================
+
+def _wizard_trump_count(state: GameState, player: str) -> float:
+    """Count of trump-suited cards in hand, normalized."""
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand:
+        return 0.0
+    trump = state.state_vars.get("trump_suit", "")
+    return sum(1 for c in hand.cards if c.suit == trump) / 5.0
+
+
+def _wizard_high_cards(state: GameState, player: str) -> float:
+    """Count of high cards (rank >= Q) in hand, normalized."""
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand:
+        return 0.0
+    high_ranks = {"Q", "K", "A"}
+    return sum(1 for c in hand.cards if c.rank in high_ranks) / 5.0
+
+
+def _wizard_bid_match(state: GameState, player: str) -> float:
+    """How well the bid matches hand strength (trump + high cards).
+    During bidding, rewards bids that match estimated winning potential.
+    During play, rewards being on track to hit the bid."""
+    suffix = "p1" if player == "player1" else "p2"
+    bid = state.state_vars.get(f"{suffix}_bid", -1)
+    if bid < 0:
+        return 0.0  # haven't bid yet
+
+    # Estimate hand strength: trump cards + high cards (A, K, Q)
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if hand and hand.cards:
+        trump = state.state_vars.get("trump_suit", "")
+        high_ranks = {"A", "K", "Q"}
+        expected = sum(1 for c in hand.cards if c.suit == trump or c.rank in high_ranks)
+        # Reward bids close to expected tricks
+        return -abs(bid - expected) / 5.0
+    else:
+        # During play: reward being on track
+        tricks = state.state_vars.get(f"{suffix}_tricks_won", 0)
+        return -abs(tricks - bid) / 5.0
+
+
+def _wizard_score_lead(state: GameState, player: str) -> float:
+    """Score advantage over opponent."""
+    my = "p1" if player == "player1" else "p2"
+    opp = "p2" if player == "player1" else "p1"
+    return (state.state_vars.get(f"{my}_score", 0) - state.state_vars.get(f"{opp}_score", 0)) / 100.0
+
+
+def _wizard_void_suits(state: GameState, player: str) -> float:
+    """Count of suits with 0 cards (can trump in when void)."""
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand:
+        return 0.0
+    suits_held = set(c.suit for c in hand.cards)
+    return (4 - len(suits_held)) / 4.0
+
+
+WIZARD_FEATURES = [
+    FeatureSpec("trump_count", "Trump-suited cards in hand", _wizard_trump_count),
+    FeatureSpec("high_cards", "High cards (Q, K, A) in hand", _wizard_high_cards),
+    FeatureSpec("bid_match", "How well bid matches hand strength", _wizard_bid_match),
+    FeatureSpec("score_lead", "Cumulative score advantage", _wizard_score_lead),
+    FeatureSpec("void_suits", "Suits with no cards (can trump in)", _wizard_void_suits),
+]
+
+
+# ============================================================
+# Scrabble features
+# ============================================================
+
+def _scrabble_score_lead(state: GameState, player: str) -> float:
+    suffix = "p1" if player == "player1" else "p2"
+    opp = "p2" if player == "player1" else "p1"
+    return (state.state_vars.get(f"{suffix}_score", 0) - state.state_vars.get(f"{opp}_score", 0)) / 50.0
+
+
+def _scrabble_rack_value(state: GameState, player: str) -> float:
+    suffix = "p1" if player == "player1" else "p2"
+    rack = state.state_vars.get(f"rack_{suffix}", [])
+    return sum(t.get('value', 0) for t in rack) / 20.0
+
+
+def _scrabble_rack_vowels(state: GameState, player: str) -> float:
+    """Vowel/consonant balance — closer to 0.4 vowels is ideal."""
+    suffix = "p1" if player == "player1" else "p2"
+    rack = state.state_vars.get(f"rack_{suffix}", [])
+    if not rack:
+        return 0.0
+    vowels = sum(1 for t in rack if t.get('letter', '') in 'AEIOU')
+    ratio = vowels / len(rack)
+    return -abs(ratio - 0.4)  # penalty for imbalance
+
+
+def _scrabble_tiles_remaining(state: GameState, player: str) -> float:
+    bag = state.state_vars.get("bag", [])
+    return len(bag) / 70.0
+
+
+SCRABBLE_FEATURES = [
+    FeatureSpec("score_lead", "Score advantage over opponent", _scrabble_score_lead),
+    FeatureSpec("rack_value", "Total point value of tiles in rack", _scrabble_rack_value),
+    FeatureSpec("rack_vowels", "Vowel/consonant balance in rack", _scrabble_rack_vowels),
+    FeatureSpec("tiles_remaining", "Tiles left in bag", _scrabble_tiles_remaining),
+]
+
+
 FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     # Games with auto-discoverable features (TTT, C4, Chutes & Ladders)
     # are intentionally omitted — they use L1 auto-discovery via
@@ -785,6 +898,8 @@ FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Backgammon": BACKGAMMON_FEATURES,
     "Gin Rummy": GIN_RUMMY_FEATURES,
     "Five-Card Draw": POKER_FEATURES,
+    "Wizard": WIZARD_FEATURES,
+    "Simplified Scrabble": SCRABBLE_FEATURES,
 }
 
 

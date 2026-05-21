@@ -170,7 +170,13 @@ class GameState:
                 new.card_zones[name] = new_zone
         else:
             new.card_zones = None
-        new.state_vars = dict(self.state_vars)
+        # Deep-copy state_vars — lists (e.g. Scrabble racks/bag) need proper copying
+        new.state_vars = {}
+        for k, v in self.state_vars.items():
+            if isinstance(v, list):
+                new.state_vars[k] = [item.copy() if isinstance(item, dict) else item for item in v]
+            else:
+                new.state_vars[k] = v
         new.current_player = self.current_player
         new.turn_number = self.turn_number
         new.move_history = []  # Don't copy history for search nodes
@@ -227,6 +233,12 @@ def setup_initial_state(gdl: dict) -> GameState:
     for action in gdl.get("setup", []):
         _apply_setup_action(action, state, gdl)
 
+    # Post-setup: if trump_card zone has a card, set trump_suit
+    if state.card_zones and "trump_card" in state.card_zones:
+        trump_zone = state.card_zones["trump_card"]
+        if trump_zone.cards:
+            state.state_vars["trump_suit"] = trump_zone.cards[0].suit
+
     return state
 
 
@@ -261,6 +273,13 @@ def _apply_setup_action(action: dict, state: GameState, gdl: dict):
         for i in range(1, state.players + 1):
             player = f"player{i}"
             state.add_piece(TrackSpace(0), Piece(name="token", owner=player))
+
+    elif action_type == "scrabble_setup":
+        from engine.gdl.scrabble_tiles import create_tile_bag, draw_tiles
+        bag = create_tile_bag()
+        state.state_vars["rack_p1"] = draw_tiles(bag, 5)
+        state.state_vars["rack_p2"] = draw_tiles(bag, 5)
+        state.state_vars["bag"] = bag
 
     elif action_type == "checkers_setup":
         from engine.gdl.checkers import setup_checkers

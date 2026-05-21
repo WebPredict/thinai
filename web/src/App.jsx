@@ -15,12 +15,14 @@ import TrackBoard from './boards/TrackBoard'
 import HeartsBoard from './boards/HeartsBoard'
 import GinRummyBoard from './boards/GinRummyBoard'
 import PokerBoard from './boards/PokerBoard'
+import WizardBoard from './boards/WizardBoard'
+import ScrabbleBoard from './boards/ScrabbleBoard'
 import './App.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'wizard', 'scrabble', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -38,6 +40,8 @@ const PLAYER_INDICATOR = {
   hex: { label: 'Red (top-bottom)', color: '#c83030' },
   backgammon: { label: 'White', color: '#e8dfd1' },
   hearts: { label: 'Player 1', color: '#d4a656' },
+  wizard: { label: 'Player 1', color: '#d4a656' },
+  scrabble: { label: 'Player 1', color: '#d4a656' },
   gin_rummy: { label: 'Player 1', color: '#d4a656' },
   five_card_draw: { label: 'Player 1', color: '#d4a656' },
 }
@@ -58,6 +62,8 @@ const GAME_LABELS = {
   hex: 'Hex',
   backgammon: 'Backgammon',
   hearts: 'Hearts',
+  wizard: 'Wizard',
+  scrabble: 'Scrabble',
   gin_rummy: 'Gin Rummy',
   five_card_draw: 'Five-Card Draw',
 }
@@ -227,6 +233,31 @@ const GAME_RULES = {
       'Each heart taken = 1 point. Queen of Spades = 13 points.',
       'Hearts cannot be led until a heart has been played on a previous trick ("broken").',
       'After all 13 tricks, the player with fewer points wins.',
+    ],
+  },
+  wizard: {
+    title: 'How to play Wizard',
+    intro: 'Predict exactly how many tricks you\'ll win! Accuracy is rewarded, mistakes are punished.',
+    rules: [
+      'Each round, 5 cards are dealt and one card is flipped to set the trump suit.',
+      'First, each player bids how many of the 5 tricks they think they\'ll win (0-5).',
+      'Then 5 tricks are played. You must follow the lead suit if you can.',
+      'Trump cards beat any non-trump card. Highest card of the lead suit wins otherwise.',
+      'Scoring: if you win exactly your bid, you get 20 + 10\u00D7tricks. If you miss, you lose 10 per trick off.',
+      'The game lasts 5 rounds. Highest cumulative score wins.',
+    ],
+  },
+  scrabble: {
+    title: 'How to play Scrabble',
+    intro: 'Place words on the board using your letter tiles. Highest score wins!',
+    rules: [
+      'Each player has a rack of 5 letter tiles drawn from a bag.',
+      'On your turn, place a word on the board connecting to existing tiles (first word must cross the center star).',
+      'All words formed (including cross-words) must be valid English words.',
+      'Score = sum of letter values. Bonus squares multiply letter or word scores.',
+      'DL = Double Letter, TL = Triple Letter, DW = Double Word, TW = Triple Word.',
+      'After placing, you draw tiles to refill your rack to 5.',
+      'You may pass if you can\'t or don\'t want to play. Game ends when both players pass or the bag is empty and someone uses all tiles.',
     ],
   },
   gin_rummy: {
@@ -493,16 +524,17 @@ function App() {
 
   useEffect(() => { refreshGames() }, [])
 
-  const startGame = useCallback(async () => {
+  const startGame = useCallback(async (gameOverride) => {
+    const game = gameOverride || selectedGame
     setLoading(true)
     try {
       const res = await fetch(`${API}/game/new`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          game: selectedGame,
+          game,
           ai_player: 'player2',
-          ai_depth: {tictactoe: 6, connect_four: 4, mancala: 3, reversi: 2, nim: 4, chutes_and_ladders: 1}[selectedGame] || 3,
+          ai_depth: {tictactoe: 6, connect_four: 4, mancala: 3, reversi: 2, nim: 4, chutes_and_ladders: 1}[game] || 3,
         }),
       })
       const data = await res.json()
@@ -595,7 +627,7 @@ function App() {
       </header>
 
       {mode === 'train' ? (
-        <TrainingDashboard games={games} initialGame={selectedGame} customGameNames={customGameNames} onBack={() => { setMode('menu') }} />
+        <TrainingDashboard games={games} initialGame={selectedGame} customGameNames={customGameNames} onBack={() => { setMode('menu') }} onPlay={(game) => { setSelectedGame(game); setMode('play'); startGame(game) }} />
       ) : mode === 'menu' || !sessionId ? (
         <div className="menu">
           <h2>Select a game</h2>
@@ -974,6 +1006,18 @@ function App() {
             />
           ) : selectedGame === 'hearts' ? (
             <HeartsBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'wizard' ? (
+            <WizardBoard
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
+            />
+          ) : selectedGame === 'scrabble' ? (
+            <ScrabbleBoard
               state={gameState}
               onMove={makeMove}
               disabled={loading || gameState?.game_result != null}

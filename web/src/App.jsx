@@ -849,7 +849,18 @@ function App() {
                                 background: (clarAnswers[c.id] || c.default) === opt ? 'var(--accent)' : 'var(--bg)',
                                 color: (clarAnswers[c.id] || c.default) === opt ? 'var(--bg)' : 'var(--ink-dim)',
                               }}
-                              onClick={() => setClarAnswers(prev => ({ ...prev, [c.id]: opt }))}
+                              onClick={() => {
+                                setClarAnswers(prev => ({ ...prev, [c.id]: opt }))
+                                if (parsedGameId) {
+                                  fetch(`${API}/parse/clarify`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ game_id: parsedGameId, clarification_id: c.id, answer: opt }),
+                                  }).then(r => r.json()).then(d => {
+                                    if (d.gdl) setParseResult(d.gdl)
+                                  }).catch(() => {})
+                                }
+                              }}
                             >
                               {opt}
                             </button>

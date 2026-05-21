@@ -445,11 +445,15 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
         })
         return rules
 
-    # Movement/Capture: move pieces from one space to another
-    if any(w in text for w in ['move your piece', 'move one square', 'move a piece',
+    # Movement/Capture: move pieces from one space to another (grid games only — track games use race rules)
+    if board.get("type") != "track" and any(w in text for w in ['move your piece', 'move one square', 'move a piece',
                                 'slide', 'step forward', 'jump over',
                                 'move diagonally', 'move orthogonally',
-                                'move to an adjacent', 'moves one space']):
+                                'move to an adjacent', 'moves one space',
+                                'advance', 'retreat', 'move forward', 'move backward',
+                                'move toward', 'move across', 'move pieces',
+                                'move one space', 'move two spaces',
+                                'reach the other side', 'reach the opposite']):
         # Determine movement type
         is_diagonal = 'diagonal' in text
         can_jump = 'jump' in text or 'capture' in text or 'hop' in text
@@ -522,7 +526,20 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
         has_bump = any(w in text for w in ['send them back', 'send back',
                                            'back to start', 'bump',
                                            "opponent's space",
-                                           "opponent space"])
+                                           "opponent space",
+                                           'land on an opponent',
+                                           'land on opponent',
+                                           'landing on an opponent',
+                                           'landing on opponent'])
+        # Detect number of dice
+        num_dice = 1
+        dice_match = re.search(r'(?:roll|throw)\s+(?:two|2)\s+(?:dice|die)', text)
+        if dice_match:
+            num_dice = 2
+        dice_match3 = re.search(r'(?:roll|throw)\s+(?:three|3)\s+(?:dice|die)', text)
+        if dice_match3:
+            num_dice = 3
+        max_roll = 6 * num_dice
         has_choice = any(w in text for w in ['forward or backward', 'backward or forward',
                                               'choose to move', 'move forward or backward',
                                               'either direction'])
@@ -557,10 +574,40 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
                 "name": "roll_and_move",
                 "action": "chance",
                 "chance": True,
-                "params": [{"name": "roll", "select": "int_range(1, 6)"}],
+                "params": [{"name": "roll", "select": f"int_range({num_dice}, {max_roll})"}],
                 "conditions": [],
                 "effects": [effect_fn],
             })
+        return rules
+
+    # Capture-based games: detect standalone capture mechanics for grid games
+    capture_keywords = ['capture', 'captured', 'capturing', 'take opponent',
+                        'remove opponent', 'eliminate', 'eliminated',
+                        'eat opponent', 'knock out', 'knocked out']
+    has_capture = any(w in text for w in capture_keywords)
+    if has_capture and board.get("type") == "grid" and not rules:
+        # Movement + capture game (like simplified checkers)
+        is_diagonal = 'diagonal' in text
+        rules.append({
+            "name": f"move_{piece_name}",
+            "action": "move",
+            "params": [
+                {"name": "from", "select": "own_pieces"},
+                {"name": "to", "select": "adjacent_empty"},
+            ],
+            "conditions": [],
+            "effects": [f"move_piece(from, to)"],
+        })
+        rules.append({
+            "name": f"capture_{piece_name}",
+            "action": "move",
+            "params": [
+                {"name": "from", "select": "own_pieces"},
+                {"name": "to", "select": "jump_targets"},
+            ],
+            "conditions": [],
+            "effects": [f"jump_piece(from, to)"],
+        })
         return rules
 
     # Default: simple placement on empty space (TTT style)
@@ -601,11 +648,35 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
     # "capture all opponent pieces" / "no pieces left"
     if any(w in text for w in ['capture all', 'no pieces left', 'eliminate all',
                                 'remove all opponent', "opponent can't move",
-                                'cannot move']):
+                                'cannot move', 'last piece', 'no remaining',
+                                'all opponent pieces', 'take all']):
         conditions.append({
             "type": "win",
             "player": "current_player",
             "condition": "opponent_has_no_pieces_or_moves(current_player)",
+        })
+
+    # Territory / area control: most pieces or most controlled area wins
+    if any(w in text for w in ['most territory', 'most area', 'control more',
+                                'controls more', 'most pieces on the board',
+                                'most stones on the board', 'majority',
+                                'most pieces wins', 'most stones wins',
+                                'most marks wins', 'dominates']):
+        conditions.append({
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "board_full() or no_legal_moves()",
+            "score": "count_pieces(current_player)",
+        })
+
+    # "closer to center" / positional scoring
+    if any(w in text for w in ['closer to the center', 'nearest to center',
+                                'most central']):
+        conditions.append({
+            "type": "win",
+            "player": "player_by_score",
+            "condition": "board_full() or no_legal_moves()",
+            "score": "center_proximity_score(current_player)",
         })
 
     # Sowing: most stones in store wins
@@ -639,6 +710,18 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
             "player": "current_player",
             "condition": "race_won(current_player)",
         })
+
+    # Movement: reach the other/opposite side wins
+    if any(w in text for w in ['reach the other side', 'reach the opposite', 'reach opponent',
+                                'cross the board', 'get to the other end']):
+        if board.get("type") == "grid":
+            rows = board.get("grid", {}).get("rows", 8)
+            conditions.append({
+                "type": "win",
+                "player": "current_player",
+                "condition": f"piece_on_row(current_player, {rows - 1})" if 'player1' != 'current_player' else f"piece_on_row(current_player, 0)",
+                "_comment": "First player to get a piece to opponent's back row wins",
+            })
 
     # "filling a row/column wins"
     if any(w in text for w in ['fill a row', 'filling a row', 'complete a row',

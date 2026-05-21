@@ -83,6 +83,15 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
                 _spread,
             ))
 
+        # Territory/area control: count pieces win condition
+        ec_text = str(end_conditions)
+        if any(w in ec_text for w in ["count_pieces", "territory", "majority"]):
+            features.append(FeatureSpec(
+                "territory_control",
+                "How many spaces I control vs opponent",
+                _piece_advantage,  # reuse piece_advantage as territory proxy
+            ))
+
         # Line-based win conditions: add line features
         if has_line_win:
             features.append(FeatureSpec(

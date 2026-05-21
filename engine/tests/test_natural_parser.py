@@ -193,6 +193,64 @@ def test_sowing_mancala():
     assert any("sow" in r["action"] for r in gdl["rules"])
 
 
+# --- Directional Movement ---
+
+def test_movement_forward():
+    gdl = parse_natural("Two players have pieces on a 6x6 board. Move your pieces forward one space per turn. First to reach the other side wins.")
+    assert any("move" in r["action"] for r in gdl["rules"])
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+
+
+def test_movement_advance():
+    gdl = parse_natural("6x6 grid. Players advance their tokens toward the opposite end. First to cross the board wins.")
+    assert any("move" in r["action"] for r in gdl["rules"])
+
+
+# --- Capture Games ---
+
+def test_capture_jump():
+    gdl = parse_natural("8x8 board. Move pieces diagonally. Jump over an opponent's piece to capture it. Capture all opponent pieces to win.")
+    assert gdl["board"]["type"] == "grid"
+    rules = gdl["rules"]
+    assert any("jump" in r["name"] or "capture" in r["name"] for r in rules)
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+
+
+def test_capture_eliminate():
+    gdl = parse_natural("6x6 grid. Players take turns moving pieces one space. If you land on an opponent piece, eliminate it. Last player with pieces wins.")
+    rules = gdl["rules"]
+    assert any("move" in r["action"] or "capture" in r.get("name", "") for r in rules)
+
+
+# --- Multi-Die Race ---
+
+def test_race_two_dice():
+    gdl = parse_natural("Roll two dice and move that many spaces on a track of 30 spaces. First to reach the end wins.")
+    assert gdl["board"]["type"] == "track"
+    rules = gdl["rules"]
+    # Should have a race/roll rule
+    assert any("roll" in r["name"] or "race" in r.get("name", "") for r in rules)
+
+
+def test_race_landing_bump():
+    gdl = parse_natural("Roll a die and move forward on a 20-space track. If you land on an opponent, send them back to start. First to finish wins.")
+    assert gdl["board"]["type"] == "track"
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+
+
+# --- Territory / Area Control ---
+
+def test_territory_most_pieces():
+    gdl = parse_natural("Two players place stones on a 5x5 grid. When the board is full, the player with the most stones wins.")
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+    assert any("count_pieces" in str(c.get("score", "")) for c in gdl["end_conditions"])
+
+
+def test_territory_control():
+    gdl = parse_natural("7x7 board. Place markers. The player who controls more territory at the end wins.")
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+
+
 def test_no_false_betting():
     """'between' should not trigger 'betting' detection."""
     gdl = parse_natural("Place stones on a grid. Surround opponent stones between two of yours to flip them.")

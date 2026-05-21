@@ -66,7 +66,7 @@ class TestLearningTTT:
         evaluator = LearnableEval("Tic-Tac-Toe", gdl=ttt_engine.gdl)
         runner = LearningRunner(ttt_engine, evaluator, max_depth=4)
         runner.train(15)
-        assert evaluator.generation == 15
+        assert evaluator.generation >= 5  # may early-stop
 
     def test_win_rate_curve(self, ttt_engine):
         random.seed(42)
@@ -74,7 +74,7 @@ class TestLearningTTT:
         runner = LearningRunner(ttt_engine, evaluator, max_depth=4)
         results = runner.train(20)
         curve = results.win_rate_curve(window=5)
-        assert len(curve) == 20
+        assert len(curve) >= 10  # may early-stop before 20
         assert all(0 <= v <= 1 for v in curve)
 
     def test_results_serialization(self, ttt_engine):

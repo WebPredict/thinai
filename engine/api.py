@@ -255,6 +255,31 @@ def parse_rules(request: Request, req: ParseRequest):
         return {"gdl": None, "error": f"Parser error: {str(e)}"}
 
 
+class ClarifyRequest(BaseModel):
+    game_id: str
+    clarification_id: str
+    answer: str
+
+
+@app.post("/api/parse/clarify")
+def apply_clarification_answer(req: ClarifyRequest):
+    """Apply a clarification answer to an existing parsed game."""
+    path = os.path.join(CUSTOM_DIR, f"{req.game_id}.json")
+    if not os.path.exists(path):
+        raise HTTPException(404, f"Game not found: {req.game_id}")
+
+    with open(path) as f:
+        gdl = json.load(f)
+
+    from engine.parser.clarifier import apply_clarification
+    gdl = apply_clarification(gdl, req.clarification_id, req.answer)
+
+    with open(path, "w") as f:
+        json.dump(gdl, f, indent=2)
+
+    return {"gdl": gdl, "game_id": req.game_id}
+
+
 # --- Game Endpoints ---
 
 @app.get("/api/game/{game_name}/features")
@@ -590,7 +615,7 @@ def start_training(request: Request, req: TrainingRequest):
         if game_name == "Simplified Scrabble":
             max_train_depth = 1
         elif is_custom:
-            max_train_depth = 2
+            max_train_depth = 3
         else:
             max_train_depth = 3
         depth = 1

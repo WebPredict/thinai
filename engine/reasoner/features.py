@@ -886,9 +886,8 @@ SCRABBLE_FEATURES = [
 
 
 FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
-    # Games with auto-discoverable features (TTT, C4, Chutes & Ladders)
-    # are intentionally omitted — they use L1 auto-discovery via
-    # auto_features.generate_features() to demonstrate learning.
+    "Tic-Tac-Toe": TTT_FEATURES,
+    "Connect Four": C4_FEATURES,
     "Mancala (Kalah)": MANCALA_FEATURES,
     "Reversi": REVERSI_FEATURES,
     "Nim": NIM_FEATURES,

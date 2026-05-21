@@ -22,6 +22,32 @@ class RandomOpponent:
         return random.choice(moves)
 
 
+class SnapshotOpponent:
+    """Plays using a frozen snapshot of learned weights at low depth.
+
+    Used for graduated difficulty — the learner plays against an older
+    version of itself, creating an arms race that develops real strategy.
+    """
+
+    def __init__(self, engine: GameEngine, evaluator, max_depth: int = 2):
+        from engine.reasoner.evaluator import LearnableEval
+        # Create a frozen copy of the evaluator's current weights
+        self._eval = LearnableEval(
+            evaluator.game_name,
+            features=evaluator.features,
+            weights=list(evaluator.weights),
+        )
+        self.reasoner = Reasoner(engine, max_depth=max_depth, eval_fn=self._eval)
+        self.max_depth = max_depth
+
+    def choose_move(self, state: GameState) -> Optional[Move]:
+        return self.reasoner.choose_move(state)
+
+    def refresh(self, evaluator):
+        """Update snapshot to current learner weights."""
+        self._eval.weights = list(evaluator.weights)
+
+
 class ReasonerOpponent:
     """Uses the minimax reasoner with optional evaluation function."""
 

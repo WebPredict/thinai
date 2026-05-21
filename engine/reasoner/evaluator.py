@@ -59,6 +59,13 @@ class LearnableEval:
         """Extract feature values for a state (used for trace collection)."""
         return [spec.extract(state, player) for spec in self.features]
 
+    def add_features(self, new_features: list):
+        """Add newly-discovered features with zero weights."""
+        for f in new_features:
+            if f.name not in {existing.name for existing in self.features}:
+                self.features.append(f)
+                self.weights.append(0.0)
+
     def update_weights(self, game_trace: list[dict], outcome: float):
         """Update weights based on a completed game.
 

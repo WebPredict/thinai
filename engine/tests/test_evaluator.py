@@ -220,9 +220,8 @@ class TestLearnableEval:
         assert ev2.game_name == "Reversi"
 
     def test_feature_registry(self):
-        # TTT, C4, Chutes & Ladders use auto-discovery (not in registry)
-        assert len(get_features("Tic-Tac-Toe")) == 0
-        assert len(get_features("Connect Four")) == 0
+        assert len(get_features("Tic-Tac-Toe")) == 4
+        assert len(get_features("Connect Four")) == 4
         assert len(get_features("Mancala (Kalah)")) == 5
         assert len(get_features("Reversi")) == 5
         assert len(get_features("Unknown")) == 0

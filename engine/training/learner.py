@@ -145,6 +145,9 @@ class LearningRunner:
         - Opponent is fixed at a consistent level throughout
         """
         opponent_desc = ""
+
+        from engine.reasoner.features import get_features as _get_features
+
         if opponent is None:
             # High branching factor games (Scrabble): use random opponent
             if self._gdl and any(r.get("name") == "place_word" for r in self._gdl.get("rules", [])):
@@ -181,12 +184,13 @@ class LearningRunner:
                         opponent_desc = f"Uses game intuition, looks {opp_depth} move{'s' if opp_depth != 1 else ''} ahead"
                 else:
                     opponent = RandomOpponent(self.engine)
-                    opponent_desc = "Plays random valid moves"
+                    opponent_desc = "Plays random, then graduates to self-snapshot"
             else:
-                is_novel = self._gdl and self._gdl.get("_original_description")
-                if is_novel:
+                # If no hand-crafted features, default_eval is too strong — use graduated difficulty
+                has_hc_features = bool(_get_features(self.evaluator.game_name))
+                if not has_hc_features:
                     opponent = RandomOpponent(self.engine)
-                    opponent_desc = "Plays random valid moves"
+                    opponent_desc = "Plays random, then graduates to self-snapshot"
                 else:
                     opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
                     opponent_desc = f"Counts lines and patterns, looks {self.max_depth} move{'s' if self.max_depth != 1 else ''} ahead"
@@ -210,19 +214,58 @@ class LearningRunner:
         # Dice games: stay at depth 1 (can't predict future rolls, depth doesn't help)
         has_dice = self._gdl and any(r.get("chance") for r in self._gdl.get("rules", []))
 
+        # (depth cap moved before opponent creation)
+
         # Progressive depth: start shallow, deepen over time
-        # Kid learns by naturally thinking deeper — increase depth every few games
         current_depth = 1
-        depth_increase_interval = 5  # try deeper thinking every N games
+        depth_increase_interval = 5
+
+        # Track if opponent started as random (eligible for graduation)
+        from engine.training.opponents import SnapshotOpponent
+        is_random_opponent = isinstance(opponent, RandomOpponent)
+        is_snapshot_opponent = False
+
+        # Collect state traces for L2 feature discovery (first 10 games)
+        l2_traces = []  # list of {"states": [GameState], "outcome": float}
+        l2_done = False
 
         for i in range(num_games):
-            # Update learner's depth (opponent stays fixed — the "adult")
+            # Graduate opponent: after 10 games, switch random → snapshot of self
+            if is_random_opponent and i == 10 and not self._use_fast_training:
+                opponent = SnapshotOpponent(self.engine, self.evaluator, max_depth=min(2, current_depth))
+                opponent_desc = f"Snapshot of self, looks {min(2, current_depth)} move{'s' if min(2, current_depth) != 1 else ''} ahead"
+                is_random_opponent = False
+                is_snapshot_opponent = True
+            elif is_snapshot_opponent and i > 0 and i % 10 == 0:
+                # Refresh snapshot every 10 games
+                opponent.refresh(self.evaluator)
+
+            # Update learner's depth (opponent stays fixed)
             if self.effort_allocator:
                 self.effort_allocator.max_depth = current_depth
 
             start = time.monotonic()
             outcome, num_moves, trace = self._play_and_trace(opponent)
             duration = (time.monotonic() - start) * 1000
+
+            # Time guard: if games are too slow, cap depth lower
+            if duration > 5000 and current_depth > 1:  # >5s per game
+                self.max_depth = min(self.max_depth, current_depth)
+
+            # L2 feature discovery: after game 10, run correlation analysis
+            # L2 feature discovery: only for games without hand-crafted features
+            has_hc = bool(_get_features(self.evaluator.game_name))
+            if not l2_done and i == 10 and not self._use_fast_training and not has_hc:
+                l2_done = True
+                try:
+                    l2_traces = self._collect_state_traces(opponent, n_games=5)
+                    if l2_traces:
+                        from engine.reasoner.feature_discovery import discover_features_from_play
+                        new_features = discover_features_from_play(self.engine, l2_traces)
+                        if new_features:
+                            self.evaluator.add_features(new_features)
+                except Exception:
+                    pass  # L2 discovery is best-effort
 
             # Update weights
             self.evaluator.update_weights(trace, outcome)
@@ -264,7 +307,7 @@ class LearningRunner:
                 progress_callback(snapshot, results)
 
             # Progressive depth: increase every N games
-            # Skip for dice games — can't predict future rolls, depth doesn't help
+            # Skip for dice games
             if (not has_dice
                     and current_depth < self.max_depth
                     and (i + 1) % depth_increase_interval == 0):
@@ -357,6 +400,30 @@ class LearningRunner:
         for entry in trace:
             entry["total_moves"] = num_moves
         return 0.0, num_moves, trace
+
+    def _collect_state_traces(self, opponent, n_games: int = 5) -> list[dict]:
+        """Play quick games collecting state snapshots for L2 feature discovery."""
+        import random as _rng
+        traces = []
+        for _ in range(n_games):
+            state = self.engine.initial_state()
+            states = [state.copy()]
+            for _ in range(100):
+                result = self.engine.check_terminal(state)
+                if result:
+                    outcome = 1.0 if result.winner == self.learner_player else (
+                        -1.0 if result.winner else 0.0)
+                    # Sample a few states (not all — keep it fast)
+                    sampled = states[::max(1, len(states) // 5)]
+                    traces.append({"states": sampled, "outcome": outcome})
+                    break
+                moves = self.engine.legal_moves(state)
+                if not moves:
+                    break
+                state = self.engine.apply_move(state, _rng.choice(moves))
+                if len(states) < 20:  # cap state collection
+                    states.append(state.copy())
+        return traces
 
     def _result_to_outcome(self, result: GameResult) -> float:
         """Convert game result to outcome from learner's perspective."""

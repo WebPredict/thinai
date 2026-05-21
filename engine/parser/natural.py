@@ -90,7 +90,7 @@ def parse_natural(text: str) -> dict:
         'rent': 'rent/payment',
         'dice': 'dice rolling', 'bet': 'betting', 'bid': 'bidding',
         'trade': 'trading', 'build': 'building', 'upgrade': 'upgrading',
-        'move from': 'moving pieces between spaces', 'capture': 'capturing pieces',
+        'move from': 'moving pieces between spaces',
     }
     for keyword, label in concept_keywords.items():
         if re.search(r'\b' + re.escape(keyword) + r'\b', text) and label not in str(understood):
@@ -455,29 +455,29 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
                                 'move one space', 'move two spaces',
                                 'reach the other side', 'reach the opposite']):
         # Determine movement type
-        is_diagonal = 'diagonal' in text
         can_jump = 'jump' in text or 'capture' in text or 'hop' in text
 
-        rules.append({
-            "name": f"move_{piece_name}",
-            "action": "move",
-            "params": [
-                {"name": "from", "select": "own_pieces"},
-                {"name": "to", "select": "adjacent_empty"},
-            ],
-            "conditions": [],
-            "effects": [f"move_piece(from, to)"],
-        })
         if can_jump:
+            # Use checkers engine for movement + capture games
             rules.append({
-                "name": f"jump_{piece_name}",
+                "name": "move_piece",
+                "action": "move",
+                "params": [{"name": "move_id", "select": "checkers_moves"}],
+                "conditions": [],
+                "effects": ["checkers_execute(move_id)"],
+            })
+            board["_use_checkers_setup"] = True
+        else:
+            # Pure movement without capture — use generic selectors
+            rules.append({
+                "name": f"move_{piece_name}",
                 "action": "move",
                 "params": [
                     {"name": "from", "select": "own_pieces"},
-                    {"name": "to", "select": "jump_targets"},
+                    {"name": "to", "select": "adjacent_empty"},
                 ],
                 "conditions": [],
-                "effects": [f"jump_piece(from, to)"],
+                "effects": [f"move_piece(from, to)"],
             })
         return rules
 
@@ -586,28 +586,16 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
                         'eat opponent', 'knock out', 'knocked out']
     has_capture = any(w in text for w in capture_keywords)
     if has_capture and board.get("type") == "grid" and not rules:
-        # Movement + capture game (like simplified checkers)
-        is_diagonal = 'diagonal' in text
+        # Movement + capture game — use checkers engine (diagonal move + jump)
         rules.append({
-            "name": f"move_{piece_name}",
+            "name": "move_piece",
             "action": "move",
-            "params": [
-                {"name": "from", "select": "own_pieces"},
-                {"name": "to", "select": "adjacent_empty"},
-            ],
+            "params": [{"name": "move_id", "select": "checkers_moves"}],
             "conditions": [],
-            "effects": [f"move_piece(from, to)"],
+            "effects": ["checkers_execute(move_id)"],
         })
-        rules.append({
-            "name": f"capture_{piece_name}",
-            "action": "move",
-            "params": [
-                {"name": "from", "select": "own_pieces"},
-                {"name": "to", "select": "jump_targets"},
-            ],
-            "conditions": [],
-            "effects": [f"jump_piece(from, to)"],
-        })
+        # Override setup to use checkers-style placement
+        board["_use_checkers_setup"] = True
         return rules
 
     # Default: simple placement on empty space (TTT style)
@@ -650,11 +638,22 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
                                 'remove all opponent', "opponent can't move",
                                 'cannot move', 'last piece', 'no remaining',
                                 'all opponent pieces', 'take all']):
-        conditions.append({
-            "type": "win",
-            "player": "current_player",
-            "condition": "opponent_has_no_pieces_or_moves(current_player)",
-        })
+        # Use checkers end condition if game uses checkers engine
+        has_checkers = any(r.get("name") == "move_piece" and
+                          any(p.get("select") == "checkers_moves" for p in r.get("params", []))
+                          for r in rules)
+        if has_checkers:
+            conditions.append({
+                "type": "win",
+                "player": "current_player",
+                "condition": "checkers_opponent_has_no_moves()",
+            })
+        else:
+            conditions.append({
+                "type": "win",
+                "player": "current_player",
+                "condition": "opponent_has_no_pieces_or_moves(current_player)",
+            })
 
     # Territory / area control: most pieces or most controlled area wins
     if any(w in text for w in ['most territory', 'most area', 'control more',
@@ -679,8 +678,8 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
             "score": "center_proximity_score(current_player)",
         })
 
-    # Sowing: most stones in store wins
-    if any(w in text for w in ['most stones', 'most seeds', 'most in store',
+    # Sowing: most stones in store wins (only for track/mancala boards)
+    if board.get("type") == "track" and any(w in text for w in ['most stones', 'most seeds', 'most in store',
                                 'most in your store', 'mancala']):
         conditions.append({
             "type": "win",
@@ -763,6 +762,11 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
 def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
     """Extract initial setup."""
     setup = []
+
+    # Capture/movement game using checkers engine
+    if board.get("_use_checkers_setup"):
+        setup.append({"action": "checkers_setup"})
+        return setup
 
     # Card game setup
     if board.get("type") == "card_zones":

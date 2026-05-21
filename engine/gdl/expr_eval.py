@@ -281,6 +281,17 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         if player == "current_player":
             player = ctx.state.current_player
         return _row_or_col_filled(ctx.state, player)
+    if name == "board_full":
+        if isinstance(ctx.state.board, GridBoard):
+            for space in ctx.state.board.spaces:
+                if ctx.state.is_empty(space):
+                    return False
+            return True
+        return False
+    if name == "count_pieces":
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        count = sum(1 for _, p in ctx.state.all_pieces() if p.owner == player)
+        return count
     if name == "no_legal_moves":
         # Check via engine if available, otherwise check board full
         if isinstance(ctx.state.board, GridBoard):

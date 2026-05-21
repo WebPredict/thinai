@@ -170,9 +170,10 @@ def test_movement_basic():
 
 def test_movement_with_jump():
     gdl = parse_natural("Two players have 12 pieces each on an 8x8 grid. Move diagonally one square. Jump over opponent pieces to capture them. Capture all opponent pieces to win.")
-    rules = [r["name"] for r in gdl["rules"]]
-    assert any("move" in name for name in rules)
-    assert any("jump" in name for name in rules)
+    rules = gdl["rules"]
+    # Should use checkers engine for movement + capture
+    assert any("move" in r["action"] for r in rules)
+    assert any("checkers" in str(r.get("params", [])) or "checkers" in str(r.get("effects", [])) for r in rules)
 
 
 def test_movement_slide():
@@ -212,14 +213,15 @@ def test_capture_jump():
     gdl = parse_natural("8x8 board. Move pieces diagonally. Jump over an opponent's piece to capture it. Capture all opponent pieces to win.")
     assert gdl["board"]["type"] == "grid"
     rules = gdl["rules"]
-    assert any("jump" in r["name"] or "capture" in r["name"] for r in rules)
+    assert any("move" in r["action"] for r in rules)
+    assert any("checkers" in str(r.get("params", [])) or "checkers" in str(r.get("effects", [])) for r in rules)
     assert any(c["type"] == "win" for c in gdl["end_conditions"])
 
 
 def test_capture_eliminate():
     gdl = parse_natural("6x6 grid. Players take turns moving pieces one space. If you land on an opponent piece, eliminate it. Last player with pieces wins.")
     rules = gdl["rules"]
-    assert any("move" in r["action"] or "capture" in r.get("name", "") for r in rules)
+    assert any("move" in r["action"] for r in rules)
 
 
 # --- Multi-Die Race ---
@@ -250,6 +252,72 @@ def test_territory_control():
     gdl = parse_natural("7x7 board. Place markers. The player who controls more territory at the end wins.")
     assert any(c["type"] == "win" for c in gdl["end_conditions"])
 
+
+# --- Novel Game Scenarios (end-to-end) ---
+
+def test_novel_grid_with_draw():
+    """Grid placement with implied draw should trigger clarification-worthy output."""
+    gdl = parse_natural("Two players place stones on a 5x5 grid. Get 3 in a row to win.")
+    assert gdl["board"]["type"] == "grid"
+    assert gdl["board"]["grid"]["rows"] == 5
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+
+
+def test_novel_directional_movement():
+    """Forward movement + reach-other-side win condition."""
+    gdl = parse_natural("Two players move their pawns forward on a 6x6 board. First to reach the other side wins.")
+    assert gdl["board"]["type"] == "grid"
+    rules = gdl["rules"]
+    assert any("move" in r["action"] for r in rules)
+
+
+def test_novel_advance_across():
+    gdl = parse_natural("6x6 grid. Players advance their pieces toward the opposite end. First to cross wins.")
+    assert any("move" in r["action"] for r in gdl["rules"])
+
+
+def test_novel_two_dice_race():
+    """Two dice should produce range 2-12."""
+    gdl = parse_natural("Roll two dice and race along a 25-space track. If you land on your opponent, send them back to start. First to finish wins.")
+    assert gdl["board"]["type"] == "track"
+    rules = gdl["rules"]
+    assert any("roll" in r.get("name", "") or "race" in r.get("name", "") for r in rules)
+    # Check for bump mechanic
+    effects = str([r.get("effects", []) for r in rules])
+    assert "bump" in effects or "roll_and_move" in effects
+
+
+def test_novel_capture_jump():
+    """Capture by jumping should use checkers engine + elimination win."""
+    gdl = parse_natural("8x8 board. Move pieces diagonally. Jump over an opponent's piece to capture it. Capture all opponent pieces to win.")
+    rules = gdl["rules"]
+    assert any("checkers" in str(r.get("params", [])) or "checkers" in str(r.get("effects", [])) for r in rules)
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+    # Should NOT flag capture as unknown
+    assert "capturing" not in str(gdl["_parse_info"].get("not_understood", []))
+
+
+def test_novel_capture_eliminate():
+    """Elimination by landing should produce capture rules."""
+    gdl = parse_natural("6x6 grid. Players take turns moving pieces one space. Eliminate opponent pieces by landing on them. Last player with pieces wins.")
+    rules = gdl["rules"]
+    assert any("move" in r["action"] or "capture" in r.get("name", "") for r in rules)
+
+
+def test_novel_territory_most_pieces():
+    """Most pieces wins should produce score-based end condition."""
+    gdl = parse_natural("Two players place stones on a 5x5 grid. When the board is full, the player with the most stones wins.")
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+    assert any("count_pieces" in str(c.get("score", "")) for c in gdl["end_conditions"])
+
+
+def test_novel_territory_control():
+    """Territory control should produce a win condition."""
+    gdl = parse_natural("7x7 board. Place markers. The player who controls more territory wins.")
+    assert any(c["type"] == "win" for c in gdl["end_conditions"])
+
+
+# --- Edge Cases ---
 
 def test_no_false_betting():
     """'between' should not trigger 'betting' detection."""

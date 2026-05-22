@@ -201,26 +201,29 @@ def find_clarifications(gdl: dict, original_text: str) -> list[dict]:
             ],
         })
 
-    # 12. Movement/capture game with no initial piece setup
+    # 12. Movement/capture game — let user choose piece setup
     # ------------------------------------------------------------------
     has_movement = any(r.get("action") == "move" for r in rules)
-    has_setup_pieces = any(
-        a.get("action") in ("place", "checkers_setup", "fill")
-        for a in gdl.get("setup", [])
+    # Check if the description explicitly specifies piece count/placement
+    has_explicit_setup = bool(
+        re.search(r'(?:first|starting)\s+(\d+)\s+rows?', original_text, re.IGNORECASE) or
+        re.search(r'(\d+)\s+pieces?\s+(?:each|per)', original_text, re.IGNORECASE)
     )
-    if has_movement and not has_setup_pieces and is_grid:
+    if has_movement and is_grid and not has_explicit_setup:
         rows = gdl.get("board", {}).get("grid", {}).get("rows", 8)
+        cols = gdl.get("board", {}).get("grid", {}).get("cols", 8)
         questions.append({
             "id": "missing_piece_setup",
-            "question": "This game involves moving pieces, but no starting positions were described. How should pieces be set up?",
-            "type": "missing",
+            "question": f"How should pieces be set up on the {rows}×{cols} board?",
+            "type": "setup",
             "field": "setup",
-            "default": f"Fill first 2 rows for each player",
+            "default": "Fill first 2 rows for each player",
             "options": [
-                f"Fill first 2 rows for each player",
-                f"Fill first row for each player",
+                "Fill first 2 rows for each player",
+                "Fill first 3 rows for each player",
+                "Fill first row for each player",
+                f"{min(8, cols)} pieces each in back row",
                 "4 pieces each in corners",
-                "Skip (I'll describe setup separately)",
             ],
         })
 
@@ -453,14 +456,28 @@ def apply_clarification(gdl: dict, clarification_id: str, answer: str) -> dict:
                 piece_name = p["name"]
                 break
 
-        setup = gdl.setdefault("setup", [])
-        if "first 2 rows" in answer:
+        # Clear any auto-generated setup
+        gdl["setup"] = [s for s in gdl.get("setup", []) if s.get("action") != "place"]
+        setup = gdl["setup"]
+
+        if "first 3 rows" in answer:
+            for r in range(rows - 3, rows):
+                for c in range(cols):
+                    setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({r}, {c})"})
+            for r in range(3):
+                for c in range(cols):
+                    setup.append({"action": "place", "piece": f"{piece_name}(player2)", "at": f"space_at({r}, {c})"})
+        elif "first 2 rows" in answer:
             for r in range(rows - 2, rows):
                 for c in range(cols):
                     setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({r}, {c})"})
             for r in range(2):
                 for c in range(cols):
                     setup.append({"action": "place", "piece": f"{piece_name}(player2)", "at": f"space_at({r}, {c})"})
+        elif "back row" in answer:
+            for c in range(cols):
+                setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({rows-1}, {c})"})
+                setup.append({"action": "place", "piece": f"{piece_name}(player2)", "at": f"space_at(0, {c})"})
         elif "first row" in answer:
             for c in range(cols):
                 setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({rows-1}, {c})"})

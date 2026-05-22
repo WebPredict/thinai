@@ -125,6 +125,14 @@ def parse_natural(text: str) -> dict:
         meta["turn_order"] = "conditional"
         meta["turn_rule"] = "if has_legal_move(next_player): next_player else: same_player"
 
+    # Extra turn / go again: result-triggered same-player turn
+    has_extra_turn = any(w in text for w in ['extra turn', 'another turn', 'go again',
+                                              'take another turn', 'gets another',
+                                              'plays again', 'bonus turn'])
+    if has_extra_turn and not has_race_choice and not is_flanking:
+        meta["turn_order"] = "conditional"
+        meta["turn_rule"] = "if extra_turn: same_player else: next_player"
+
     gdl = {
         "meta": meta,
         "board": board,
@@ -1072,24 +1080,47 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
         return rules
 
     # 2. Matching/Shedding: play matching card, empty hand wins
+    # Detect card special powers
+    card_effects = {}
+    if re.search(r'\b8s?\b.*wild|wild.*\b8s?\b|eight.*wild|wild.*eight', text):
+        card_effects["wild_rank"] = "8"
+    if 'wild' in text and 'wild' not in str(card_effects):
+        card_effects["has_wild"] = True
+    if any(w in text for w in ['skip', 'skip card', 'miss a turn']):
+        card_effects["has_skip"] = True
+    if any(w in text for w in ['reverse', 'reverses', 'change direction']):
+        card_effects["has_reverse"] = True
+    if re.search(r'draw\s+(?:two|2|four|4)', text):
+        card_effects["has_draw_penalty"] = True
+
     if any(w in text for w in ['match', 'same suit', 'same rank', 'matching',
                                 'play a card that matches', 'play a matching',
                                 'crazy eight', 'uno', 'empty hand', 'get rid of',
                                 'shed', 'discard matching']):
+        # Use Uno engine if Uno-style effects detected, otherwise Crazy Eights
+        use_uno = card_effects.get("has_skip") or card_effects.get("has_reverse") or \
+                  card_effects.get("has_draw_penalty") or 'uno' in text
+        selector = "uno_playable" if use_uno else "crazy_eights_playable"
+        effect = "uno_play(card_id)" if use_uno else "crazy_eights_play(card_id)"
+        draw_cond = "uno_must_draw()" if use_uno else "crazy_eights_must_draw()"
+        draw_effect = "uno_draw()" if use_uno else "crazy_eights_draw()"
+
         rules.append({
             "name": "play_card",
             "action": "play",
-            "params": [{"name": "card_id", "select": "crazy_eights_playable"}],
+            "params": [{"name": "card_id", "select": selector}],
             "conditions": [],
-            "effects": ["crazy_eights_play(card_id)"],
+            "effects": [effect],
         })
         rules.append({
             "name": "draw_card",
             "action": "draw",
             "params": [],
-            "conditions": ["crazy_eights_must_draw()"],
-            "effects": ["crazy_eights_draw()"],
+            "conditions": [draw_cond],
+            "effects": [draw_effect],
         })
+        if card_effects:
+            board["_card_effects"] = card_effects
         return rules
 
     # 3. Trick-taking: play cards in tricks, follow suit, highest wins
@@ -1201,6 +1232,11 @@ def _extract_state_vars(text: str, board: dict) -> list[dict]:
                 {"name": "race_roll", "type": "int", "scope": "global", "initial": 0},
             ])
         return state_vars
+
+    # Extra turn state var for any game mentioning bonus/extra turns
+    if any(w in text for w in ['extra turn', 'another turn', 'go again', 'plays again', 'bonus turn']):
+        if not any(sv["name"] == "extra_turn" for sv in state_vars):
+            state_vars.append({"name": "extra_turn", "type": "bool", "scope": "global", "initial": False})
 
     if board.get("type") == "card_zones":
         # Go Fish needs extra_turn tracking

@@ -859,7 +859,11 @@ function App() {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ game_id: parsedGameId, clarification_id: c.id, answer: opt }),
                                   }).then(r => r.json()).then(d => {
-                                    if (d.gdl) setParseResult(d.gdl)
+                                    if (d.gdl) {
+                                      setParseResult(d.gdl)
+                                      // Refresh game list to pick up changes
+                                      refreshGames()
+                                    }
                                   }).catch(() => {})
                                 }
                               }}
@@ -889,8 +893,8 @@ function App() {
                 <button className="teach-btn teach-btn-learn" onClick={async () => {
                   const name = customGameName || parseResult.meta?.name || 'custom_game'
                   let gid = parsedGameId || name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'custom_game'
-                  if (customGameName) {
-                    // Re-save with custom name
+                  if (customGameName && customGameName !== parseResult.meta?.name) {
+                    // Rename by applying a name clarification (doesn't re-parse)
                     try {
                       const res = await fetch(`${API}/parse`, {
                         method: 'POST',
@@ -899,6 +903,14 @@ function App() {
                       })
                       const data = await res.json()
                       if (data.game_id) gid = data.game_id
+                      // Re-apply any clarification answers to the new file
+                      for (const [cid, ans] of Object.entries(clarAnswers)) {
+                        await fetch(`${API}/parse/clarify`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ game_id: gid, clarification_id: cid, answer: ans }),
+                        })
+                      }
                       refreshGames()
                     } catch (e) {}
                   }

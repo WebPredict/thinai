@@ -3,6 +3,7 @@ import { icons } from '../icons/game-icons'
 
 function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
   const [hoverCol, setHoverCol] = useState(null)
+  const [selectedPiece, setSelectedPiece] = useState(null)
 
   if (!state) return null
   // Accept grid board_type or any state with rows/cols (custom games)
@@ -24,9 +25,53 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
   const aiCol = aiLastMove?.target?.col ?? aiLastMove?.column ?? null
 
   const isColumnBased = legal_moves.length > 0 && 'column' in (legal_moves[0]?.params || {})
+  // Movement games: moves have from/to data
+  const isMovementGame = legal_moves.length > 0 && legal_moves[0]?.from != null
+
+  // Build movement lookup for click-to-move
+  const movesFromPiece = {}
+  const movablePieces = new Set()
+  if (isMovementGame) {
+    for (const m of legal_moves) {
+      if (m.from && m.to) {
+        const fromKey = `${m.from.row},${m.from.col}`
+        const toKey = `${m.to.row},${m.to.col}`
+        movablePieces.add(fromKey)
+        if (!movesFromPiece[fromKey]) movesFromPiece[fromKey] = []
+        movesFromPiece[fromKey].push({ move: m, toKey })
+      }
+    }
+  }
+
+  const validDestinations = new Set()
+  if (selectedPiece && movesFromPiece[selectedPiece]) {
+    for (const { toKey } of movesFromPiece[selectedPiece]) {
+      validDestinations.add(toKey)
+    }
+  }
 
   const handleCellClick = (row, col) => {
     if (disabled) return
+    const key = `${row},${col}`
+
+    if (isMovementGame) {
+      // Click-to-move: select piece, then click destination
+      if (movablePieces.has(key)) {
+        setSelectedPiece(selectedPiece === key ? null : key)
+        return
+      }
+      if (selectedPiece && validDestinations.has(key)) {
+        const moveEntry = movesFromPiece[selectedPiece].find(m => m.toKey === key)
+        if (moveEntry) {
+          onMove(moveEntry.move.rule, moveEntry.move.params)
+          setSelectedPiece(null)
+        }
+        return
+      }
+      setSelectedPiece(null)
+      return
+    }
+
     if (isColumnBased) {
       const move = legal_moves.find(m => m.params.column === col)
       if (move) onMove(move.rule, move.params)
@@ -39,6 +84,7 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
   }
 
   const isLegal = (row, col) => {
+    if (isMovementGame) return false  // handled by movable/destination highlighting
     if (isColumnBased) return legal_moves.some(m => m.params.column === col)
     return legal_moves.some(m =>
       m.params.target?.row === row && m.params.target?.col === col
@@ -138,6 +184,9 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
             isHoverCol ? 'hover-col' : '',
             isAiMove ? 'ai-last-move' : '',
             piece?.owner === 'player1' ? 'p1' : piece?.owner === 'player2' ? 'p2' : '',
+            isMovementGame && movablePieces.has(key) ? 'movable' : '',
+            isMovementGame && selectedPiece === key ? 'selected' : '',
+            isMovementGame && validDestinations.has(key) ? 'destination' : '',
           ].filter(Boolean).join(' ')}
           style={isCheckerboard ? { background: (r + c) % 2 === 0 ? '#d4c8a0' : '#8a7a5a' } : boardColor && !isC4 && !isTTT && !isReversi ? { background: boardColor } : undefined}
           onClick={() => handleCellClick(r, c)}
@@ -152,7 +201,14 @@ function GridBoard({ state, onMove, disabled, gameType, aiLastMove }) {
     grid.push(<div key={r} className="board-row">{rowCells}</div>)
   }
 
-  return <div className={boardClass}>{grid}</div>
+  return <div className={boardClass}>
+    {grid}
+    {isMovementGame && !disabled && legal_moves.length > 0 && (
+      <div style={{ textAlign: 'center', fontFamily: 'Menlo, monospace', fontSize: '0.8rem', color: 'var(--ink)', marginTop: '0.5rem' }}>
+        {selectedPiece ? 'Click a highlighted square to move' : 'Click one of your pieces to move it'}
+      </div>
+    )}
+  </div>
 }
 
 export default GridBoard

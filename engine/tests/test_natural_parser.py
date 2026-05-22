@@ -319,6 +319,69 @@ def test_novel_territory_control():
 
 # --- Edge Cases ---
 
+# --- Extra Turns ---
+
+def test_extra_turn_detection():
+    gdl = parse_natural("5x5 grid. Place stones. If you place on the center, take another turn. 3 in a row wins.")
+    assert gdl["meta"]["turn_order"] == "conditional"
+    assert "extra_turn" in gdl["meta"].get("turn_rule", "")
+    assert any(sv["name"] == "extra_turn" for sv in gdl.get("state_vars", []))
+
+
+def test_go_again_detection():
+    gdl = parse_natural("Deal 5 cards. Play matching card. If you play an ace, go again. Empty hand wins.")
+    assert "extra_turn" in gdl["meta"].get("turn_rule", "")
+
+
+# --- Card Special Powers ---
+
+def test_wild_card_detection():
+    gdl = parse_natural("Deal 5 cards. Play matching suit or rank. Eights are wild. Draw if you can't play. Empty hand wins.")
+    card_effects = gdl.get("board", {}).get("_card_effects", {})
+    assert card_effects.get("wild_rank") == "8"
+
+
+def test_uno_detection():
+    gdl = parse_natural("Card game with Skip, Reverse, and Draw Two cards. Match by color or number. Wild cards playable anytime. Empty hand wins.")
+    card_effects = gdl.get("board", {}).get("_card_effects", {})
+    assert card_effects.get("has_skip") == True
+    assert card_effects.get("has_reverse") == True
+    assert card_effects.get("has_draw_penalty") == True
+    # Should use Uno engine
+    assert any("uno" in str(r.get("effects", [])) for r in gdl["rules"])
+
+
+def test_uno_deck_detection():
+    gdl = parse_natural("Card game with four colors numbered 0 to 9. Match by color or number. Empty hand wins.")
+    assert gdl.get("cards", {}).get("deck") == "uno"
+
+
+# --- Piece Promotion ---
+
+def test_promotion_detection():
+    gdl = parse_natural("8x8 board. Move diagonally forward. When a piece reaches the back row it becomes a king and can move backward. Jump to capture. Capture all to win.")
+    assert any(sv["name"] == "_promotion_enabled" and sv["initial"] == True for sv in gdl.get("state_vars", []))
+    assert any(sv["name"] == "_forward_only" and sv["initial"] == True for sv in gdl.get("state_vars", []))
+
+
+# --- Flanking Setup ---
+
+def test_flanking_center_setup():
+    gdl = parse_natural("8x8 grid. Place to surround and flip opponent pieces. Most pieces wins.")
+    setup = gdl.get("setup", [])
+    assert len(setup) == 4  # 4 center pieces
+    assert any("space_at(3" in str(s) for s in setup)
+    assert any("space_at(4" in str(s) for s in setup)
+
+
+def test_flanking_pass_turn_rule():
+    gdl = parse_natural("8x8 grid. Flip opponent pieces by surrounding them. Pass if no moves. Most pieces wins.")
+    assert gdl["meta"]["turn_order"] == "conditional"
+    assert "has_legal_move" in gdl["meta"].get("turn_rule", "")
+
+
+# --- Edge Cases ---
+
 def test_no_false_betting():
     """'between' should not trigger 'betting' detection."""
     gdl = parse_natural("Place stones on a grid. Surround opponent stones between two of yours to flip them.")

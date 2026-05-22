@@ -194,17 +194,41 @@
 
 <h2>Recent Changes (May 21, 2026)</h2>
 <ul>
-  <li><strong>Wizard (new game):</strong> Trick-taking card game with trump suit and bidding. Players bid how many of 5 tricks they'll win, then play. Trump beats non-trump. Scoring rewards accurate prediction. Multi-round with cumulative scoring.</li>
-  <li><strong>Simplified Scrabble (new game):</strong> Word/tile placement on a 9×9 board with bonus squares (DL, TL, DW, TW). ~2,700 word dictionary with cross-word validation. Click-to-place UI with word suggestions as fallback.</li>
-  <li><strong>Training transparency:</strong> Training results now show the training partner's strategy (e.g., "Counts lines and patterns, looks 3 moves ahead" or "Plays random valid moves") so users understand what the AI is learning against.</li>
-  <li><strong>Smarter training opponents:</strong> Dice games (Backgammon) train at depth 1 since dice randomness limits the value of deep search. Novel/custom games train against a random opponent since the built-in line evaluator is too strong for a fresh learner. Known games face a competent fixed opponent.</li>
+  <li><strong>Wizard (new game):</strong> Trick-taking card game with trump suit and bidding. Multi-round with cumulative scoring.</li>
+  <li><strong>Simplified Scrabble (new game):</strong> Word/tile placement on a 9×9 board with bonus squares and ~2,700 word dictionary. Click-to-place UI.</li>
+  <li><strong>Generic movement engine:</strong> Novel games can now describe movement + capture mechanics: diagonal, orthogonal, or all-direction movement with jump capture. Forward-only movement supported. Piece promotion (reaching back row → becomes king with backward movement). Mandatory capture enforced (jumps override regular moves).</li>
+  <li><strong>Novel game pipeline expansion:</strong> Seven novel game types now work end-to-end:
+    <ul>
+      <li>Grid placement (N-in-a-row, territory)</li>
+      <li>Gravity/column drop (Connect Four-style)</li>
+      <li>Diagonal capture with promotion (Checkers-like)</li>
+      <li>Forward movement to goal (race on grid)</li>
+      <li>Flanking/flipping with pass-when-stuck (Reversi-like)</li>
+      <li>Card comparing with escalating stakes</li>
+      <li>Dice race with bumping</li>
+    </ul>
+  </li>
+  <li><strong>Adaptive training:</strong> Novel games graduate from random opponent to self-snapshot at game 10. L2 feature discovery runs mid-training to find correlated features. Escalating-stakes card games get a "card conservation" feature with strong prior.</li>
+  <li><strong>Clarification system wired:</strong> Parser clarification answers now actually modify the saved game definition via API. Movement games prompt for piece setup (5 layout options). Clarification choices preserved when renaming games.</li>
+  <li><strong>Click-to-move UI:</strong> Novel movement/capture games now support click-to-select-piece → click-destination in the grid board. Movable pieces highlighted, valid destinations shown on selection.</li>
+  <li><strong>Card special powers:</strong> Parser detects wild cards ("eights are wild"), Skip, Reverse, Draw Two/Four keywords. Routes to Uno engine when action cards detected, Crazy Eights otherwise. Uno-style deck auto-detected from "four colors numbered 0-9".</li>
+  <li><strong>Extra turn rules:</strong> "Take another turn", "go again", "bonus turn" keywords detected and generate conditional turn rules.</li>
+  <li><strong>Training transparency:</strong> Training results show the training partner's strategy. Dice games train at depth 1. Novel games can reach depth 3 with time guard.</li>
+</ul>
+
+<h3>Known limitations in novel games</h3>
+<ul>
+  <li>Novel card games (Crazy Eights-like): discard pile card may not render face-up; false "pure luck" detection in some cases</li>
+  <li>Card action effects (Skip, Reverse, Draw Two) only work via built-in Uno engine, not generically expressible for novel card games</li>
+  <li>Extra turn triggers detected but the effect logic (what sets the extra_turn flag) requires game-specific code</li>
+  <li>Movement games auto-fill starting rows but don't support dark-square-only placement (checkerboard pattern)</li>
 </ul>
 
 <h2>Games Implemented (20)</h2>
 <table>
   <tr><th>Game</th><th>Type</th><th>Training Quality</th><th>Notes</th></tr>
   <tr><td>Reversi</td><td>Flanking</td><td><span class="status done">strong</span></td><td>Learns corner strategy, mobility. Consistently good play.</td></tr>
-  <tr><td>Connect Four</td><td>Placement</td><td><span class="status done">strong</span></td><td>Auto-discovered features. Blocks threats, plays center.</td></tr>
+  <tr><td>Connect Four</td><td>Placement</td><td><span class="status done">strong</span></td><td>Hand-crafted features. Blocks threats, plays center.</td></tr>
   <tr><td>Checkers</td><td>Movement</td><td><span class="status done">strong</span></td><td>Captures, kings, advancement. Solid play.</td></tr>
   <tr><td>Hex</td><td>Territory</td><td><span class="status partial">decent</span></td><td>Connection progress + center control. Developing.</td></tr>
   <tr><td>Backgammon</td><td>Race + Dice</td><td><span class="status partial">decent</span></td><td>Pip advantage, blot safety. Depth-1 training (dice variance).</td></tr>
@@ -222,26 +246,29 @@
   <tr><td>Tic-Tac-Toe</td><td>Placement</td><td><span class="status partial">decent</span></td><td>Auto-features. Learning against strong opponent.</td></tr>
   <tr><td>Nim</td><td>Take-away</td><td><span class="status done">strong</span></td><td>Pile balance, single-pile detection.</td></tr>
   <tr><td>Chutes &amp; Ladders</td><td>Race</td><td><span class="status done">luck</span></td><td>Pure luck. Detected and flagged automatically.</td></tr>
-  <tr><td>Custom/Novel Games</td><td>Various</td><td><span class="status partial">varies</span></td><td>Parser-generated. Auto-features, trains vs random.</td></tr>
+  <tr><td>Custom/Novel Games</td><td>Various</td><td><span class="status partial">varies</span></td><td>Parser-generated. Supports: placement, gravity drop, movement/capture with promotion, flanking, territory, card games, dice races. Auto-features + graduated opponent.</td></tr>
 </table>
 
 <h2>What Works Well</h2>
 <ul>
   <li><strong>Learning from scratch:</strong> Games like Reversi, Mancala, Go Fish, and Checkers show clear improvement from zero knowledge to competent play in 20-40 training games.</li>
-  <li><strong>Feature auto-discovery:</strong> For line-win games (Connect Four, Tic-Tac-Toe, novel grid games), the system automatically identifies center_control, longest_line, and line_threats without any hand-coded knowledge.</li>
+  <li><strong>Feature auto-discovery:</strong> Auto-generated features for line games, capture games (piece_advantage), territory (count_pieces), and escalating-stakes card games (card_conservation). L2 correlation discovery finds additional features mid-training.</li>
   <li><strong>Luck detection:</strong> Pure-luck games (War, Chutes &amp; Ladders) are automatically identified and flagged — no false "mastery" claims.</li>
-  <li><strong>Game variety:</strong> 20 games across 13 categories, from simple (Nim) to complex (Backgammon, Scrabble). Hidden information, dice, bidding, word formation.</li>
-  <li><strong>Novel game pipeline:</strong> Describe a game in English → parse → auto-generate features → train → play. Works end-to-end for grid placement, card, race, and tile games.</li>
+  <li><strong>Game variety:</strong> 20 built-in games across 13 categories, plus novel games parsed from English descriptions.</li>
+  <li><strong>Novel game pipeline:</strong> Describe a game in English → parse → auto-generate features → train → play. Works for grid placement, gravity drop, movement/capture, flanking, territory, card games, dice races, and tile placement.</li>
+  <li><strong>Movement and capture:</strong> Generic movement engine handles diagonal, orthogonal, and all-direction movement with jump capture, mandatory capture, and piece promotion (kinging).</li>
   <li><strong>Interpretable AI:</strong> Every decision can be traced to feature weights. Commentary explains moves. Training partner strength is disclosed.</li>
 </ul>
 
 <h2>What Needs Work</h2>
 <ul>
-  <li><strong>Progressive depth instability:</strong> When the learner's search depth increases during training, weights learned at shallow depths don't always transfer well to deeper search. Causes nosedives in learning curves (visible in Connect Four, Backgammon).</li>
-  <li><strong>Novel game play quality:</strong> Custom/novel games train against random opponents and rarely exceed beginner level. Need better auto-opponents or self-play.</li>
-  <li><strong>Opponent modeling:</strong> Card games (especially Uno, Hearts) would benefit from tracking what opponents' plays reveal about their hand. Infrastructure exists but isn't wired to training.</li>
-  <li><strong>Scrabble word placement:</strong> The click-to-place UI occasionally doesn't match a valid move the engine recognizes. Word suggestions sometimes show duplicates.</li>
-  <li><strong>Missing game mechanics:</strong> Chess-like movement, auction/bidding (beyond Wizard), partnership play, and complex real-time mechanics are not yet supported.</li>
+  <li><strong>Conditional card effects:</strong> Action cards (Uno's Skip, Reverse, Draw Two) can't be expressed as novel game rules yet. "When X is played, do Y to the next player" isn't parseable.</li>
+  <li><strong>Multi-step turns:</strong> Jump chains (keep jumping if another capture available) and draw-then-optionally-play sequences aren't supported for novel games.</li>
+  <li><strong>Complex dice:</strong> Two independent dice (Backgammon: move one piece by die1 AND another by die2), doubles giving extra moves — not supported for novel games.</li>
+  <li><strong>Piece inventory:</strong> "Each player has exactly 8 stones" — limited supply constraints not parsed or enforced.</li>
+  <li><strong>Dark square placement:</strong> Checkerboard-pattern piece placement (dark squares only) not supported.</li>
+  <li><strong>Opponent modeling:</strong> Card games would benefit from tracking what opponents' plays reveal about their hand.</li>
+  <li><strong>Novel game strategy depth:</strong> Novel games graduate from random to self-snapshot opponent, but strategy discovery remains shallow for complex games.</li>
 </ul>
 
 <h2>Changes (May 20, 2026)</h2>

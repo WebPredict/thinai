@@ -95,6 +95,17 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
             from engine.gdl.checkers import get_all_moves
             checkers_move_details = get_all_moves(state)
 
+        # For grid movement games, get move from/to details
+        grid_move_details = None
+        has_grid_moves = any(
+            any(p.get("select") == "grid_moves" for p in r.get("params", []))
+            for r in engine.gdl.get("rules", []))
+        if has_grid_moves:
+            from engine.gdl.movement import get_grid_moves
+            directions = state.state_vars.get("_move_directions", "all")
+            forward_only = state.state_vars.get("_forward_only", False)
+            grid_move_details = get_grid_moves(state, state.current_player, directions, forward_only)
+
         # For Scrabble, get word placement details
         scrabble_placements = None
         if engine.meta.get("name") == "Simplified Scrabble":
@@ -120,6 +131,17 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
                     move_dict["from"] = {"row": cm.steps[0][0].row, "col": cm.steps[0][0].col}
                     move_dict["to"] = {"row": cm.steps[-1][1].row, "col": cm.steps[-1][1].col}
                     move_dict["is_jump"] = cm.is_jump
+
+            # Add grid movement from/to details
+            if grid_move_details and m.rule_name and "move" in m.rule_name:
+                move_id = m.params.get("move_id", -1)
+                if isinstance(move_id, int):
+                    for gm in grid_move_details:
+                        if gm.move_id == move_id:
+                            move_dict["from"] = {"row": gm.from_space.row, "col": gm.from_space.col}
+                            move_dict["to"] = {"row": gm.to_space.row, "col": gm.to_space.col}
+                            move_dict["is_jump"] = gm.captured_space is not None
+                            break
 
             # Add Scrabble word details
             if m.rule_name == "place_word" and scrabble_placements:

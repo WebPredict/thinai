@@ -811,6 +811,39 @@ header em {
   background: rgba(212, 166, 86, 0.2);
 }
 
+/* Movement game: clickable pieces and destinations */
+.cell.movable {
+  cursor: pointer;
+}
+.cell.movable::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+}
+.cell.selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  z-index: 2;
+}
+.cell.destination {
+  cursor: pointer;
+  background: rgba(212, 166, 86, 0.25) !important;
+}
+.cell.destination::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(212, 166, 86, 0.5);
+}
+
 /* --- Tic-Tac-Toe --- */
 
 .ttt-board {

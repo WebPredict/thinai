@@ -141,9 +141,51 @@ The ultimate goal: paste a real game's rulebook and have ThinAI parse, train, an
 | Pass-when-stuck turn logic | Reversi | Easy |
 | Specific starting positions (not just "fill rows") | Reversi, Backgammon | Medium |
 
-### Easiest wins (most games unblocked per effort):
-1. **Gravity placement** — unblocks Connect Four as novel game
-2. **Pass-when-stuck** — unblocks Reversi as novel game
-3. **Specific starting positions** — improves Checkers, Reversi
-4. **Mandatory capture** — improves Checkers
-5. **Conditional card effects** — unblocks Uno action cards
+### Completed:
+- ✅ **Gravity placement** — Connect Four works as novel game
+- ✅ **Pass-when-stuck** — Reversi-like games work
+- ✅ **Specific starting positions** — flanking gets center 4, movement fills rows
+- ✅ **Mandatory capture** — jumps override regular moves in movement engine
+- ✅ **Piece promotion** — reaches back row → king with backward movement
+- ✅ **Deck composition** — Uno-style deck auto-detected
+- ✅ **Card special powers** — wild/skip/reverse/draw detected and routed
+
+### Remaining easiest wins:
+1. **Conditional card effects** — unblocks Uno action cards for novel games
+2. **Multi-step turns** — unblocks draw-then-play, jump chains
+3. **Piece inventory** — "each player has N pieces" support
+4. **Dark square placement** — checkerboard pattern for Checkers
+
+---
+
+## Demo & Training Experience
+
+### Visual training replay ("War Games" mode)
+Watch the AI play training games in real-time with the actual board graphics, pieces moving, cards being played — at adjustable speed (1x to 10x). Instead of just a learning curve graph, users see the AI literally learning: early games are clumsy, later games show strategy emerging.
+
+**Implementation approach:**
+- Stream game states from training loop via SSE (Server-Sent Events)
+- Frontend renders each state in the existing board components
+- Speed slider controls delay between moves (50ms to 500ms)
+- Show game number, current depth, win/loss overlay
+- Could run alongside the learning curve graph
+
+**Impact:** The most compelling demo feature. "Watch the AI learn Checkers in 60 seconds" is a shareable moment. War Games reference is perfect positioning.
+
+### Learn from human play
+Every game against a human is a training signal. An optional "Allow ThinAI to learn from this game" toggle that feeds the game trace into weight updates after the game ends.
+
+**Implementation approach:**
+- After game over, if toggle is on, collect the feature trace (already recorded during play)
+- Call `evaluator.update_weights(trace, outcome)` with the game result
+- Save updated weights to memory store
+- Show "ThinAI learned from this game" message
+- Generation counter increments, learning curve extends
+
+**Impact:** Creates a flywheel — the more people play, the better the AI gets. Each human game is higher quality than self-play training. Also means the AI can improve beyond its initial 40-game training ceiling.
+
+**Considerations:**
+- Need to prevent adversarial training (intentionally losing to corrupt weights)
+- Learning rate should be lower for human games (subtle adjustments, not big swings)
+- Could show "confidence change" after each human game
+- Works especially well for novel games where the AI starts weak

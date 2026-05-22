@@ -133,6 +133,20 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
     if board_type == "card_zones":
         zones = board_spec.get("zones", [])
 
+        # Detect escalating stakes (later rounds worth more)
+        all_text = str(gdl.get("_original_description", "")) + str(gdl.get("_comments", {}))
+        import re as _re
+        has_escalating = bool(_re.search(
+            r'worth more|escalat|increasing|more point|higher stakes|round.*worth|grows|more valuable',
+            all_text, _re.IGNORECASE
+        ))
+        if has_escalating:
+            features.append(FeatureSpec(
+                "card_conservation",
+                "Saving high cards for later (when stakes are higher)",
+                _card_conservation,
+            ))
+
         # Find hand zones (visible_to: "owner")
         hand_zones = [z for z in zones if z.get("visible_to") == "owner"]
         if hand_zones:
@@ -449,6 +463,34 @@ def _get_opp_hand(state: GameState, player: str):
         return None
     suffix = "p2" if player == "player1" else "p1"
     return state.get_zone(f"hand_{suffix}")
+
+
+def _card_conservation(state: GameState, player: str) -> float:
+    """Measures whether high cards are being saved for later.
+
+    Returns high values when the player still has strong cards late in the game.
+    With a positive weight, the AI learns to play low cards first.
+    """
+    hand = _get_my_hand(state, player)
+    if not hand or hand.size == 0:
+        return 0.0
+
+    # Average rank value of remaining cards (2=2, ..., A=14)
+    from engine.gdl.cards import RANK_VALUES
+    total_rank = sum(RANK_VALUES.get(c.rank, 0) for c in hand.cards)
+    avg_rank = total_rank / hand.size
+
+    # Game progress: how far through the game are we?
+    # More cards played = further along
+    opp_hand = _get_opp_hand(state, player)
+    initial_size = max(hand.size + (opp_hand.size if opp_hand else 0), 1)
+    # Estimate: at start both hands are full; progress = fraction used
+    cards_played = state.state_vars.get("tricks_played", 0)
+    # Fallback: estimate from hand sizes
+    progress = 1.0 - (hand.size / max(hand.size + cards_played, 1))
+
+    # High avg rank * high progress = saving strong cards for later (good)
+    return (avg_rank / 14.0) * progress
 
 
 def _card_hand_size(state: GameState, player: str) -> float:

@@ -425,6 +425,14 @@ class GameEngine:
             for p in placements:
                 yield p['id']
 
+        elif select == "grid_moves":
+            from engine.gdl.movement import get_grid_moves
+            directions = state.state_vars.get("_move_directions", "all")
+            forward_only = state.state_vars.get("_forward_only", False)
+            moves = get_grid_moves(state, state.current_player, directions, forward_only)
+            for m in moves:
+                yield m.move_id
+
         elif select == "checkers_moves":
             from engine.gdl.checkers import get_all_moves
             moves = get_all_moves(state)

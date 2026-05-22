@@ -191,6 +191,10 @@ def _prior_for_feature(feature_name: str, signals: dict) -> float:
         if "mobility" in name:
             return 0.1
 
+    # Card conservation — save high cards for later when stakes escalate
+    if "conservation" in name:
+        return 0.5  # strong prior: saving high cards is almost always right
+
     # Center control — moderate bias, usually helpful
     if "center" in name:
         return 0.2

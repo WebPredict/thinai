@@ -281,6 +281,27 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         if player == "current_player":
             player = ctx.state.current_player
         return _row_or_col_filled(ctx.state, player)
+    if name == "piece_on_row":
+        # piece_on_row(player, row) — check if player has a piece on that row
+        # But actually: player1 wins at row 0, player2 wins at max row
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        if isinstance(ctx.state.board, GridBoard):
+            check_row = 0 if player == "player1" else ctx.state.board.rows - 1
+            for space in ctx.state.board.spaces:
+                if space.row == check_row:
+                    piece = ctx.state.get_piece(space)
+                    if piece and piece.owner == player:
+                        return True
+        return False
+
+    if name == "grid_no_moves":
+        from engine.gdl.movement import get_grid_moves
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        directions = ctx.state.state_vars.get("_move_directions", "all")
+        forward_only = ctx.state.state_vars.get("_forward_only", False)
+        moves = get_grid_moves(ctx.state, player, directions, forward_only)
+        return len(moves) == 0
+
     if name == "board_full":
         if isinstance(ctx.state.board, GridBoard):
             for space in ctx.state.board.spaces:
@@ -831,6 +852,14 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "go_fish_ask":
         args = [evaluate(a, ctx) for a in node.args]
         _go_fish_ask(ctx.state, args[0])
+        return
+
+    if name == "grid_move_execute":
+        args = [evaluate(a, ctx) for a in node.args]
+        from engine.gdl.movement import execute_grid_move
+        directions = ctx.state.state_vars.get("_move_directions", "all")
+        forward_only = ctx.state.state_vars.get("_forward_only", False)
+        execute_grid_move(ctx.state, int(args[0]), directions, forward_only)
         return
 
     if name == "checkers_execute":

@@ -526,6 +526,7 @@ function App() {
 
   const startGame = useCallback(async (gameOverride) => {
     const game = gameOverride || selectedGame
+    console.log('startGame called with:', game, 'selectedGame:', selectedGame)
     setLoading(true)
     try {
       const res = await fetch(`${API}/game/new`, {
@@ -548,6 +549,7 @@ function App() {
       }
     } catch (e) {
       console.error('Failed to start game:', e)
+      setSessionId(null)
     }
     setLoading(false)
   }, [selectedGame])
@@ -1099,7 +1101,7 @@ function App() {
             <button className="action-btn" onClick={() => { setSessionId(null); setGameState(null); setMode('menu') }}>
               &larr; Back to Games
             </button>
-            <button className="action-btn action-btn-primary" onClick={startGame}>
+            <button className="action-btn action-btn-primary" onClick={() => { setGameState(null); setAiThinking(null); setAiLastMove(null); startGame() }}>
               New Game
             </button>
           </div>

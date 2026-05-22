@@ -113,6 +113,18 @@ def parse_natural(text: str) -> dict:
     if has_race_choice:
         meta["turn_rule"] = "if race_turn_done(): next_player else: same_player"
 
+    # Flanking/Reversi games or "pass when no moves": skip stuck player
+    is_flanking = any(r.get("name", "").startswith("place") and
+                      any("flip" in str(e) or "flank" in str(e) for e in r.get("effects", []))
+                      for r in rules)
+    has_pass_keywords = any(w in text for w in ['pass your turn', 'skip your turn',
+                                                 'no legal move', 'cannot move',
+                                                 "can't move", 'no valid move',
+                                                 'pass if'])
+    if (is_flanking or has_pass_keywords) and not has_race_choice:
+        meta["turn_order"] = "conditional"
+        meta["turn_rule"] = "if has_legal_move(next_player): next_player else: same_player"
+
     gdl = {
         "meta": meta,
         "board": board,
@@ -126,7 +138,13 @@ def parse_natural(text: str) -> dict:
     # Add card-specific fields
     if is_card:
         deck_zone = "pond" if any(z["name"] == "pond" for z in board.get("zones", [])) else "deck"
-        gdl["cards"] = {"deck": "standard52", "deck_zone": deck_zone}
+        # Detect deck type from description
+        deck_type = "standard52"
+        if any(w in text for w in ['uno', 'skip', 'reverse', 'draw two', 'wild card']):
+            deck_type = "uno"
+        elif re.search(r'(?:4|four)\s+colors?', text) and re.search(r'(?:number|numb)\w*\s+(?:0|1).*(?:9|10)', text):
+            deck_type = "uno"  # 4 colors with numbered cards = Uno-style
+        gdl["cards"] = {"deck": deck_type, "deck_zone": deck_zone}
 
     if cosmetics:
         gdl["_cosmetics"] = cosmetics
@@ -454,31 +472,31 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
                                 'move toward', 'move across', 'move pieces',
                                 'move one space', 'move two spaces',
                                 'reach the other side', 'reach the opposite']):
-        # Determine movement type
-        can_jump = 'jump' in text or 'capture' in text or 'hop' in text
+        # Determine movement direction
+        is_diagonal = 'diagonal' in text
+        is_orthogonal = 'orthogonal' in text or 'straight' in text
+        is_forward = 'forward' in text or 'advance' in text or 'toward' in text
 
-        if can_jump:
-            # Use checkers engine for movement + capture games
-            rules.append({
-                "name": "move_piece",
-                "action": "move",
-                "params": [{"name": "move_id", "select": "checkers_moves"}],
-                "conditions": [],
-                "effects": ["checkers_execute(move_id)"],
-            })
-            board["_use_checkers_setup"] = True
+        if is_diagonal:
+            move_dirs = "diagonal"
+        elif is_orthogonal:
+            move_dirs = "orthogonal"
         else:
-            # Pure movement without capture — use generic selectors
-            rules.append({
-                "name": f"move_{piece_name}",
-                "action": "move",
-                "params": [
-                    {"name": "from", "select": "own_pieces"},
-                    {"name": "to", "select": "adjacent_empty"},
-                ],
-                "conditions": [],
-                "effects": [f"move_piece(from, to)"],
-            })
+            move_dirs = "all"
+
+        # Use generic grid movement engine
+        rules.append({
+            "name": f"move_{piece_name}",
+            "action": "move",
+            "params": [{"name": "move_id", "select": "grid_moves"}],
+            "conditions": [],
+            "effects": ["grid_move_execute(move_id)"],
+        })
+
+        # Store movement config in board for state_vars initialization
+        board["_move_directions"] = move_dirs
+        board["_forward_only"] = is_forward
+        board["_needs_piece_setup"] = True
         return rules
 
     # Sowing/Mancala: pick up and distribute tokens
@@ -586,16 +604,20 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
                         'eat opponent', 'knock out', 'knocked out']
     has_capture = any(w in text for w in capture_keywords)
     if has_capture and board.get("type") == "grid" and not rules:
-        # Movement + capture game — use checkers engine (diagonal move + jump)
+        # Movement + capture game — use generic grid movement
+        is_diagonal = 'diagonal' in text
+        move_dirs = "diagonal" if is_diagonal else "all"
+
         rules.append({
-            "name": "move_piece",
+            "name": f"move_{piece_name}",
             "action": "move",
-            "params": [{"name": "move_id", "select": "checkers_moves"}],
+            "params": [{"name": "move_id", "select": "grid_moves"}],
             "conditions": [],
-            "effects": ["checkers_execute(move_id)"],
+            "effects": ["grid_move_execute(move_id)"],
         })
-        # Override setup to use checkers-style placement
-        board["_use_checkers_setup"] = True
+        board["_move_directions"] = move_dirs
+        board["_forward_only"] = False
+        board["_needs_piece_setup"] = True
         return rules
 
     # Default: simple placement on empty space (TTT style)
@@ -634,15 +656,29 @@ def _extract_end_conditions(text: str, board: dict, rules: list) -> list[dict]:
         })
 
     # "capture all opponent pieces" / "no pieces left"
-    if any(w in text for w in ['capture all', 'no pieces left', 'eliminate all',
-                                'remove all opponent', "opponent can't move",
-                                'cannot move', 'last piece', 'no remaining',
-                                'all opponent pieces', 'take all']):
+    # Exclude flanking games — "cannot move" means pass, not capture-all
+    is_flanking_game = any(w in text for w in ['flip', 'flank', 'sandwich', 'surround', 'reversi', 'othello'])
+    capture_all_keywords = ['capture all', 'no pieces left', 'eliminate all',
+                            'remove all opponent', 'last piece', 'no remaining',
+                            'all opponent pieces', 'take all']
+    if not is_flanking_game:
+        capture_all_keywords.extend(["opponent can't move", 'cannot move'])
+    if any(w in text for w in capture_all_keywords):
         # Use checkers end condition if game uses checkers engine
-        has_checkers = any(r.get("name") == "move_piece" and
-                          any(p.get("select") == "checkers_moves" for p in r.get("params", []))
-                          for r in rules)
-        if has_checkers:
+        # Use grid_no_moves for generic movement games, checkers for checkers
+        has_grid_moves = any(
+            any(p.get("select") == "grid_moves" for p in r.get("params", []))
+            for r in rules)
+        has_checkers = any(
+            any(p.get("select") == "checkers_moves" for p in r.get("params", []))
+            for r in rules)
+        if has_grid_moves:
+            conditions.append({
+                "type": "win",
+                "player": "current_player",
+                "condition": "grid_no_moves()",
+            })
+        elif has_checkers:
             conditions.append({
                 "type": "win",
                 "player": "current_player",
@@ -763,9 +799,54 @@ def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
     """Extract initial setup."""
     setup = []
 
-    # Capture/movement game using checkers engine
-    if board.get("_use_checkers_setup"):
-        setup.append({"action": "checkers_setup"})
+    # Flanking/Reversi game — 4 pieces in center
+    is_flanking = any("flip" in str(r.get("effects", [])) or "flank" in str(r.get("effects", []))
+                      for r in board.get("_rules_ref", []))  # check via board ref
+    # Detect from text
+    if any(w in text for w in ['flip', 'flank', 'sandwich', 'surround', 'reversi', 'othello']):
+        is_flanking = True
+    if is_flanking and board.get("type") == "grid":
+        rows = board.get("grid", {}).get("rows", 8)
+        cols = board.get("grid", {}).get("cols", 8)
+        cr, cc = rows // 2, cols // 2
+        piece_name = "piece"
+        for p in pieces:
+            if p.get("name"):
+                piece_name = p["name"]
+                break
+        # Center 4 pieces in alternating pattern
+        setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({cr-1}, {cc-1})"})
+        setup.append({"action": "place", "piece": f"{piece_name}(player2)", "at": f"space_at({cr-1}, {cc})"})
+        setup.append({"action": "place", "piece": f"{piece_name}(player2)", "at": f"space_at({cr}, {cc-1})"})
+        setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({cr}, {cc})"})
+        return setup
+
+    # Movement/capture game — place pieces in starting rows
+    if board.get("_needs_piece_setup"):
+        rows = board.get("grid", {}).get("rows", 8)
+        cols = board.get("grid", {}).get("cols", 8)
+        piece_name = "piece"
+        for p in pieces:
+            if p.get("name"):
+                piece_name = p["name"]
+                break
+
+        # Check for specific row count in description
+        row_match = re.search(r'(?:first|starting)\s+(\d+)\s+rows?', text)
+        if row_match:
+            fill_rows = int(row_match.group(1))
+        elif re.search(r'(\d+)\s+pieces?\s+each', text):
+            piece_count = int(re.search(r'(\d+)\s+pieces?\s+each', text).group(1))
+            fill_rows = max(1, (piece_count + cols - 1) // cols)  # rows needed
+        else:
+            fill_rows = min(2, rows // 3)
+
+        for r in range(rows - fill_rows, rows):
+            for c in range(cols):
+                setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({r}, {c})"})
+        for r in range(fill_rows):
+            for c in range(cols):
+                setup.append({"action": "place", "piece": f"{piece_name}(player2)", "at": f"space_at({r}, {c})"})
         return setup
 
     # Card game setup
@@ -1084,6 +1165,23 @@ def _extract_card_rules(text: str, board: dict) -> list[dict]:
 def _extract_state_vars(text: str, board: dict) -> list[dict]:
     """Extract state variables needed for the game."""
     state_vars = []
+
+    # Movement game config
+    if board.get("_move_directions") or board.get("_needs_piece_setup"):
+        # Detect promotion keywords
+        has_promotion = any(w in text for w in ['king', 'crowned', 'promoted', 'promotion',
+                                                 'becomes a king', 'reaches the back',
+                                                 'reaches the opposite', 'last row'])
+        state_vars.extend([
+            {"name": "_move_directions", "type": "string", "scope": "global",
+             "initial": board.get("_move_directions", "all")},
+            {"name": "_forward_only", "type": "bool", "scope": "global",
+             "initial": board.get("_forward_only", False)},
+            {"name": "_promotion_enabled", "type": "bool", "scope": "global",
+             "initial": has_promotion},
+            {"name": "last_play", "type": "string", "scope": "global", "initial": ""},
+            {"name": "last_action", "type": "string", "scope": "global", "initial": ""},
+        ])
 
     # Race game state vars
     race_keywords = ['race', 'finish line', 'reach the end', 'first to reach',

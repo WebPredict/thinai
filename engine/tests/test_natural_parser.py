@@ -171,9 +171,9 @@ def test_movement_basic():
 def test_movement_with_jump():
     gdl = parse_natural("Two players have 12 pieces each on an 8x8 grid. Move diagonally one square. Jump over opponent pieces to capture them. Capture all opponent pieces to win.")
     rules = gdl["rules"]
-    # Should use checkers engine for movement + capture
+    # Should use grid movement engine for movement + capture
     assert any("move" in r["action"] for r in rules)
-    assert any("checkers" in str(r.get("params", [])) or "checkers" in str(r.get("effects", [])) for r in rules)
+    assert any("grid_moves" in str(r.get("params", [])) or "grid_move" in str(r.get("effects", [])) for r in rules)
 
 
 def test_movement_slide():
@@ -214,7 +214,7 @@ def test_capture_jump():
     assert gdl["board"]["type"] == "grid"
     rules = gdl["rules"]
     assert any("move" in r["action"] for r in rules)
-    assert any("checkers" in str(r.get("params", [])) or "checkers" in str(r.get("effects", [])) for r in rules)
+    assert any("grid_moves" in str(r.get("params", [])) or "grid_move" in str(r.get("effects", [])) for r in rules)
     assert any(c["type"] == "win" for c in gdl["end_conditions"])
 
 
@@ -288,10 +288,10 @@ def test_novel_two_dice_race():
 
 
 def test_novel_capture_jump():
-    """Capture by jumping should use checkers engine + elimination win."""
+    """Capture by jumping should use grid movement + elimination win."""
     gdl = parse_natural("8x8 board. Move pieces diagonally. Jump over an opponent's piece to capture it. Capture all opponent pieces to win.")
     rules = gdl["rules"]
-    assert any("checkers" in str(r.get("params", [])) or "checkers" in str(r.get("effects", [])) for r in rules)
+    assert any("grid_moves" in str(r.get("params", [])) or "grid_move" in str(r.get("effects", [])) for r in rules)
     assert any(c["type"] == "win" for c in gdl["end_conditions"])
     # Should NOT flag capture as unknown
     assert "capturing" not in str(gdl["_parse_info"].get("not_understood", []))

@@ -177,14 +177,16 @@ class LearningRunner:
                         gdl=self._gdl,
                     )
                     has_dice = any(r.get("chance") for r in self._gdl.get("rules", []))
-                    opp_depth = 1 if has_dice else self.max_depth
-                    opponent = ReasonerOpponent(
-                        self.engine, max_depth=opp_depth, eval_fn=opp_eval,
-                    )
                     if has_dice:
+                        opp_depth = 1
+                        opponent = ReasonerOpponent(
+                            self.engine, max_depth=opp_depth, eval_fn=opp_eval,
+                        )
                         opponent_desc = "Uses game intuition, 1 move ahead (dice limit deeper planning)"
                     else:
-                        opponent_desc = f"Uses game intuition, looks {opp_depth} move{'s' if opp_depth != 1 else ''} ahead"
+                        # Use graduated difficulty: random → self-snapshot
+                        opponent = RandomOpponent(self.engine)
+                        opponent_desc = "Plays random, then graduates to self-snapshot"
                 else:
                     opponent = RandomOpponent(self.engine)
                     opponent_desc = "Plays random, then graduates to self-snapshot"

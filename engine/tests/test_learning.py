@@ -98,3 +98,53 @@ class TestLearningC4:
         results = runner.train(20, opponent=opponent)
 
         assert results.win_rate >= 0.4, f"C4 win rate too low: {results.win_rate:.0%}"
+
+
+# --- Training quality regression tests ---
+
+class TestTrainingNoNosedive:
+    """Verify training curves don't collapse to 0% for known games.
+
+    These tests catch the progressive-depth nosedive bug where consecutive
+    losses corrupt weights and the learning rate doesn't decay fast enough.
+    """
+
+    GAMES = [
+        ("tictactoe.json", "Tic-Tac-Toe", 3),
+        ("connect_four.json", "Connect Four", 3),
+        ("reversi.json", "Reversi", 2),
+        ("checkers.json", "Checkers", 3),
+        ("mancala.json", "Mancala (Kalah)", 3),
+        ("nim.json", "Nim", 4),
+        ("gin_rummy.json", "Gin Rummy", 2),
+        ("go_fish.json", "Go Fish", 2),
+    ]
+
+    @pytest.fixture(params=GAMES, ids=[g[1] for g in GAMES])
+    def game_setup(self, request):
+        game_file, game_name, depth = request.param
+        engine = GameEngine.from_file(os.path.join(EXAMPLES_DIR, game_file))
+        return engine, game_name, depth
+
+    def test_late_win_rate_not_zero(self, game_setup):
+        """Late training win rate should not collapse to 0%."""
+        random.seed(42)
+        engine, game_name, depth = game_setup
+        evaluator = LearnableEval(game_name, gdl=engine.gdl)
+        runner = LearningRunner(engine, evaluator, max_depth=depth, gdl=engine.gdl)
+        results = runner.train(30)
+
+        curve = results.win_rate_curve()
+        if len(curve) >= 10:
+            late_wr = sum(curve[-10:]) / 10
+        else:
+            late_wr = results.win_rate
+
+        # Pure luck games are exempt
+        if results.strategy_assessment == "pure_luck":
+            return
+
+        assert late_wr > 0.05, (
+            f"{game_name}: late win rate collapsed to {late_wr:.0%} "
+            f"(total: {results.win_rate:.0%}, {results.total_games} games)"
+        )

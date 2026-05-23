@@ -84,15 +84,15 @@ class LearnableEval:
 
             for i, f_val in enumerate(features):
                 adjustment = self.learning_rate * outcome * f_val * move_weight
+                # Clamp individual weight adjustments to prevent runaway
+                adjustment = max(-0.5, min(0.5, adjustment))
                 self.weights[i] += adjustment
 
-        # Adaptive learning rate decay:
-        # Wins → decay faster (we're on the right track, stabilize)
-        # Losses → decay slower (still exploring, keep adjusting)
+        # Adaptive learning rate decay
         if outcome > 0:
-            self.learning_rate = max(0.01, self.learning_rate * 0.97)
+            self.learning_rate = max(0.01, self.learning_rate * 0.95)
         elif outcome < 0:
-            self.learning_rate = max(0.01, self.learning_rate * 0.995)
+            self.learning_rate = max(0.01, self.learning_rate * 0.92)
         else:
             self.learning_rate = max(0.01, self.learning_rate * 0.99)
 

@@ -1,22 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import TrainingDashboard from './TrainingDashboard'
-import GridBoard from './boards/GridBoard'
-import MancalaBoard from './boards/MancalaBoard'
-import NimBoard from './boards/NimBoard'
-import CheckersBoard from './boards/CheckersBoard'
-import BlackjackBoard from './boards/BlackjackBoard'
-import CrazyEightsBoard from './boards/CrazyEightsBoard'
-import GoFishBoard from './boards/GoFishBoard'
-import WarBoard from './boards/WarBoard'
-import ChutesAndLaddersBoard from './boards/ChutesAndLaddersBoard'
-import BackgammonBoard from './boards/BackgammonBoard'
-import HexBoard from './boards/HexBoard'
-import TrackBoard from './boards/TrackBoard'
-import HeartsBoard from './boards/HeartsBoard'
-import GinRummyBoard from './boards/GinRummyBoard'
-import PokerBoard from './boards/PokerBoard'
-import WizardBoard from './boards/WizardBoard'
-import ScrabbleBoard from './boards/ScrabbleBoard'
+import GameBoardRenderer from './boards/GameBoardRenderer'
 import './App.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
@@ -974,122 +958,12 @@ function App() {
             <RulesModal gameType={selectedGame} onClose={() => setShowRulesModal(false)}
               customDescription={teachInput || gdlData?.gdl?._original_description} />
           )}
-          {selectedGame === 'mancala' ? (
-            <MancalaBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-              aiLastMove={aiLastMove}
-            />
-          ) : selectedGame === 'nim' ? (
-            <NimBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'checkers' ? (
-            <CheckersBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'uno' ? (
-            <CrazyEightsBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'blackjack' ? (
-            <BlackjackBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'crazy_eights' ? (
-            <CrazyEightsBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'go_fish' ? (
-            <GoFishBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'hex' ? (
-            <HexBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'backgammon' ? (
-            <BackgammonBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'hearts' ? (
-            <HeartsBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'wizard' ? (
-            <WizardBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'scrabble' ? (
-            <ScrabbleBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'gin_rummy' ? (
-            <GinRummyBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'five_card_draw' ? (
-            <PokerBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'war' ? (
-            <WarBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : selectedGame === 'chutes_and_ladders' ? (
-            <ChutesAndLaddersBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-              aiLastMove={aiLastMove}
-            />
-          ) : gameState?.board_type === 'track' ? (
-            <TrackBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : gameState?.board_type === 'card_zones' ? (
-            <CrazyEightsBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
-            />
-          ) : (
-            <GridBoard
-              state={gameState}
-              onMove={makeMove}
-              disabled={loading || gameState?.game_result != null}
+          {(
+            <GameBoardRenderer
               gameType={selectedGame}
+              state={gameState}
+              onMove={makeMove}
+              disabled={loading || gameState?.game_result != null}
               aiLastMove={aiLastMove}
             />
           )}

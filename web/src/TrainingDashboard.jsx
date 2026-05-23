@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import GridBoard from './boards/GridBoard'
+import GameBoardRenderer from './boards/GameBoardRenderer'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
@@ -68,37 +68,17 @@ function GameReplayViewer({ replays, gameType }) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        {boardState && boardState.board_type === 'grid' ? (
-          <div style={{ transform: 'scale(0.7)', transformOrigin: 'top center' }}>
-            <GridBoard state={boardState} onMove={() => {}} disabled={true} gameType={gameType} />
-          </div>
-        ) : isResult ? (
+        {isResult ? (
           <div style={{ padding: '2rem', fontFamily: 'Georgia, serif', fontSize: '1.3rem', color: outcomeColor }}>
             {outcomeLabel}
           </div>
-        ) : frame?.card_zones ? (
-          <div style={{ padding: '1rem', textAlign: 'center' }}>
-            <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center', fontFamily: 'Menlo, monospace', fontSize: '0.9rem', color: 'var(--ink)', marginBottom: '0.5rem' }}>
-              <span>P1 hand: {frame.card_zones.hand_p1?.size || 0}</span>
-              <span>P2 hand: {frame.card_zones.hand_p2?.size || 0}</span>
-              {frame.card_zones.deck && <span>Deck: {frame.card_zones.deck.size || 0}</span>}
-            </div>
-            {frame.card_zones.discard?.cards?.[0] && (
-              <div style={{
-                display: 'inline-block', padding: '0.5rem 1rem',
-                background: 'var(--bg-raised)', border: '2px solid var(--rule-bright)',
-                borderRadius: '8px', fontFamily: 'Menlo, monospace', fontSize: '1.2rem',
-                color: ['hearts', 'diamonds'].includes(frame.card_zones.discard.cards[0].suit) ? '#c83030' : 'var(--ink)',
-              }}>
-                {frame.card_zones.discard.cards[0].rank}
-                {({'hearts':'♥','diamonds':'♦','clubs':'♣','spades':'♠'})[frame.card_zones.discard.cards[0].suit] || ''}
-              </div>
-            )}
-            {frame.state_vars?.last_play && (
-              <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.85rem', color: 'var(--accent)', marginTop: '0.5rem' }}>
-                {frame.state_vars.last_play}
-              </div>
-            )}
+        ) : boardState ? (
+          <div style={{ transform: 'scale(0.7)', transformOrigin: 'top center' }}>
+            <GameBoardRenderer
+              gameType={gameType}
+              state={boardState}
+              disabled={true}
+            />
           </div>
         ) : (
           <div style={{ padding: '1rem', fontFamily: 'Menlo, monospace', fontSize: '0.85rem', color: 'var(--ink)' }}>

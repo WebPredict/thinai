@@ -497,14 +497,15 @@ def _snapshot_state(state: GameState) -> dict:
                 spaces[str(space.index)] = [{"name": p.name, "owner": p.owner} for p in pieces]
         snapshot["spaces"] = spaces
 
-    # Card zones
+    # Card zones — include all cards for replay (both players are AI)
     if state.card_zones:
         snapshot["board_type"] = "card_zones"
         zones = {}
         for name, zone in state.card_zones.items():
-            zones[name] = {"size": zone.size}
-            if zone.visible_to == "all":
-                zones[name]["cards"] = [{"rank": c.rank, "suit": c.suit, "id": c.id} for c in zone.cards]
+            zones[name] = {
+                "size": zone.size,
+                "cards": [{"rank": c.rank, "suit": c.suit, "id": c.id} for c in zone.cards],
+            }
         snapshot["card_zones"] = zones
 
     snapshot["state_vars"] = {k: v for k, v in state.state_vars.items()

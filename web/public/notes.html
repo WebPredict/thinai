@@ -182,7 +182,7 @@
 <h2>Key Numbers</h2>
 <ul>
   <li><strong>20</strong> playable games across 13 categories</li>
-  <li><strong>381</strong> automated tests</li>
+  <li><strong>413</strong> automated tests (including 8 training quality regression tests)</li>
   <li><strong>~12,000</strong> lines of engine code</li>
   <li><strong>~2,700</strong> word Scrabble dictionary</li>
   <li><strong>40</strong> training games to reach competence (board games)</li>
@@ -192,7 +192,18 @@
   <li><strong>0</strong> GPUs required</li>
 </ul>
 
-<h2>Recent Changes (May 21, 2026)</h2>
+<h2>Recent Changes (May 23, 2026)</h2>
+<ul>
+  <li><strong>Visual training replay:</strong> After training, watch sampled game replays with the actual game board UI — pieces moving, cards being played. Play/Pause, speed slider, Prev/Next game navigation. 5 games sampled evenly across training to show the AI's progression from clumsy to competent.</li>
+  <li><strong>Training stability:</strong> Fixed weight corruption spiral where consecutive losses degraded the AI's evaluation function. Learning rate now decays 8% per loss (was 0.5%) with per-update weight clamping. Feature-based opponents use graduated difficulty (random → self-snapshot) instead of fixed depth-3 that caused nosedives. 8 new regression tests verify no game's late win rate collapses to 0%.</li>
+  <li><strong>Stop training:</strong> New "Stop Training" button lets users halt training mid-run while keeping all results accumulated so far.</li>
+  <li><strong>GameBoardRenderer refactor:</strong> Extracted unified board routing component used by both play mode and training replay — replays now look identical to actual gameplay for all 20 games.</li>
+  <li><strong>Click-to-move UI:</strong> Novel movement/capture games support click-to-select-piece → click-destination in the grid board with movable/selected/destination highlighting.</li>
+  <li><strong>Card special powers:</strong> Parser detects wild cards, Skip, Reverse, Draw Two keywords and routes to appropriate engine. Uno deck auto-detected from description.</li>
+  <li><strong>413 tests</strong> including 8 training quality regression tests across all major games.</li>
+</ul>
+
+<h2>Changes (May 21, 2026)</h2>
 <ul>
   <li><strong>Wizard (new game):</strong> Trick-taking card game with trump suit and bidding. Multi-round with cumulative scoring.</li>
   <li><strong>Simplified Scrabble (new game):</strong> Word/tile placement on a 9×9 board with bonus squares and ~2,700 word dictionary. Click-to-place UI.</li>

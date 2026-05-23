@@ -218,6 +218,7 @@ class TrainingRequest(BaseModel):
     depth: Optional[int] = None
     think_time: Optional[int] = None  # seconds per move — converted to depth
     fresh: bool = False
+    replay_count: int = 3  # number of games to record for visual replay
 
 
 class ParseRequest(BaseModel):
@@ -676,6 +677,7 @@ def start_training(request: Request, req: TrainingRequest):
         "results": None,
         "snapshots": [],
         "evaluator": evaluator,
+        "runner": None,
     }
     _training_runs[training_id] = run_state
 
@@ -695,6 +697,8 @@ def start_training(request: Request, req: TrainingRequest):
             self_assessor=self_assessor,
             gdl=engine.gdl,
         )
+        runner._replay_count = req.replay_count
+        run_state["runner"] = runner
 
         def on_progress(snapshot, results):
             run_state["games_played"] = snapshot.game_number
@@ -719,6 +723,18 @@ def start_training(request: Request, req: TrainingRequest):
     thread.start()
 
     return {"training_id": training_id}
+
+
+@app.post("/api/training/{training_id}/stop")
+def stop_training(training_id: str):
+    """Stop a running training session, keeping results so far."""
+    run = _training_runs.get(training_id)
+    if not run:
+        raise HTTPException(404, "Training run not found")
+    runner = run.get("runner")
+    if runner:
+        runner._cancelled = True
+    return {"status": "stopping"}
 
 
 @app.get("/api/training/{training_id}/status")

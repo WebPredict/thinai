@@ -46,6 +46,7 @@ class LearningResults:
     final_depth: int = 0
     strategy_assessment: str = ""  # "strategic", "mostly_luck", "pure_luck"
     opponent_description: str = ""  # human-readable description of training partner
+    game_replays: list = field(default_factory=list)  # recorded game state sequences for visual replay
 
     @property
     def win_rate(self) -> float:
@@ -91,6 +92,7 @@ class LearningResults:
             "final_depth": self.final_depth,
             "strategy_assessment": self.strategy_assessment,
             "opponent_description": self.opponent_description,
+            "game_replays": _sample_replays(self.game_replays, 5),
             "snapshots": [
                 {
                     "game": s.game_number,
@@ -130,6 +132,7 @@ class LearningRunner:
         self._use_fast_training = gdl and any(
             r.get("name") == "place_word" for r in gdl.get("rules", [])
         )
+        self._cancelled = False
 
     def train(
         self,
@@ -244,8 +247,23 @@ class LearningRunner:
             if self.effort_allocator:
                 self.effort_allocator.max_depth = current_depth
 
+            # Check for cancellation
+            if self._cancelled:
+                results.stopped_early = True
+                results.stop_reason = f"Training stopped by user after {i} games"
+                results.total_games = i
+                break
+
             start = time.monotonic()
-            outcome, num_moves, trace = self._play_and_trace(opponent)
+            # Record all game replays (downsampled at the end)
+            should_record = not self._use_fast_training
+            outcome, num_moves, trace, replay_states = self._play_and_trace(opponent, record_replay=should_record)
+            if should_record and replay_states:
+                results.game_replays.append({
+                    "game_number": i + 1,
+                    "outcome": outcome,
+                    "states": replay_states,
+                })
             duration = (time.monotonic() - start) * 1000
 
             # Time guard: if games are too slow, cap depth lower
@@ -340,13 +358,14 @@ class LearningRunner:
 
         return results
 
-    def _play_and_trace(self, opponent) -> tuple[float, int, list[dict]]:
+    def _play_and_trace(self, opponent, record_replay: bool = False) -> tuple[float, int, list[dict], list]:
         """Play one game, collecting feature traces for the learner's positions.
 
-        Returns: (outcome, num_moves, trace)
+        Returns: (outcome, num_moves, trace, replay_states)
         """
         state = self.engine.initial_state()
         trace = []
+        replay_states = []
         num_moves = 0
         # Backgammon needs ~300+ moves (each die is separate), most games need < 200
         max_moves = 500 if any(r.get("chance") for r in self.engine.gdl.get("rules", [])) else 200
@@ -361,10 +380,17 @@ class LearningRunner:
             result = self.engine.check_terminal(state)
             if result:
                 outcome = self._result_to_outcome(result)
-                # Set total_moves on all trace entries
                 for entry in trace:
                     entry["total_moves"] = num_moves
-                return outcome, num_moves, trace
+                if record_replay:
+                    replay_states.append({"result": result.result_type, "winner": result.winner})
+                return outcome, num_moves, trace, replay_states
+
+            if record_replay:
+                try:
+                    replay_states.append(_snapshot_state(state))
+                except Exception:
+                    pass  # best effort
 
             if state.current_player == self.learner_player:
                 # Learner's turn — record features and choose move
@@ -399,7 +425,7 @@ class LearningRunner:
         # Game didn't terminate normally
         for entry in trace:
             entry["total_moves"] = num_moves
-        return 0.0, num_moves, trace
+        return 0.0, num_moves, trace, replay_states
 
     def _collect_state_traces(self, opponent, n_games: int = 5) -> list[dict]:
         """Play quick games collecting state snapshots for L2 feature discovery."""
@@ -432,6 +458,56 @@ class LearningRunner:
         if result.winner == self.learner_player:
             return 1.0
         return -1.0
+
+
+def _sample_replays(replays: list, count: int) -> list:
+    """Downsample replays to `count` evenly spaced entries."""
+    if not replays or count <= 0:
+        return []
+    if len(replays) <= count:
+        return replays
+    indices = [round(k * (len(replays) - 1) / (count - 1)) for k in range(count)]
+    return [replays[i] for i in indices]
+
+
+def _snapshot_state(state: GameState) -> dict:
+    """Lightweight state snapshot for replay recording."""
+    from engine.gdl.board import GridBoard, TrackBoard
+    snapshot = {"current_player": state.current_player}
+
+    if isinstance(state.board, GridBoard):
+        snapshot["board_type"] = "grid"
+        snapshot["rows"] = state.board.rows
+        snapshot["cols"] = state.board.cols
+        spaces = {}
+        for space in state.board.spaces:
+            piece = state.get_piece(space)
+            if piece:
+                spaces[f"{space.row},{space.col}"] = {"name": piece.name, "owner": piece.owner}
+        snapshot["spaces"] = spaces
+    elif isinstance(state.board, TrackBoard):
+        snapshot["board_type"] = "track"
+        snapshot["track_length"] = state.board.length
+        spaces = {}
+        for space in state.board.spaces:
+            pieces = state.get_pieces(space)
+            if pieces:
+                spaces[str(space.index)] = [{"name": p.name, "owner": p.owner} for p in pieces]
+        snapshot["spaces"] = spaces
+
+    # Card zones
+    if state.card_zones:
+        snapshot["board_type"] = "card_zones"
+        zones = {}
+        for name, zone in state.card_zones.items():
+            zones[name] = {"size": zone.size}
+            if zone.visible_to == "all":
+                zones[name]["cards"] = [{"rank": c.rank, "suit": c.suit, "id": c.id} for c in zone.cards]
+        snapshot["card_zones"] = zones
+
+    snapshot["state_vars"] = {k: v for k, v in state.state_vars.items()
+                              if isinstance(v, (str, int, float, bool)) and not k.startswith("_")}
+    return snapshot
 
 
 def run_learning(

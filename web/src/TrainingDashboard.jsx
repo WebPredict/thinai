@@ -1,6 +1,148 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import GridBoard from './boards/GridBoard'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+
+function GameReplayViewer({ replays, gameType }) {
+  const [currentGame, setCurrentGame] = useState(0)
+  const [currentFrame, setCurrentFrame] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [speed, setSpeed] = useState(400)
+  const intervalRef = useRef(null)
+
+  const validReplays = (replays || []).filter(r => r.states && r.states.length > 0)
+  if (validReplays.length === 0) return null
+
+  const game = validReplays[Math.min(currentGame, validReplays.length - 1)]
+  const totalFrames = game.states.length
+  const frame = game.states[Math.min(currentFrame, totalFrames - 1)]
+  const isResult = frame?.result != null
+
+  // Auto-advance
+  useEffect(() => {
+    if (!playing) {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      return
+    }
+    intervalRef.current = setInterval(() => {
+      setCurrentFrame(prev => {
+        const next = prev + 1
+        if (next >= totalFrames) {
+          if (currentGame < validReplays.length - 1) {
+            setCurrentGame(g => g + 1)
+            return 0
+          }
+          setPlaying(false)
+          return totalFrames - 1
+        }
+        return next
+      })
+    }, speed)
+    return () => clearInterval(intervalRef.current)
+  }, [playing, speed, totalFrames, currentGame, validReplays.length])
+
+  useEffect(() => { setCurrentFrame(0) }, [currentGame])
+
+  // Build a state object the GridBoard can render
+  const boardState = frame && !isResult ? {
+    ...frame,
+    legal_moves: [],  // no interaction during replay
+    game_result: null,
+  } : null
+
+  const outcomeLabel = game.outcome > 0 ? 'AI Won' : game.outcome < 0 ? 'AI Lost' : 'Draw'
+  const outcomeColor = game.outcome > 0 ? '#5cba6e' : game.outcome < 0 ? '#c83030' : 'var(--ink-dim)'
+
+  return (
+    <div style={{
+      border: '1px solid var(--rule-bright)', borderRadius: '8px',
+      padding: '1rem', margin: '0.75rem 0', background: 'var(--bg-raised)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <strong style={{ color: 'var(--accent)', fontFamily: 'Menlo, monospace', fontSize: '0.85rem' }}>
+          Game Replay — Training Game {game.game_number || currentGame + 1}
+        </strong>
+        <span style={{ fontFamily: 'Menlo, monospace', fontSize: '0.8rem', color: 'var(--ink)' }}>
+          Move {currentFrame + 1}/{totalFrames} {isResult && <span style={{ color: outcomeColor, marginLeft: '0.5rem' }}>— {outcomeLabel}</span>}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        {boardState && boardState.board_type === 'grid' ? (
+          <div style={{ transform: 'scale(0.7)', transformOrigin: 'top center' }}>
+            <GridBoard state={boardState} onMove={() => {}} disabled={true} gameType={gameType} />
+          </div>
+        ) : isResult ? (
+          <div style={{ padding: '2rem', fontFamily: 'Georgia, serif', fontSize: '1.3rem', color: outcomeColor }}>
+            {outcomeLabel}
+          </div>
+        ) : frame?.card_zones ? (
+          <div style={{ padding: '1rem', textAlign: 'center' }}>
+            <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center', fontFamily: 'Menlo, monospace', fontSize: '0.9rem', color: 'var(--ink)', marginBottom: '0.5rem' }}>
+              <span>P1 hand: {frame.card_zones.hand_p1?.size || 0}</span>
+              <span>P2 hand: {frame.card_zones.hand_p2?.size || 0}</span>
+              {frame.card_zones.deck && <span>Deck: {frame.card_zones.deck.size || 0}</span>}
+            </div>
+            {frame.card_zones.discard?.cards?.[0] && (
+              <div style={{
+                display: 'inline-block', padding: '0.5rem 1rem',
+                background: 'var(--bg-raised)', border: '2px solid var(--rule-bright)',
+                borderRadius: '8px', fontFamily: 'Menlo, monospace', fontSize: '1.2rem',
+                color: ['hearts', 'diamonds'].includes(frame.card_zones.discard.cards[0].suit) ? '#c83030' : 'var(--ink)',
+              }}>
+                {frame.card_zones.discard.cards[0].rank}
+                {({'hearts':'♥','diamonds':'♦','clubs':'♣','spades':'♠'})[frame.card_zones.discard.cards[0].suit] || ''}
+              </div>
+            )}
+            {frame.state_vars?.last_play && (
+              <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.85rem', color: 'var(--accent)', marginTop: '0.5rem' }}>
+                {frame.state_vars.last_play}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ padding: '1rem', fontFamily: 'Menlo, monospace', fontSize: '0.85rem', color: 'var(--ink)' }}>
+            {frame?.state_vars?.last_play || `Frame ${currentFrame + 1}`}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+        <button className="crazy8-draw-btn" onClick={() => {
+            if (!playing) {
+              // If at the end, restart from beginning
+              if (currentFrame >= totalFrames - 1 && currentGame >= validReplays.length - 1) {
+                setCurrentGame(0)
+                setCurrentFrame(0)
+              }
+            }
+            setPlaying(!playing)
+          }}
+          style={{ fontSize: '0.85rem', padding: '0.3rem 1rem' }}>
+          {playing ? '⏸ Pause' : '▶ Play'}
+        </button>
+        {validReplays.length > 1 && (
+          <>
+            <button className="crazy8-draw-btn" onClick={() => { setCurrentGame(Math.max(0, currentGame - 1)) }}
+              disabled={currentGame === 0} style={{ fontSize: '0.85rem', padding: '0.3rem 0.6rem' }}>
+              ◀ Prev Game
+            </button>
+            <button className="crazy8-draw-btn" onClick={() => { setCurrentGame(Math.min(validReplays.length - 1, currentGame + 1)) }}
+              disabled={currentGame >= validReplays.length - 1} style={{ fontSize: '0.85rem', padding: '0.3rem 0.6rem' }}>
+              Next Game ▶
+            </button>
+          </>
+        )}
+        <label style={{ fontFamily: 'Menlo, monospace', fontSize: '0.8rem', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          Speed:
+          <input type="range" min="50" max="800" step="50" value={800 - speed}
+            onChange={e => setSpeed(800 - Number(e.target.value))}
+            style={{ width: '80px' }} />
+        </label>
+      </div>
+    </div>
+  )
+}
 
 function TrainExplainer() {
   const [open, setOpen] = useState(false)
@@ -197,6 +339,13 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
                   ? 'Retry Training'
                   : 'Start Training'}
           </button>
+          {status?.status === 'running' && trainingId && (
+            <button className="action-btn" onClick={() => {
+              fetch(`${API}/training/${trainingId}/stop`, { method: 'POST' }).catch(() => {})
+            }}>
+              Stop Training
+            </button>
+          )}
           {status?.status === 'complete' && onPlay && (
             <button className="action-btn" onClick={() => onPlay(selectedGame)}>
               Play vs ThinAI &rarr;
@@ -313,6 +462,9 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
             <div className="training-depth-report">
               Search depth settled at: <strong>{status.results.final_depth} move{status.results.final_depth !== 1 ? 's' : ''} ahead</strong>
             </div>
+          )}
+          {status.results?.game_replays?.length > 0 && (
+            <GameReplayViewer replays={status.results.game_replays} gameType={selectedGame} />
           )}
           {status.self_assessment && status.results?.strategy_assessment !== 'pure_luck' && (
             <SelfAssessmentPanel assessment={status.self_assessment} />

@@ -229,10 +229,9 @@
 
 <h3>Known limitations in novel games</h3>
 <ul>
-  <li>Novel card games (Crazy Eights-like): discard pile card may not render face-up; false "pure luck" detection in some cases</li>
-  <li>Card action effects (Skip, Reverse, Draw Two) only work via built-in Uno engine, not generically expressible for novel card games</li>
-  <li>Extra turn triggers detected but the effect logic (what sets the extra_turn flag) requires game-specific code</li>
-  <li>Movement games auto-fill starting rows but don't support dark-square-only placement (checkerboard pattern)</li>
+  <li>Card action effects (Skip, Reverse, Draw Two) work via built-in Uno engine, not generically expressible for fully custom card effects</li>
+  <li>Extra turn triggers detected but the specific conditions that set the flag (e.g., "landing in store") require game-specific code</li>
+  <li>Capture games default to filling all squares — dark-square-only placement requires "dark squares" in the description</li>
 </ul>
 
 <h2>Games Implemented (20)</h2>

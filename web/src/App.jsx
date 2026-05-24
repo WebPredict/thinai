@@ -878,7 +878,7 @@ function App() {
                   const name = customGameName || parseResult.meta?.name || 'custom_game'
                   let gid = parsedGameId || name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '') || 'custom_game'
                   if (customGameName && customGameName !== parseResult.meta?.name) {
-                    // Rename by applying a name clarification (doesn't re-parse)
+                    // Rename: re-parse with new name, then re-apply clarifications
                     try {
                       const res = await fetch(`${API}/parse`, {
                         method: 'POST',
@@ -887,7 +887,7 @@ function App() {
                       })
                       const data = await res.json()
                       if (data.game_id) gid = data.game_id
-                      // Re-apply any clarification answers to the new file
+                      // Re-apply clarification answers to the renamed file
                       for (const [cid, ans] of Object.entries(clarAnswers)) {
                         await fetch(`${API}/parse/clarify`, {
                           method: 'POST',
@@ -897,6 +897,15 @@ function App() {
                       }
                       refreshGames()
                     } catch (e) {}
+                  } else if (Object.keys(clarAnswers).length > 0 && parsedGameId) {
+                    // No rename but has clarifications — ensure they're applied
+                    for (const [cid, ans] of Object.entries(clarAnswers)) {
+                      await fetch(`${API}/parse/clarify`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ game_id: parsedGameId, clarification_id: cid, answer: ans }),
+                      })
+                    }
                   }
                   setSelectedGame(gid)
                   setMode('train')

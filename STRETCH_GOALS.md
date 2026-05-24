@@ -189,3 +189,33 @@ Every game against a human is a training signal. An optional "Allow ThinAI to le
 - Learning rate should be lower for human games (subtle adjustments, not big swings)
 - Could show "confidence change" after each human game
 - Works especially well for novel games where the AI starts weak
+
+---
+
+### Strategy hints from user ("teach the kid")
+The user tells the AI what to pay attention to in plain English, like an adult teaching a kid: "Try to control the center" or "Don't leave single pieces exposed" or "Save high cards for later rounds."
+
+**Implementation approach:**
+- Text field on the training page: "Any strategy tips? (optional)"
+- Parser matches hint keywords to existing feature names:
+  - "center" → boost `center_control` prior
+  - "high cards later" / "save" → boost `card_conservation` prior
+  - "single pieces" / "exposed" / "blot" → boost `exposed_singles` or `blot_safety` prior
+  - "corners" → boost `corner_presence` prior
+  - "lines" / "rows" → boost `line_threats` prior
+  - "pieces" / "advantage" / "capture" → boost `piece_advantage` prior
+  - "block" / "opponent" → boost blocking-related features
+- Matched features get their auto-prior boosted (e.g., 0.1 → 0.5+)
+- AI starts training with that bias and refines through play
+- Multiple hints supported: "Control center, don't leave single pieces"
+
+**Impact:** Addresses the novel game strategy depth problem without more compute. The AI doesn't need 40 games to discover "center matters" if the user says so. Mirrors how humans actually learn games — someone explains what's important before you start playing.
+
+**Example flow:**
+1. User parses: "8x8 board. Move diagonally. Jump to capture."
+2. User adds hint: "Try to keep your pieces together and control the center"
+3. Parser matches: `center_control` prior → 0.5, `adjacency_count` prior → 0.3
+4. AI trains with strong center + grouping bias from game 1
+5. Training curve starts higher, converges faster
+
+**Estimated effort:** ~50 LOC — keyword matching to feature names + prior boost in auto_priors.py. UI: one text input field on training page.

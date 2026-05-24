@@ -125,6 +125,15 @@ def parse_natural(text: str) -> dict:
         meta["turn_order"] = "conditional"
         meta["turn_rule"] = "if has_legal_move(next_player): next_player else: same_player"
 
+    # Jump chain: movement+capture games get same-player turn on chain jumps
+    has_jump_capture = any(
+        any(p.get("select") == "grid_moves" for p in r.get("params", []))
+        for r in rules
+    ) and any(w in text for w in ['jump', 'capture', 'hop'])
+    if has_jump_capture and not has_race_choice:
+        meta["turn_order"] = "conditional"
+        meta["turn_rule"] = "if jump_chain_active(): same_player else: next_player"
+
     # Extra turn / go again: result-triggered same-player turn
     has_extra_turn = any(w in text for w in ['extra turn', 'another turn', 'go again',
                                               'take another turn', 'gets another',
@@ -630,11 +639,24 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
 
     # Default: simple placement on empty space (TTT style)
     if board.get("type") == "grid":
+        # Detect piece inventory: "each player has N pieces/stones"
+        piece_limit = None
+        inv_match = re.search(r'each player (?:has|gets|starts with)\s+(\d+)', text)
+        if not inv_match:
+            inv_match = re.search(r'(\d+)\s+(?:pieces?|stones?|marks?)\s+(?:each|per)', text)
+        if inv_match:
+            piece_limit = int(inv_match.group(1))
+            board["_piece_limit"] = piece_limit
+
+        conditions = ["piece_at(target) == empty"]
+        if piece_limit:
+            conditions.append(f"pieces_placed(current_player) < {piece_limit}")
+
         rules.append({
             "name": f"place_{piece_name}",
             "action": "place",
             "params": [{"name": "target", "select": "empty_space"}],
-            "conditions": ["piece_at(target) == empty"],
+            "conditions": conditions,
             "effects": [f"place {piece_name}(current_player) at target"],
         })
         return rules
@@ -840,7 +862,15 @@ def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
                 break
 
         # Check for specific row count in description
+        word_nums = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5}
         row_match = re.search(r'(?:first|starting)\s+(\d+)\s+rows?', text)
+        if not row_match:
+            word_match = re.search(r'(?:first|starting)\s+(one|two|three|four|five)\s+rows?', text)
+            if word_match:
+                class FakeMatch:
+                    def __init__(self, v): self._v = v
+                    def group(self, _): return str(self._v)
+                row_match = FakeMatch(word_nums[word_match.group(1)])
         if row_match:
             fill_rows = int(row_match.group(1))
         elif re.search(r'(\d+)\s+pieces?\s+each', text):
@@ -849,11 +879,19 @@ def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
         else:
             fill_rows = min(2, rows // 3)
 
+        # Detect dark square placement
+        dark_only = any(w in text for w in ['dark square', 'black square', 'checkerboard',
+                                             'alternate square', 'alternating square'])
+
         for r in range(rows - fill_rows, rows):
             for c in range(cols):
+                if dark_only and (r + c) % 2 == 0:
+                    continue  # skip light squares
                 setup.append({"action": "place", "piece": f"{piece_name}(player1)", "at": f"space_at({r}, {c})"})
         for r in range(fill_rows):
             for c in range(cols):
+                if dark_only and (r + c) % 2 == 0:
+                    continue
                 setup.append({"action": "place", "piece": f"{piece_name}(player2)", "at": f"space_at({r}, {c})"})
         return setup
 
@@ -883,8 +921,11 @@ def _extract_setup(text: str, board: dict, pieces: list) -> list[dict]:
         setup.append({"action": "deal", "from": deck_zone, "to": "hand_p2", "count": deal_count})
 
         # If there's a discard pile, flip one card to start it
+        # Always flip for matching/shedding games (they need a card to match against)
         has_discard = any(z["name"] == "discard" for z in board.get("zones", []))
-        if has_discard and any(w in text for w in ['flip', 'turn over', 'face up', 'start', 'discard']):
+        is_matching = any(w in text for w in ['match', 'matching', 'crazy eight', 'uno',
+                                               'same suit', 'same rank', 'play a card'])
+        if has_discard and (is_matching or any(w in text for w in ['flip', 'turn over', 'face up', 'start', 'discard'])):
             setup.append({"action": "reveal", "from": deck_zone, "to": "discard", "count": 1})
 
         return setup

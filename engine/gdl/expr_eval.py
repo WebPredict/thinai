@@ -281,6 +281,9 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         if player == "current_player":
             player = ctx.state.current_player
         return _row_or_col_filled(ctx.state, player)
+    if name == "jump_chain_active":
+        return ctx.state.state_vars.get("_jump_chain", False)
+
     if name == "piece_on_row":
         # piece_on_row(player, row) — check if player has a piece on that row
         # But actually: player1 wins at row 0, player2 wins at max row
@@ -301,6 +304,12 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         forward_only = ctx.state.state_vars.get("_forward_only", False)
         moves = get_grid_moves(ctx.state, player, directions, forward_only)
         return len(moves) == 0
+
+    if name == "pieces_placed":
+        player = args[0] if args else ctx.state.current_player
+        if isinstance(player, str) and player.startswith("player"):
+            return sum(1 for _, p in ctx.state.all_pieces() if p.owner == player)
+        return 0
 
     if name == "board_full":
         if isinstance(ctx.state.board, GridBoard):

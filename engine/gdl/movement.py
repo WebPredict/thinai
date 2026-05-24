@@ -64,9 +64,16 @@ def get_grid_moves(state: GameState, player: str = None,
     moves = []
     jumps = []
 
+    # During a jump chain, only the chain piece can move (and only jumps)
+    chain_piece_key = state.state_vars.get("_chain_piece") if state.state_vars.get("_jump_chain") else None
+
     for space in board.spaces:
         piece = state.get_piece(space)
         if not piece or piece.owner != player:
+            continue
+
+        # During chain, skip all pieces except the chain piece
+        if chain_piece_key and f"{space.row},{space.col}" != chain_piece_key:
             continue
 
         r, c = space.row, space.col
@@ -152,6 +159,43 @@ def execute_grid_move(state: GameState, move_id: int,
             f"({move.from_space.row},{move.from_space.col}) → "
             f"({move.to_space.row},{move.to_space.col})"
         )
+
+    # Check for jump chain: if we just jumped and can jump again, flag extra turn
+    state.state_vars["_jump_chain"] = False
+    if move.captured_space:
+        # Check if the piece at the landing square can make another jump
+        updated_piece = state.get_piece(move.to_space)
+        if updated_piece:
+            is_king = updated_piece.name == "king"
+            board = state.board
+            rows, cols = board.rows, board.cols
+            opponent = state.opponent(player)
+
+            if directions == "orthogonal":
+                dirs = ORTHOGONAL
+            elif directions == "diagonal":
+                dirs = DIAGONAL
+            else:
+                dirs = ALL_DIRS
+
+            for dr, dc in dirs:
+                if forward_only and not is_king:
+                    if player == "player1" and dr > 0:
+                        continue
+                    if player == "player2" and dr < 0:
+                        continue
+                nr, nc = move.to_space.row + dr, move.to_space.col + dc
+                if 0 <= nr < rows and 0 <= nc < cols:
+                    mid = GridSpace(nr, nc)
+                    mid_piece = state.get_piece(mid)
+                    if mid_piece and mid_piece.owner == opponent:
+                        jr, jc = move.to_space.row + 2*dr, move.to_space.col + 2*dc
+                        if 0 <= jr < rows and 0 <= jc < cols:
+                            landing = GridSpace(jr, jc)
+                            if state.is_empty(landing):
+                                state.state_vars["_jump_chain"] = True
+                                state.state_vars["_chain_piece"] = f"{move.to_space.row},{move.to_space.col}"
+                                break
 
     # Check for promotion: piece reaching back row becomes a king
     if state.state_vars.get("_promotion_enabled"):

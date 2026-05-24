@@ -273,13 +273,11 @@
 
 <h2>What Needs Work</h2>
 <ul>
-  <li><strong>Conditional card effects:</strong> Action cards (Uno's Skip, Reverse, Draw Two) can't be expressed as novel game rules yet. "When X is played, do Y to the next player" isn't parseable.</li>
-  <li><strong>Multi-step turns:</strong> Jump chains (keep jumping if another capture available) and draw-then-optionally-play sequences aren't supported for novel games.</li>
   <li><strong>Complex dice:</strong> Two independent dice (Backgammon: move one piece by die1 AND another by die2), doubles giving extra moves — not supported for novel games.</li>
-  <li><strong>Piece inventory:</strong> "Each player has exactly 8 stones" — limited supply constraints not parsed or enforced.</li>
-  <li><strong>Dark square placement:</strong> Checkerboard-pattern piece placement (dark squares only) not supported.</li>
-  <li><strong>Opponent modeling:</strong> Card games would benefit from tracking what opponents' plays reveal about their hand.</li>
+  <li><strong>Draw-then-play turns:</strong> Multi-phase turns like "draw a card, then optionally play it" aren't supported for novel card games.</li>
+  <li><strong>Meld detection:</strong> Gin Rummy-style meld evaluation (runs, sets) can't be expressed generically for novel card games.</li>
   <li><strong>Novel game strategy depth:</strong> Novel games graduate from random to self-snapshot opponent, but strategy discovery remains shallow for complex games.</li>
+  <li><strong>Custom conditional effects:</strong> "When you land on a red space, draw a card" — arbitrary effect triggers not yet parseable beyond built-in patterns (Skip, Reverse, Draw Two).</li>
 </ul>
 
 <h2>Changes (May 20, 2026)</h2>

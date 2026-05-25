@@ -207,6 +207,80 @@ def _prior_for_feature(feature_name: str, signals: dict) -> float:
     return 0.0
 
 
+# ======================================================================
+# Strategy hints: user-provided plain English → feature prior boosts
+# ======================================================================
+
+# Maps hint keywords to feature name patterns and boost amounts
+HINT_KEYWORDS = {
+    # Positional
+    "center": [("center", 0.5)],
+    "middle": [("center", 0.5)],
+    "corner": [("corner", 0.4)],
+    "edge": [("edge", 0.3)],
+
+    # Lines and threats
+    "line": [("line", 0.4), ("longest", 0.3)],
+    "row": [("line", 0.4)],
+    "block": [("line_threat", 0.4), ("line", 0.3)],
+    "threat": [("line_threat", 0.5)],
+
+    # Pieces and capture
+    "capture": [("piece_advantage", 0.5), ("piece", 0.3)],
+    "pieces": [("piece_advantage", 0.3)],
+    "advantage": [("advantage", 0.4)],
+    "protect": [("blot", 0.4), ("exposed", 0.4), ("safety", 0.4)],
+    "exposed": [("blot", 0.5), ("exposed", 0.5), ("safety", 0.4)],
+    "single": [("blot", 0.4), ("exposed", 0.4), ("singles", 0.4)],
+    "together": [("adjacency", 0.4), ("spread", -0.3)],
+    "group": [("adjacency", 0.4), ("spread", -0.3)],
+
+    # Card games
+    "save": [("conservation", 0.5)],
+    "high card": [("conservation", 0.4), ("high_card", 0.3)],
+    "trump": [("trump", 0.5)],
+    "bid": [("bid", 0.4)],
+
+    # General strategy
+    "mobility": [("mobility", 0.4)],
+    "options": [("mobility", 0.3)],
+    "territory": [("territory", 0.4), ("piece_advantage", 0.3)],
+    "control": [("center", 0.3), ("territory", 0.3)],
+    "advance": [("advancement", 0.4), ("progress", 0.3)],
+    "forward": [("advancement", 0.3), ("progress", 0.3)],
+    "king": [("king", 0.4), ("promoted", 0.4)],
+    "promote": [("promoted", 0.5), ("advancement", 0.3)],
+}
+
+
+def apply_hints(features: list, weights: list[float], hint_text: str) -> list[float]:
+    """Apply user strategy hints to boost feature weights.
+
+    Args:
+        features: list of FeatureSpec objects
+        weights: current weight list (modified in place and returned)
+        hint_text: plain English strategy hint from user
+
+    Returns:
+        Modified weights list
+    """
+    if not hint_text or not features:
+        return weights
+
+    hint_lower = hint_text.lower()
+    boosted = set()
+
+    for keyword, mappings in HINT_KEYWORDS.items():
+        if keyword in hint_lower:
+            for feature_pattern, boost in mappings:
+                for i, feat in enumerate(features):
+                    if feature_pattern in feat.name.lower() and i not in boosted:
+                        weights[i] += boost
+                        boosted.add(i)
+
+    return weights
+
+
 def _explain_prior(feature_name: str, weight: float, signals: dict) -> str:
     """Generate a human-readable explanation for a prior."""
     name = feature_name.lower()

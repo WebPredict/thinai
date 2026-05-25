@@ -433,6 +433,42 @@ class GameEngine:
             for m in moves:
                 yield m.move_id
 
+        elif select == "spades_bid_options":
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+            hand_size = hand.size if hand else 13
+            for i in range(1, hand_size + 1):  # bid 1 to hand_size (no nil in 2-player)
+                yield i
+
+        elif select == "spades_playable":
+            if state.card_zones:
+                suffix = "p1" if state.current_player == "player1" else "p2"
+                hand = state.card_zones.get(f"hand_{suffix}")
+                trick = state.card_zones.get("trick")
+                lead_suit = state.state_vars.get("lead_suit", "")
+                spades_broken = state.state_vars.get("spades_broken", False)
+                is_leading = not trick or trick.is_empty
+
+                if hand:
+                    if is_leading:
+                        # Can't lead spades until broken (unless only have spades)
+                        non_spades = [c for c in hand.cards if c.suit != "spades"]
+                        if non_spades and not spades_broken:
+                            for card in non_spades:
+                                yield card.id
+                        else:
+                            for card in hand.cards:
+                                yield card.id
+                    else:
+                        # Must follow lead suit if possible
+                        matching = [c for c in hand.cards if c.suit == lead_suit]
+                        if matching:
+                            for card in matching:
+                                yield card.id
+                        else:
+                            for card in hand.cards:
+                                yield card.id
+
         elif select == "checkers_moves":
             from engine.gdl.checkers import get_all_moves
             moves = get_all_moves(state)

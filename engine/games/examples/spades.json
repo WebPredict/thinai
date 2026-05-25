@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "name": "Spades",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if spades_trick_complete(): spades_trick_winner() else: next_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "deck", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "trick", "visible_to": "all", "ordered": true },
+      { "name": "taken_p1", "owner": "player1", "visible_to": "all", "ordered": false },
+      { "name": "taken_p2", "owner": "player2", "visible_to": "all", "ordered": false }
+    ]
+  },
+
+  "cards": {
+    "deck": "standard52",
+    "deck_zone": "deck"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "lead_suit", "type": "string", "scope": "global", "initial": "" },
+    { "name": "phase", "type": "string", "scope": "global", "initial": "bid_p1" },
+    { "name": "p1_bid", "type": "int", "scope": "global", "initial": -1 },
+    { "name": "p2_bid", "type": "int", "scope": "global", "initial": -1 },
+    { "name": "p1_tricks_won", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_tricks_won", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p1_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "tricks_played", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "trick_winner", "type": "string", "scope": "global", "initial": "" },
+    { "name": "trump_suit", "type": "string", "scope": "global", "initial": "spades" },
+    { "name": "spades_broken", "type": "bool", "scope": "global", "initial": false },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_play", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "deck" },
+    { "action": "deal", "from": "deck", "to": "hand_p1", "count": 13 },
+    { "action": "deal", "from": "deck", "to": "hand_p2", "count": 13 }
+  ],
+
+  "rules": [
+    {
+      "name": "bid",
+      "action": "bid",
+      "params": [
+        { "name": "bid_value", "select": "spades_bid_options" }
+      ],
+      "conditions": ["spades_can_bid()"],
+      "effects": [
+        "spades_bid(bid_value)"
+      ]
+    },
+    {
+      "name": "play_card",
+      "action": "play",
+      "params": [
+        { "name": "card_id", "select": "spades_playable" }
+      ],
+      "conditions": ["spades_can_play()"],
+      "effects": [
+        "spades_play(card_id)"
+      ]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "spades_game_over()",
+      "score": "spades_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "2-player Spades: 13 cards each, spades are always trump. Players bid how many tricks they'll win (1-13). Must follow lead suit if possible. Spades can't be led until broken. Scoring: make bid = 10*bid + overtricks, miss bid = -10*bid."
+  }
+}

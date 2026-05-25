@@ -6,7 +6,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'wizard', 'scrabble', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'spades', 'wizard', 'scrabble', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -24,6 +24,7 @@ const PLAYER_INDICATOR = {
   hex: { label: 'Red (top-bottom)', color: '#c83030' },
   backgammon: { label: 'White', color: '#e8dfd1' },
   hearts: { label: 'Player 1', color: '#d4a656' },
+  spades: { label: 'Player 1', color: '#d4a656' },
   wizard: { label: 'Player 1', color: '#d4a656' },
   scrabble: { label: 'Player 1', color: '#d4a656' },
   gin_rummy: { label: 'Player 1', color: '#d4a656' },
@@ -46,6 +47,7 @@ const GAME_LABELS = {
   hex: 'Hex',
   backgammon: 'Backgammon',
   hearts: 'Hearts',
+  spades: 'Spades',
   wizard: 'Wizard',
   scrabble: 'Scrabble',
   gin_rummy: 'Gin Rummy',
@@ -217,6 +219,18 @@ const GAME_RULES = {
       'Each heart taken = 1 point. Queen of Spades = 13 points.',
       'Hearts cannot be led until a heart has been played on a previous trick ("broken").',
       'After all 13 tricks, the player with fewer points wins.',
+    ],
+  },
+  spades: {
+    title: 'How to play Spades',
+    intro: 'Win the number of tricks you bid! Spades are always trump.',
+    rules: [
+      'Each player is dealt 13 cards.',
+      'First, each player bids how many tricks they think they\'ll win (1-13).',
+      'Players take turns playing one card per trick. Must follow the lead suit if possible.',
+      'Spades are trump — they beat any non-spade card. Spades can\'t be led until one has been played (broken).',
+      'Highest card of the lead suit wins the trick, unless a spade is played.',
+      'Scoring: if you win at least your bid, you get 10\u00D7bid + 1 per overtrick. If you miss, you lose 10\u00D7bid.',
     ],
   },
   wizard: {

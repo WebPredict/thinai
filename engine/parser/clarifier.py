@@ -206,8 +206,10 @@ def find_clarifications(gdl: dict, original_text: str) -> list[dict]:
     has_movement = any(r.get("action") == "move" for r in rules)
     # Check if the description explicitly specifies piece count/placement
     has_explicit_setup = bool(
-        re.search(r'(?:first|starting)\s+(\d+)\s+rows?', original_text, re.IGNORECASE) or
-        re.search(r'(\d+)\s+pieces?\s+(?:each|per)', original_text, re.IGNORECASE)
+        re.search(r'(?:first|starting)\s+(?:\d+|one|two|three|four|five)\s+rows?', original_text, re.IGNORECASE) or
+        re.search(r'(\d+)\s+pieces?\s+(?:each|per)', original_text, re.IGNORECASE) or
+        re.search(r'(?:has|gets|starts with)\s+(\d+)\s+pieces?', original_text, re.IGNORECASE) or
+        re.search(r'dark square|black square|checkerboard|back row|corner', original_text, re.IGNORECASE)
     )
     if has_movement and is_grid and not has_explicit_setup:
         rows = gdl.get("board", {}).get("grid", {}).get("rows", 8)

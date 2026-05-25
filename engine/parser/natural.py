@@ -481,7 +481,13 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
         return rules
 
     # Movement/Capture: move pieces from one space to another (grid games only — track games use race rules)
-    if board.get("type") != "track" and any(w in text for w in ['move your piece', 'move one square', 'move a piece',
+    # Skip if the primary action is placing (not moving) — e.g., "take turns placing stones"
+    # Don't match "place pieces on a grid" when followed by "move" — that's setup context
+    is_placement_game = any(w in text for w in ['take turns placing', 'takes turns placing',
+                                                 'placing stones', 'placing marks'])
+    if is_placement_game and any(w in text for w in ['move your', 'move one', 'move diag', 'move piece']):
+        is_placement_game = False  # has explicit movement — not a pure placement game
+    if not is_placement_game and board.get("type") != "track" and any(w in text for w in ['move your piece', 'move one square', 'move a piece',
                                 'slide', 'step forward', 'jump over',
                                 'move diagonally', 'move orthogonally',
                                 'move to an adjacent', 'moves one space',
@@ -620,7 +626,7 @@ def _extract_rules(text: str, board: dict, pieces: list) -> list[dict]:
                         'remove opponent', 'eliminate', 'eliminated',
                         'eat opponent', 'knock out', 'knocked out']
     has_capture = any(w in text for w in capture_keywords)
-    if has_capture and board.get("type") == "grid" and not rules:
+    if has_capture and board.get("type") == "grid" and not rules and not is_placement_game:
         # Movement + capture game — use generic grid movement
         is_diagonal = 'diagonal' in text
         move_dirs = "diagonal" if is_diagonal else "all"
@@ -1353,7 +1359,7 @@ def _extract_cosmetics(text: str) -> dict:
     # Board pattern: checkerboard/chessboard
     if any(w in text for w in ['checkerboard', 'chessboard', 'checkered',
                                 'alternating squares', 'chess board',
-                                'checker board']):
+                                'checker board', 'dark square', 'black square']):
         cosmetics["board_pattern"] = "checkerboard"
 
     return cosmetics

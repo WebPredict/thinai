@@ -48,6 +48,7 @@ export default function GameBoardRenderer({ gameType, state, onMove, disabled, a
     case 'hearts':
       return <HeartsBoard state={state} onMove={move} disabled={off} />
     case 'wizard':
+    case 'spades':
       return <WizardBoard state={state} onMove={move} disabled={off} />
     case 'scrabble':
       return <ScrabbleBoard state={state} onMove={move} disabled={off} />

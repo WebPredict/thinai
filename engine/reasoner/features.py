@@ -898,6 +898,7 @@ FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Gin Rummy": GIN_RUMMY_FEATURES,
     "Five-Card Draw": POKER_FEATURES,
     "Wizard": WIZARD_FEATURES,
+    "Spades": WIZARD_FEATURES,  # same features work (trump, high cards, bid accuracy, score, voids)
     "Simplified Scrabble": SCRABBLE_FEATURES,
 }
 

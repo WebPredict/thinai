@@ -192,6 +192,51 @@ Every game against a human is a training signal. An optional "Allow ThinAI to le
 
 ---
 
+### Canasta Implementation Plan
+
+Canasta is a rummy-style card game focused on melding (3+ of same rank). It requires significant new infrastructure.
+
+**New mechanics needed:**
+1. **Meld detection** — identify groups of 3+ same rank in hand
+2. **Multi-card play** — lay down multiple cards as a meld in one turn
+3. **Wild cards in melds** — 2s and Jokers can substitute in melds (max 1 wild per 2 naturals)
+4. **Discard pile pickup** — take entire discard pile if top card matches a meld or pair in hand
+5. **Frozen pile** — wild card or black 3 on discard freezes it (can only pick up with natural pair)
+6. **Going out** — requires at least one canasta (7 of a kind), must ask partner in 4-player
+7. **Scoring** — natural canasta: 500, mixed: 300, cards: face value, going out bonus: 100
+
+**Implementation order:**
+1. `engine/gdl/melds.py` (~150 LOC) — meld detection, validation, scoring
+   - `find_melds(hand)` → list of valid meld groups
+   - `is_valid_meld(cards)` → bool (3+ same rank, wild card limits)
+   - `score_melds(melds)` → points
+   - `is_canasta(meld)` → bool (7+ cards)
+
+2. Multi-phase turn system (~100 LOC) — draw phase → meld phase → discard phase
+   - New turn structure: `phases: ["draw", "meld", "discard"]`
+   - Player draws 2 cards (or picks up discard pile)
+   - Player optionally lays down melds
+   - Player discards 1 card
+
+3. `engine/games/examples/canasta.json` (~80 LOC) — GDL with:
+   - Double deck (108 cards: 2×52 + 4 jokers)
+   - Zones: deck, hand_p1, hand_p2, melds_p1, melds_p2, discard
+   - State vars: frozen_pile, has_canasta_p1/p2, etc.
+
+4. Canasta-specific features (~50 LOC):
+   - `meld_progress` — cards close to forming melds
+   - `canasta_count` — completed canastas
+   - `wild_card_count` — 2s and Jokers in hand
+   - `discard_pile_value` — incentive to pick up large piles
+
+5. UI: MeldBoard component (~120 LOC) — show melds on table, hand, discard pile
+
+**Estimated total:** ~500 LOC, 1-2 sessions
+**Dependencies:** Meld system would also unblock Gin Rummy as a novel game
+**Priority:** Medium — significant work but unlocks a whole game category (rummy family)
+
+---
+
 ### Strategy hints from user ("teach the kid")
 The user tells the AI what to pay attention to in plain English, like an adult teaching a kid: "Try to control the center" or "Don't leave single pieces exposed" or "Save high cards for later rounds."
 

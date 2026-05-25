@@ -219,6 +219,7 @@ class TrainingRequest(BaseModel):
     think_time: Optional[int] = None  # seconds per move — converted to depth
     fresh: bool = False
     replay_count: int = 3  # number of games to record for visual replay
+    hints: str = ""  # user strategy hints in plain English
 
 
 class ParseRequest(BaseModel):
@@ -667,6 +668,16 @@ def start_training(request: Request, req: TrainingRequest):
             features = discover_features_from_rules(engine.gdl)
         evaluator = LearnableEval(game_name, features=features, gdl=engine.gdl)
 
+    # Apply user strategy hints to boost relevant feature priors
+    hints_applied = []
+    if req.hints and evaluator:
+        from engine.reasoner.auto_priors import apply_hints
+        old_weights = list(evaluator.weights)
+        evaluator.weights = apply_hints(evaluator.features, evaluator.weights, req.hints)
+        for i, (f, ow, nw) in enumerate(zip(evaluator.features, old_weights, evaluator.weights)):
+            if nw != ow:
+                hints_applied.append(f"{f.name}: {ow:.2f} → {nw:.2f}")
+
     run_state = {
         "status": "running",
         "game": req.game,
@@ -678,6 +689,7 @@ def start_training(request: Request, req: TrainingRequest):
         "snapshots": [],
         "evaluator": evaluator,
         "runner": None,
+        "hints_applied": hints_applied,
     }
     _training_runs[training_id] = run_state
 
@@ -761,6 +773,7 @@ def training_status(training_id: str):
         ],
         "generation": evaluator.generation,
         "results": run["results"],
+        "hints_applied": run.get("hints_applied", []),
     }
 
     # Add metacognition data

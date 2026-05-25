@@ -382,6 +382,25 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         suffix = "p1" if player == "player1" else "p2"
         return ctx.state.state_vars.get(f"{suffix}_score", 0)
 
+    # Spades built-ins
+    if name == "spades_can_bid":
+        phase = ctx.state.state_vars.get("phase", "")
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        return phase == f"bid_{suffix}"
+    if name == "spades_can_play":
+        return ctx.state.state_vars.get("phase", "") == "play"
+    if name == "spades_trick_complete":
+        return ctx.state.state_vars.get("last_action") == "trick_won"
+    if name == "spades_trick_winner":
+        winner = ctx.state.state_vars.get("trick_winner", "")
+        return winner if winner in ("player1", "player2") else ctx.state.current_player
+    if name == "spades_game_over":
+        return ctx.state.state_vars.get("tricks_played", 0) >= 13
+    if name == "spades_score":
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        suffix = "p1" if player == "player1" else "p2"
+        return ctx.state.state_vars.get(f"{suffix}_score", 0)
+
     # Scrabble built-ins
     if name == "scrabble_game_over":
         bag = ctx.state.state_vars.get("bag", [])
@@ -930,6 +949,16 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "wizard_play":
         args = [evaluate(a, ctx) for a in node.args]
         _wizard_play(ctx.state, int(args[0]))
+        return
+
+    # Spades effects
+    if name == "spades_bid":
+        args = [evaluate(a, ctx) for a in node.args]
+        _spades_bid(ctx.state, int(args[0]))
+        return
+    if name == "spades_play":
+        args = [evaluate(a, ctx) for a in node.args]
+        _spades_play(ctx.state, int(args[0]))
         return
 
     # Scrabble effects
@@ -2544,6 +2573,122 @@ def _scrabble_place(state: GameState, word_id: int):
     state.state_vars["first_move"] = False
     state.state_vars["last_play"] = f"{placement['word']} ({placement['score']} pts)"
     state.state_vars["last_action"] = "place"
+
+
+# --- Spades card game built-ins ---
+
+def _spades_bid(state: GameState, bid_value: int):
+    """Record a player's bid in Spades."""
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    state.state_vars[f"{suffix}_bid"] = bid_value
+    state.state_vars["last_play"] = f"{'You' if suffix == 'p1' else 'AI'} bid {bid_value} trick{'s' if bid_value != 1 else ''}"
+    state.state_vars["last_action"] = "bid"
+
+    if suffix == "p1":
+        state.state_vars["phase"] = "bid_p2"
+    else:
+        state.state_vars["phase"] = "play"
+
+
+def _spades_play(state: GameState, card_id: int):
+    """Play a card in Spades."""
+    if not state.card_zones:
+        return
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    trick = state.card_zones.get("trick")
+    if not hand or not trick:
+        return
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    hand.remove(card)
+    trick.add(card)
+
+    state.state_vars["last_play"] = f"{card.rank}{SUIT_SYMBOLS.get(card.suit, card.suit)}"
+    state.state_vars["last_action"] = "play"
+
+    if trick.size == 1:
+        state.state_vars["lead_suit"] = card.suit
+        state.state_vars["lead_player"] = state.current_player
+
+    if card.suit == "spades":
+        state.state_vars["spades_broken"] = True
+
+    if trick.size == 2:
+        _spades_resolve_trick(state)
+
+
+def _spades_resolve_trick(state: GameState):
+    """Resolve a completed Spades trick — spades are always trump."""
+    trick = state.card_zones.get("trick")
+    if not trick or trick.size != 2:
+        return
+
+    lead_suit = state.state_vars.get("lead_suit", "")
+    lead_player = state.state_vars.get("lead_player", "player1")
+    follow_player = "player2" if lead_player == "player1" else "player1"
+
+    cards = list(trick.cards)
+    lead_card = cards[0]
+    follow_card = cards[1]
+
+    lead_val = _RANK_ORDER.get(lead_card.rank, 0)
+    follow_val = _RANK_ORDER.get(follow_card.rank, 0)
+
+    # Trump logic: spades beat everything
+    lead_is_trump = lead_card.suit == "spades"
+    follow_is_trump = follow_card.suit == "spades"
+
+    if lead_is_trump and follow_is_trump:
+        winner = follow_player if follow_val > lead_val else lead_player
+    elif follow_is_trump:
+        winner = follow_player
+    elif lead_is_trump:
+        winner = lead_player
+    elif follow_card.suit == lead_suit and follow_val > lead_val:
+        winner = follow_player
+    else:
+        winner = lead_player
+
+    winner_suffix = "p1" if winner == "player1" else "p2"
+    taken = state.card_zones.get(f"taken_{winner_suffix}")
+    if taken:
+        for card in list(trick.cards):
+            trick.remove(card)
+            taken.add(card)
+    else:
+        trick.cards.clear()
+
+    state.state_vars[f"{winner_suffix}_tricks_won"] = state.state_vars.get(f"{winner_suffix}_tricks_won", 0) + 1
+    state.state_vars["tricks_played"] = state.state_vars.get("tricks_played", 0) + 1
+    state.state_vars["lead_suit"] = ""
+    state.state_vars["trick_winner"] = winner
+    state.state_vars["last_action"] = "trick_won"
+
+    tricks_won = state.state_vars[f"{winner_suffix}_tricks_won"]
+    state.state_vars["last_play"] = f"{'You' if winner == 'player1' else 'AI'} won trick #{state.state_vars['tricks_played']}"
+
+    # Score at end of hand (13 tricks)
+    if state.state_vars["tricks_played"] >= 13:
+        for s in ("p1", "p2"):
+            bid = state.state_vars.get(f"{s}_bid", 0)
+            tricks = state.state_vars.get(f"{s}_tricks_won", 0)
+            if tricks >= bid:
+                points = 10 * bid + (tricks - bid)  # overtricks worth 1 each
+            else:
+                points = -10 * bid
+            state.state_vars[f"{s}_score"] = points
+        p1s = state.state_vars["p1_score"]
+        p2s = state.state_vars["p2_score"]
+        state.state_vars["last_play"] = f"Hand complete! You: {p1s} pts, AI: {p2s} pts"
+        state.state_vars["last_action"] = "game_over"
 
 
 # --- Compare/Score card game built-ins (novel parsed games) ---

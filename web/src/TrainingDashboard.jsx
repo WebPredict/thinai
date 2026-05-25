@@ -174,6 +174,7 @@ const GAME_LABELS = {
   hex: 'Hex',
   backgammon: 'Backgammon',
   hearts: 'Hearts',
+  spades: 'Spades',
   wizard: 'Wizard',
   scrabble: 'Scrabble',
   gin_rummy: 'Gin Rummy',
@@ -200,6 +201,7 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
   const [numGames, setNumGames] = useState(initDefaults.games)
   const [thinkTime, setThinkTime] = useState(initDefaults.thinkTime)
   const [fresh, setFresh] = useState(true)
+  const [hints, setHints] = useState('')
   const [memories, setMemories] = useState([])
   const pollRef = useRef(null)
 
@@ -244,7 +246,7 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
     const res = await fetch(`${API}/training/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game: selectedGame, num_games: numGames, think_time: thinkTime, fresh }),
+      body: JSON.stringify({ game: selectedGame, num_games: numGames, think_time: thinkTime, fresh, hints }),
     })
     const data = await res.json()
     setStatus({ status: 'running', games_played: 0, total_games: numGames, snapshots: [] })
@@ -305,6 +307,29 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
               : '(continue from previously learned weights)'}
           </span>
         </label>
+        <div style={{
+          margin: '0.75rem 0', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto',
+        }}>
+          <label style={{ fontFamily: 'Menlo, monospace', fontSize: '0.9rem', color: 'var(--accent)', display: 'block', marginBottom: '0.4rem' }}>
+            Strategy hints <span style={{ color: 'var(--ink)' }}>(optional — teach it what matters)</span>
+          </label>
+          <textarea
+            value={hints}
+            onChange={e => setHints(e.target.value)}
+            placeholder="e.g. Control the center, protect your pieces, save high cards for later rounds"
+            rows={2}
+            style={{
+              width: '100%', padding: '0.5rem 0.7rem',
+              fontFamily: 'Menlo, monospace', fontSize: '0.9rem',
+              background: 'var(--bg)', color: 'var(--ink)',
+              border: '1px solid var(--accent-dim)', borderRadius: '6px',
+              resize: 'vertical',
+            }}
+          />
+          <div style={{ fontFamily: 'Menlo, monospace', fontSize: '0.7rem', color: 'var(--ink-dim)', marginTop: '0.2rem' }}>
+            Examples: "control the center" · "don't leave pieces exposed" · "save high cards for later" · "try to promote to king"
+          </div>
+        </div>
         <div className="train-action-buttons">
           <button
             className="start-btn"
@@ -417,6 +442,19 @@ export default function TrainingDashboard({ games, initialGame, customGameNames,
             }}>
               <strong style={{ color: 'var(--accent)' }}>Training partner:</strong>{' '}
               {status.results.opponent_description}
+            </div>
+          )}
+          {status.hints_applied?.length > 0 && (
+            <div style={{
+              fontFamily: 'Menlo, monospace', fontSize: '0.8rem',
+              color: 'var(--ink)', textAlign: 'center',
+              padding: '0.5rem 1rem', margin: '0.5rem auto',
+              background: 'rgba(92,186,110,0.08)',
+              border: '1px solid rgba(92,186,110,0.3)',
+              borderRadius: '6px', maxWidth: '500px',
+            }}>
+              <strong style={{ color: '#5cba6e' }}>Strategy hints applied:</strong>{' '}
+              {status.hints_applied.join(', ')}
             </div>
           )}
           {status.results?.stopped_early && (

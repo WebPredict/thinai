@@ -1,0 +1,109 @@
+{
+  "meta": {
+    "name": "Canasta",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if turn_phase_done(): next_player else: same_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "deck", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "discard", "visible_to": "all", "ordered": true }
+    ]
+  },
+
+  "cards": {
+    "deck": "double_deck",
+    "deck_zone": "deck"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "_turn_phases", "type": "list", "scope": "global", "initial": ["draw", "meld", "discard"] },
+    { "name": "phase", "type": "string", "scope": "global", "initial": "draw" },
+    { "name": "p1_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "melds_p1", "type": "list", "scope": "global", "initial": [] },
+    { "name": "melds_p2", "type": "list", "scope": "global", "initial": [] },
+    { "name": "pile_frozen", "type": "bool", "scope": "global", "initial": false },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_play", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "deck" },
+    { "action": "deal", "from": "deck", "to": "hand_p1", "count": 15 },
+    { "action": "deal", "from": "deck", "to": "hand_p2", "count": 15 },
+    { "action": "reveal", "from": "deck", "to": "discard", "count": 1 }
+  ],
+
+  "rules": [
+    {
+      "name": "draw_deck",
+      "action": "draw",
+      "params": [],
+      "conditions": ["canasta_can_draw_deck()"],
+      "effects": ["canasta_draw_deck()"]
+    },
+    {
+      "name": "draw_pile",
+      "action": "draw",
+      "params": [],
+      "conditions": ["canasta_can_draw_pile()"],
+      "effects": ["canasta_draw_pile()"]
+    },
+    {
+      "name": "lay_meld",
+      "action": "meld",
+      "params": [
+        { "name": "meld_id", "select": "canasta_meldable" }
+      ],
+      "conditions": ["canasta_can_meld()"],
+      "effects": ["canasta_lay_meld(meld_id)"]
+    },
+    {
+      "name": "add_to_meld",
+      "action": "meld",
+      "params": [
+        { "name": "add_id", "select": "canasta_addable" }
+      ],
+      "conditions": ["canasta_can_add()"],
+      "effects": ["canasta_add_to_meld(add_id)"]
+    },
+    {
+      "name": "done_melding",
+      "action": "pass",
+      "params": [],
+      "conditions": ["canasta_can_skip_meld()"],
+      "effects": ["canasta_skip_meld()"]
+    },
+    {
+      "name": "discard",
+      "action": "discard",
+      "params": [
+        { "name": "card_id", "select": "canasta_hand" }
+      ],
+      "conditions": ["canasta_can_discard()"],
+      "effects": ["canasta_discard(card_id)"]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "canasta_game_over()",
+      "score": "canasta_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "2-player Canasta: double deck (108 cards), 15 cards each. Draw 2 from deck or pick up entire discard pile, lay melds (3+ same rank, wilds allowed), discard 1. Canasta = 7+ card meld (natural: 500 pts, mixed: 300 pts). Going out requires at least 1 canasta."
+  }
+}

@@ -173,15 +173,16 @@
   <tr><td>3</td><td>Corrections — rule revision, error detection</td><td><span class="status done">done</span></td></tr>
   <tr><td>4</td><td>Metacognition — adaptive search, confidence, self-assessment</td><td><span class="status done">done</span></td></tr>
   <tr><td>5</td><td>Card games — hidden information, 11 card games, sampling search, opponent modeling</td><td><span class="status done">done</span></td></tr>
-  <tr><td>6</td><td>New game types — Hex, Backgammon, Wizard, Scrabble, race games, novel game pipeline</td><td><span class="status done">done</span></td></tr>
+  <tr><td>6</td><td>New game types — Hex, Backgammon, Wizard, Scrabble, Spades, race games, novel game pipeline</td><td><span class="status done">done</span></td></tr>
   <tr><td>7</td><td>Auto-discovery — feature auto-generation, luck detection, progressive depth, training transparency</td><td><span class="status done">done</span></td></tr>
-  <tr><td>8</td><td>Visualization — 16 board components, SVG boards, commentary, parser reference</td><td><span class="status partial">~90%</span></td></tr>
-  <tr><td>9</td><td>Polish — chess support, opponent modeling in training, partnership games</td><td><span class="status todo">planned</span></td></tr>
+  <tr><td>8</td><td>Visualization — 17 board components, SVG boards, commentary, parser reference</td><td><span class="status partial">~90%</span></td></tr>
+  <tr><td>9</td><td>Generic mechanics — meld system, multi-phase turns, double deck, strategy hints</td><td><span class="status done">done</span></td></tr>
+  <tr><td>10</td><td>Polish — chess support, opponent modeling in training, partnership games</td><td><span class="status todo">planned</span></td></tr>
 </table>
 
 <h2>Key Numbers</h2>
 <ul>
-  <li><strong>20</strong> playable games across 13 categories</li>
+  <li><strong>21</strong> playable games across 13 categories</li>
   <li><strong>413</strong> automated tests (including 8 training quality regression tests)</li>
   <li><strong>~12,000</strong> lines of engine code</li>
   <li><strong>~2,700</strong> word Scrabble dictionary</li>
@@ -192,7 +193,20 @@
   <li><strong>0</strong> GPUs required</li>
 </ul>
 
-<h2>Recent Changes (May 23, 2026)</h2>
+<h2>Recent Changes (May 27, 2026)</h2>
+<ul>
+  <li><strong>Canasta (new game):</strong> Full 2-player Canasta with double deck (108 cards), multi-phase turns (draw → meld → discard), wild cards (2s, Jokers), discard pile pickup, canasta bonuses (7+ card meld: natural 500 pts, mixed 300 pts), and going out detection. Custom UI with table melds, meld action buttons showing actual cards, and discard prompts.</li>
+  <li><strong>Generic meld system:</strong> Reusable module (<code>engine/gdl/melds.py</code>) with <code>find_sets()</code>, <code>find_runs()</code>, <code>best_melds()</code>, <code>deadwood_value()</code>, and <code>can_add_to_meld()</code>. Configurable wild cards, minimum meld size, and scoring bonuses. Any card game mentioning "melds" or "sets" can use it.</li>
+  <li><strong>Multi-phase turns:</strong> Generic turn phase system — games define a phase list (e.g. <code>["draw", "meld", "discard"]</code>) and phases advance automatically. Phase resets to the first phase when the turn passes to the next player.</li>
+  <li><strong>Double deck support:</strong> New <code>"double_deck"</code> deck type (2×52 + 4 jokers = 108 cards) in the card system.</li>
+  <li><strong>Strategy hints:</strong> Users can type plain-English strategy advice before training (e.g. "control the center", "save high cards"). Keywords are matched to feature priors, giving the AI a head start on what matters.</li>
+  <li><strong>Spades (new game):</strong> 2-player trick-taking with bidding and spades-always-trump. Shares UI with Wizard.</li>
+  <li><strong>Deep copy fix:</strong> State copying now properly handles nested lists (list-of-lists like melds), preventing card duplication during AI search.</li>
+  <li><strong>Untrained AI speed:</strong> Card games without trained weights now use depth 1 instead of 4, making untrained AI respond instantly instead of getting stuck on large branching factors.</li>
+  <li><strong>413 tests</strong> all passing.</li>
+</ul>
+
+<h2>Changes (May 23, 2026)</h2>
 <ul>
   <li><strong>Visual training replay:</strong> After training, watch sampled game replays with the actual game board UI — pieces moving, cards being played. Play/Pause, speed slider, Prev/Next game navigation. 5 games sampled evenly across training to show the AI's progression from clumsy to competent.</li>
   <li><strong>Training stability:</strong> Fixed weight corruption spiral where consecutive losses degraded the AI's evaluation function. Learning rate now decays 8% per loss (was 0.5%) with per-update weight clamping. Feature-based opponents use graduated difficulty (random → self-snapshot) instead of fixed depth-3 that caused nosedives. 8 new regression tests verify no game's late win rate collapses to 0%.</li>
@@ -253,6 +267,8 @@
   <tr><td>Blackjack</td><td>Comparing</td><td><span class="status done">strong</span></td><td>Hit/stand decisions. Learns basic strategy.</td></tr>
   <tr><td>Go Fish</td><td>Collecting</td><td><span class="status done">strong</span></td><td>Near-sets, pairs tracking. 70%+ win rate.</td></tr>
   <tr><td>War</td><td>Comparing</td><td><span class="status done">luck</span></td><td>Pure luck. Detected and flagged automatically.</td></tr>
+  <tr><td>Spades</td><td>Trick-taking + Bidding</td><td><span class="status partial">decent</span></td><td>Spades always trump. 2-player with bidding. Shares UI with Wizard.</td></tr>
+  <tr><td>Canasta</td><td>Rummy/Melding</td><td><span class="status partial">decent</span></td><td>Double deck, multi-phase turns, wild cards, meld management, canasta bonuses.</td></tr>
   <tr><td>Tic-Tac-Toe</td><td>Placement</td><td><span class="status partial">decent</span></td><td>Auto-features. Learning against strong opponent.</td></tr>
   <tr><td>Nim</td><td>Take-away</td><td><span class="status done">strong</span></td><td>Pile balance, single-pile detection.</td></tr>
   <tr><td>Chutes &amp; Ladders</td><td>Race</td><td><span class="status done">luck</span></td><td>Pure luck. Detected and flagged automatically.</td></tr>
@@ -264,7 +280,7 @@
   <li><strong>Learning from scratch:</strong> Games like Reversi, Mancala, Go Fish, and Checkers show clear improvement from zero knowledge to competent play in 20-40 training games.</li>
   <li><strong>Feature auto-discovery:</strong> Auto-generated features for line games, capture games (piece_advantage), territory (count_pieces), and escalating-stakes card games (card_conservation). L2 correlation discovery finds additional features mid-training.</li>
   <li><strong>Luck detection:</strong> Pure-luck games (War, Chutes &amp; Ladders) are automatically identified and flagged — no false "mastery" claims.</li>
-  <li><strong>Game variety:</strong> 20 built-in games across 13 categories, plus novel games parsed from English descriptions.</li>
+  <li><strong>Game variety:</strong> 21 built-in games across 13 categories, plus novel games parsed from English descriptions.</li>
   <li><strong>Novel game pipeline:</strong> Describe a game in English → parse → auto-generate features → train → play. Works for grid placement, gravity drop, movement/capture, flanking, territory, card games, dice races, and tile placement.</li>
   <li><strong>Movement and capture:</strong> Generic movement engine handles diagonal, orthogonal, and all-direction movement with jump capture, mandatory capture, and piece promotion (kinging).</li>
   <li><strong>Interpretable AI:</strong> Every decision can be traced to feature weights. Commentary explains moves. Training partner strength is disclosed.</li>
@@ -273,8 +289,8 @@
 <h2>What Needs Work</h2>
 <ul>
   <li><strong>Complex dice:</strong> Two independent dice (Backgammon: move one piece by die1 AND another by die2), doubles giving extra moves — not supported for novel games.</li>
-  <li><strong>Draw-then-play turns:</strong> Multi-phase turns like "draw a card, then optionally play it" aren't supported for novel card games.</li>
-  <li><strong>Meld detection:</strong> Gin Rummy-style meld evaluation (runs, sets) can't be expressed generically for novel card games.</li>
+  <li><strong>Draw-then-play turns:</strong> Multi-phase turns are now supported for built-in games (Canasta) but not yet auto-detected by the parser for novel card games.</li>
+  <li><strong>Meld detection for novel games:</strong> The generic meld system exists (<code>find_sets</code>, <code>find_runs</code>) but the parser doesn't yet auto-wire it for novel game descriptions mentioning "melds" or "sets".</li>
   <li><strong>Novel game strategy depth:</strong> Novel games graduate from random to self-snapshot opponent, but strategy discovery remains shallow for complex games.</li>
   <li><strong>Custom conditional effects:</strong> "When you land on a red space, draw a card" — arbitrary effect triggers not yet parseable beyond built-in patterns (Skip, Reverse, Draw Two).</li>
 </ul>
@@ -327,9 +343,9 @@
   <tr><td><strong>Sowing/Mancala</strong> — distribute tokens around a track</td><td>Mancala, Oware, Kalah</td><td><span class="status done">works</span></td><td>Standard mancala variants supported</td></tr>
   <tr><td><strong>Nim-like</strong> — remove items from piles</td><td>Nim, Wythoff's, Sprouts</td><td><span class="status done">works</span></td><td>Any take-away game</td></tr>
   <tr><td><strong>Matching/Shedding</strong> — match cards, empty your hand</td><td>Crazy Eights, Uno, Rummy</td><td><span class="status done">works</span></td><td>Color/rank matching, action cards, melds</td></tr>
-  <tr><td><strong>Collecting</strong> — gather sets of cards</td><td>Go Fish, Rummy, Canasta</td><td><span class="status done">works</span></td><td>Set detection, asking, drawing</td></tr>
+  <tr><td><strong>Collecting/Melding</strong> — gather sets, lay melds</td><td>Go Fish, Canasta, Rummy</td><td><span class="status done">works</span></td><td>Set detection, meld system with wilds, multi-phase turns, canasta bonuses</td></tr>
   <tr><td><strong>Comparing</strong> — compare hands for best rank</td><td>Poker, Blackjack, War</td><td><span class="status done">works</span></td><td>Hand ranking, hit/stand, draw/discard</td></tr>
-  <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Wizard, Spades, Bridge</td><td><span class="status done">works</span></td><td>Hearts + Wizard (with trump suit and bidding). Follow suit, trick resolution.</td></tr>
+  <tr><td><strong>Trick-taking</strong> — play cards to win tricks</td><td>Hearts, Wizard, Spades, Bridge</td><td><span class="status done">works</span></td><td>Hearts, Wizard, Spades (all with trump/bidding). Follow suit, trick resolution.</td></tr>
   <tr><td><strong>Auction/Bidding</strong> — bid resources for advantage</td><td>Bridge (bidding), Power Grid</td><td><span class="status partial">partial</span></td><td>Wizard has per-round bidding. Full auction mechanics planned.</td></tr>
   <tr><td><strong>Race</strong> — move pieces to finish line</td><td>Chutes &amp; Ladders, Backgammon, Parcheesi</td><td><span class="status done">works</span></td><td>Backgammon, custom race games with forward/backward choice and bumping, luck detection</td></tr>
   <tr><td><strong>Territory</strong> — control areas of the board</td><td>Go, Hex, Blokus</td><td><span class="status partial">partial</span></td><td>Hex works (7×7, connect sides). Go-level complexity is a stretch goal</td></tr>

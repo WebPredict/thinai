@@ -170,11 +170,19 @@ class GameState:
                 new.card_zones[name] = new_zone
         else:
             new.card_zones = None
-        # Deep-copy state_vars — lists (e.g. Scrabble racks/bag) need proper copying
+        # Deep-copy state_vars — nested lists (e.g. melds, Scrabble racks) need full deep copy
         new.state_vars = {}
         for k, v in self.state_vars.items():
             if isinstance(v, list):
-                new.state_vars[k] = [item.copy() if isinstance(item, dict) else item for item in v]
+                new_list = []
+                for item in v:
+                    if isinstance(item, dict):
+                        new_list.append(item.copy())
+                    elif isinstance(item, list):
+                        new_list.append([x.copy() if isinstance(x, dict) else x for x in item])
+                    else:
+                        new_list.append(item)
+                new.state_vars[k] = new_list
             else:
                 new.state_vars[k] = v
         new.current_player = self.current_player

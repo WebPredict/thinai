@@ -6,7 +6,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'spades', 'wizard', 'scrabble', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'spades', 'wizard', 'canasta', 'scrabble', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -25,6 +25,7 @@ const PLAYER_INDICATOR = {
   backgammon: { label: 'White', color: '#e8dfd1' },
   hearts: { label: 'Player 1', color: '#d4a656' },
   spades: { label: 'Player 1', color: '#d4a656' },
+  canasta: { label: 'Player 1', color: '#d4a656' },
   wizard: { label: 'Player 1', color: '#d4a656' },
   scrabble: { label: 'Player 1', color: '#d4a656' },
   gin_rummy: { label: 'Player 1', color: '#d4a656' },
@@ -48,6 +49,7 @@ const GAME_LABELS = {
   backgammon: 'Backgammon',
   hearts: 'Hearts',
   spades: 'Spades',
+  canasta: 'Canasta',
   wizard: 'Wizard',
   scrabble: 'Scrabble',
   gin_rummy: 'Gin Rummy',
@@ -243,6 +245,19 @@ const GAME_RULES = {
       'Trump cards beat any non-trump card. Highest card of the lead suit wins otherwise.',
       'Scoring: if you win exactly your bid, you get 20 + 10\u00D7tricks. If you miss, you lose 10 per trick off.',
       'The game lasts 5 rounds. Highest cumulative score wins.',
+    ],
+  },
+  canasta: {
+    title: 'How to play Canasta',
+    intro: 'Form melds of 3+ matching cards. Build canastas (7+ cards) to go out and score big!',
+    rules: [
+      'Each player is dealt 15 cards from a double deck (108 cards with jokers).',
+      'On your turn: (1) Draw 2 cards from the deck OR pick up the entire discard pile, (2) Optionally lay down melds, (3) Discard 1 card.',
+      'A meld is 3+ cards of the same rank. Wild cards (2s and Jokers) can substitute, but natural cards must outnumber wilds.',
+      'You can add cards to your existing melds on any turn.',
+      'A canasta is a meld of 7+ cards. Natural canasta (no wilds) = 500 points, mixed = 300 points.',
+      'To go out (end the game), you must have at least one canasta and empty your hand.',
+      'Card values: 4-7 = 5 pts, 8-K = 10 pts, A/2 = 20 pts, Joker = 50 pts. Going out = 100 pt bonus.',
     ],
   },
   scrabble: {

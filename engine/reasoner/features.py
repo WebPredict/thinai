@@ -885,6 +885,42 @@ SCRABBLE_FEATURES = [
 ]
 
 
+# ============================================================
+# Canasta features
+# ============================================================
+
+def _canasta_meld_progress(state: GameState, player: str) -> float:
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand:
+        return 0.0
+    from collections import Counter
+    ranks = Counter(c.rank for c in hand.cards if c.rank not in ("2", "Joker"))
+    pairs = sum(1 for count in ranks.values() if count >= 2)
+    return pairs / 6.0
+
+
+def _canasta_wild_count(state: GameState, player: str) -> float:
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    if not hand:
+        return 0.0
+    return sum(1 for c in hand.cards if c.rank in ("2", "Joker")) / 8.0
+
+
+def _canasta_table_score(state: GameState, player: str) -> float:
+    suffix = "p1" if player == "player1" else "p2"
+    melds = state.state_vars.get(f"melds_{suffix}", [])
+    score = sum(len(m) for m in melds)
+    return score / 20.0
+
+
+def _canasta_hand_size(state: GameState, player: str) -> float:
+    suffix = "p1" if player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+    return (hand.size / 15.0) if hand else 0.0
+
+
 FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Tic-Tac-Toe": TTT_FEATURES,
     "Connect Four": C4_FEATURES,
@@ -899,6 +935,16 @@ FEATURE_REGISTRY: dict[str, list[FeatureSpec]] = {
     "Five-Card Draw": POKER_FEATURES,
     "Wizard": WIZARD_FEATURES,
     "Spades": WIZARD_FEATURES,  # same features work (trump, high cards, bid accuracy, score, voids)
+    "Canasta": [
+        FeatureSpec("meld_progress", "Pairs and near-sets in hand",
+                    lambda s, p: _canasta_meld_progress(s, p)),
+        FeatureSpec("wild_cards", "Wild cards (2s, Jokers) in hand",
+                    lambda s, p: _canasta_wild_count(s, p)),
+        FeatureSpec("table_score", "Points on table from melds",
+                    lambda s, p: _canasta_table_score(s, p)),
+        FeatureSpec("hand_size", "Cards remaining in hand (fewer = closer to going out)",
+                    lambda s, p: -_canasta_hand_size(s, p)),
+    ],
     "Simplified Scrabble": SCRABBLE_FEATURES,
 }
 

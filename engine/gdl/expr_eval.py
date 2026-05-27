@@ -305,6 +305,15 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         moves = get_grid_moves(ctx.state, player, directions, forward_only)
         return len(moves) == 0
 
+    # Generic multi-phase turn system
+    if name == "phase_is":
+        current = ctx.state.state_vars.get("phase", "")
+        return current == (args[0] if args else "")
+    if name == "turn_phase_done":
+        phases = ctx.state.state_vars.get("_turn_phases", [])
+        phase = ctx.state.state_vars.get("phase", "")
+        return phase == "done" or (phases and phase not in phases)
+
     if name == "pieces_placed":
         player = args[0] if args else ctx.state.current_player
         if isinstance(player, str) and player.startswith("player"):
@@ -381,6 +390,69 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
         player = ctx.bindings.get("current_player", ctx.state.current_player)
         suffix = "p1" if player == "player1" else "p2"
         return ctx.state.state_vars.get(f"{suffix}_score", 0)
+
+    # Canasta built-ins
+    if name == "canasta_can_draw_deck":
+        return ctx.state.state_vars.get("phase") == "draw"
+    if name == "canasta_can_draw_pile":
+        if ctx.state.state_vars.get("phase") != "draw":
+            return False
+        discard = ctx.state.card_zones.get("discard") if ctx.state.card_zones else None
+        if not discard or discard.is_empty:
+            return False
+        # Can pick up if top card matches a pair in hand (or existing meld)
+        top = discard.peek()
+        if not top or top.rank in ("2", "Joker"):
+            return False  # can't pick up wilds/jokers from pile
+        if ctx.state.state_vars.get("pile_frozen"):
+            return False  # frozen pile can't be picked up (simplified)
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        hand = ctx.state.card_zones.get(f"hand_{suffix}")
+        if hand:
+            matching = sum(1 for c in hand.cards if c.rank == top.rank)
+            return matching >= 2  # need pair to pick up
+        return False
+    if name == "canasta_can_meld":
+        if ctx.state.state_vars.get("phase") != "meld":
+            return False
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        hand = ctx.state.card_zones.get(f"hand_{suffix}") if ctx.state.card_zones else None
+        if not hand:
+            return False
+        from engine.gdl.melds import find_sets
+        sets = find_sets(hand.cards, min_size=3, wild_ranks=["2", "Joker"])
+        return len(sets) > 0
+    if name == "canasta_can_add":
+        if ctx.state.state_vars.get("phase") != "meld":
+            return False
+        suffix = "p1" if ctx.state.current_player == "player1" else "p2"
+        melds = ctx.state.state_vars.get(f"melds_{suffix}", [])
+        if not melds:
+            return False
+        hand = ctx.state.card_zones.get(f"hand_{suffix}") if ctx.state.card_zones else None
+        if not hand:
+            return False
+        from engine.gdl.melds import can_add_to_meld
+        from engine.gdl.cards import Card
+        for card in hand.cards:
+            for meld in melds:
+                meld_cards = [Card(m["suit"], m["rank"], m["id"]) for m in meld]
+                if can_add_to_meld(card, meld_cards, wild_ranks=["2", "Joker"]):
+                    return True
+        return False
+    if name == "canasta_can_skip_meld":
+        return ctx.state.state_vars.get("phase") == "meld"
+    if name == "canasta_can_discard":
+        return ctx.state.state_vars.get("phase") == "discard"
+    if name == "canasta_game_over":
+        # Game over when deck is empty or someone went out
+        if ctx.state.state_vars.get("last_action") == "went_out":
+            return True
+        deck = ctx.state.card_zones.get("deck") if ctx.state.card_zones else None
+        return deck is not None and deck.is_empty
+    if name == "canasta_score":
+        player = ctx.bindings.get("current_player", ctx.state.current_player)
+        return _canasta_calculate_score(ctx.state, player)
 
     # Spades built-ins
     if name == "spades_can_bid":
@@ -949,6 +1021,46 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
     if name == "wizard_play":
         args = [evaluate(a, ctx) for a in node.args]
         _wizard_play(ctx.state, int(args[0]))
+        return
+
+    # Canasta effects
+    if name == "canasta_draw_deck":
+        _canasta_draw_deck(ctx.state)
+        return
+    if name == "canasta_draw_pile":
+        _canasta_draw_pile(ctx.state)
+        return
+    if name == "canasta_lay_meld":
+        args = [evaluate(a, ctx) for a in node.args]
+        _canasta_lay_meld(ctx.state, int(args[0]))
+        return
+    if name == "canasta_add_to_meld":
+        args = [evaluate(a, ctx) for a in node.args]
+        _canasta_add_to_meld(ctx.state, int(args[0]))
+        return
+    if name == "canasta_skip_meld":
+        ctx.state.state_vars["phase"] = "discard"
+        return
+    if name == "canasta_discard":
+        args = [evaluate(a, ctx) for a in node.args]
+        _canasta_discard(ctx.state, int(args[0]))
+        return
+
+    # Generic multi-phase turn effects
+    if name == "advance_phase":
+        phases = ctx.state.state_vars.get("_turn_phases", [])
+        current = ctx.state.state_vars.get("phase", "")
+        if phases and current in phases:
+            idx = phases.index(current)
+            if idx + 1 < len(phases):
+                ctx.state.state_vars["phase"] = phases[idx + 1]
+            else:
+                ctx.state.state_vars["phase"] = "done"
+        return
+
+    if name == "set_phase":
+        args_val = [evaluate(a, ctx) for a in node.args]
+        ctx.state.state_vars["phase"] = str(args_val[0]) if args_val else "done"
         return
 
     # Spades effects
@@ -2689,6 +2801,184 @@ def _spades_resolve_trick(state: GameState):
         p2s = state.state_vars["p2_score"]
         state.state_vars["last_play"] = f"Hand complete! You: {p1s} pts, AI: {p2s} pts"
         state.state_vars["last_action"] = "game_over"
+
+
+# --- Canasta built-ins ---
+
+CANASTA_CARD_VALUES = {
+    "3": 5, "4": 5, "5": 5, "6": 5, "7": 5,
+    "8": 10, "9": 10, "10": 10, "J": 10, "Q": 10, "K": 10,
+    "A": 20, "2": 20, "Joker": 50,
+}
+
+
+def _canasta_draw_deck(state: GameState):
+    """Draw 2 cards from deck."""
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    deck = state.card_zones.get("deck")
+    if hand and deck:
+        for _ in range(2):
+            card = deck.draw()
+            if card:
+                hand.add(card)
+    state.state_vars["phase"] = "meld"
+    state.state_vars["last_play"] = f"{'You' if suffix == 'p1' else 'AI'} drew 2 cards"
+    state.state_vars["last_action"] = "draw"
+
+
+def _canasta_draw_pile(state: GameState):
+    """Pick up entire discard pile into hand."""
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    if hand and discard:
+        count = discard.size
+        for card in list(discard.cards):
+            discard.remove(card)
+            hand.add(card)
+        state.state_vars["last_play"] = f"{'You' if suffix == 'p1' else 'AI'} picked up {count} cards from discard"
+    state.state_vars["phase"] = "meld"
+    state.state_vars["pile_frozen"] = False
+    state.state_vars["last_action"] = "draw_pile"
+
+
+def _canasta_check_go_out(state: GameState, suffix: str):
+    """If hand is empty and player has a canasta, they go out."""
+    hand = state.card_zones.get(f"hand_{suffix}")
+    if not hand or len(hand.cards) > 0:
+        return
+    table_melds = state.state_vars.get(f"melds_{suffix}", [])
+    has_canasta = any(len(m) >= 7 for m in table_melds)
+    if has_canasta:
+        who = "You" if suffix == "p1" else "AI"
+        state.state_vars["last_play"] = f"{who} went out!"
+        state.state_vars["last_action"] = "went_out"
+        state.state_vars["phase"] = "done"
+
+
+def _canasta_lay_meld(state: GameState, meld_id: int):
+    """Lay down a meld from hand to table."""
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    if not hand:
+        return
+
+    from engine.gdl.melds import find_sets
+    melds = find_sets(hand.cards, min_size=3, wild_ranks=["2", "Joker"])
+    if meld_id >= len(melds):
+        return
+
+    meld = melds[meld_id]
+    meld_data = []
+    for card in meld:
+        hand.remove(card)
+        meld_data.append({"rank": card.rank, "suit": card.suit, "id": card.id})
+
+    table_melds = state.state_vars.get(f"melds_{suffix}", [])
+    table_melds.append(meld_data)
+    state.state_vars[f"melds_{suffix}"] = table_melds
+
+    ranks = set(m["rank"] for m in meld_data if m["rank"] not in ("2", "Joker"))
+    rank_str = ranks.pop() if ranks else "wild"
+    state.state_vars["last_play"] = f"{'You' if suffix == 'p1' else 'AI'} melded {len(meld_data)} {rank_str}s"
+    state.state_vars["last_action"] = "meld"
+    _canasta_check_go_out(state, suffix)
+
+
+def _canasta_add_to_meld(state: GameState, add_id: int):
+    """Add a card from hand to an existing table meld."""
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    if not hand:
+        return
+
+    table_melds = state.state_vars.get(f"melds_{suffix}", [])
+    if not table_melds:
+        return
+
+    from engine.gdl.melds import can_add_to_meld
+    from engine.gdl.cards import Card
+
+    # Decode add_id: enumerate all (card, meld_idx) pairs
+    idx = 0
+    for card in hand.cards:
+        for mi, meld_data in enumerate(table_melds):
+            meld_cards = [Card(m["suit"], m["rank"], m["id"]) for m in meld_data]
+            if can_add_to_meld(card, meld_cards, wild_ranks=["2", "Joker"]):
+                if idx == add_id:
+                    hand.remove(card)
+                    meld_data.append({"rank": card.rank, "suit": card.suit, "id": card.id})
+                    state.state_vars["last_play"] = f"{'You' if suffix == 'p1' else 'AI'} added {card.rank} to meld"
+                    state.state_vars["last_action"] = "add_to_meld"
+                    _canasta_check_go_out(state, suffix)
+                    return
+                idx += 1
+
+
+def _canasta_discard(state: GameState, card_id: int):
+    """Discard a card and end turn."""
+    suffix = "p1" if state.current_player == "player1" else "p2"
+    hand = state.card_zones.get(f"hand_{suffix}")
+    discard = state.card_zones.get("discard")
+    if not hand or not discard:
+        return
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    hand.remove(card)
+    discard.add(card)
+
+    # Freeze pile if discarding a wild
+    if card.rank in ("2", "Joker"):
+        state.state_vars["pile_frozen"] = True
+
+    SUIT_SYM = {"hearts": "♥", "diamonds": "♦", "clubs": "♣", "spades": "♠", "joker": "★"}
+    state.state_vars["last_play"] = f"{'You' if suffix == 'p1' else 'AI'} discarded {card.rank}{SUIT_SYM.get(card.suit, '')}"
+    state.state_vars["last_action"] = "discard"
+    state.state_vars["phase"] = "done"
+
+    # Check if player went out (empty hand + has canasta)
+    if hand.size == 0:
+        melds = state.state_vars.get(f"melds_{suffix}", [])
+        has_canasta = any(len(m) >= 7 for m in melds)
+        if has_canasta:
+            state.state_vars["last_action"] = "went_out"
+            state.state_vars["last_play"] += " — went out!"
+
+
+def _canasta_calculate_score(state: GameState, player: str) -> int:
+    """Calculate total score for a player."""
+    suffix = "p1" if player == "player1" else "p2"
+    melds = state.state_vars.get(f"melds_{suffix}", [])
+
+    score = 0
+    for meld in melds:
+        # Card values
+        for card in meld:
+            score += CANASTA_CARD_VALUES.get(card["rank"], 0)
+        # Canasta bonus
+        if len(meld) >= 7:
+            has_wild = any(card["rank"] in ("2", "Joker") for card in meld)
+            score += 300 if has_wild else 500
+
+    # Subtract deadwood (unmelded hand cards)
+    hand = state.card_zones.get(f"hand_{suffix}")
+    if hand:
+        for card in hand.cards:
+            score -= CANASTA_CARD_VALUES.get(card.rank, 0)
+
+    # Going out bonus
+    if hand and hand.size == 0:
+        score += 100
+
+    return score
 
 
 # --- Compare/Score card game built-ins (novel parsed games) ---

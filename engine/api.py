@@ -106,6 +106,15 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
             forward_only = state.state_vars.get("_forward_only", False)
             grid_move_details = get_grid_moves(state, state.current_player, directions, forward_only)
 
+        # For Canasta, get meld card details
+        canasta_melds = None
+        if engine.meta.get("name") == "Canasta":
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+            if hand:
+                from engine.gdl.melds import find_sets
+                canasta_melds = find_sets(hand.cards, min_size=3, wild_ranks=["2", "Joker"])
+
         # For Scrabble, get word placement details
         scrabble_placements = None
         if engine.meta.get("name") == "Simplified Scrabble":
@@ -152,6 +161,15 @@ def _state_to_dict(state: GameState, engine: GameEngine) -> dict:
                         move_dict["params"]["_score"] = p['score']
                         move_dict["params"]["_dir"] = p['direction']
                         break
+
+            # Add Canasta meld card details
+            if m.rule_name == "lay_meld" and canasta_melds:
+                meld_id = m.params.get("meld_id", -1)
+                if isinstance(meld_id, int) and meld_id < len(canasta_melds):
+                    meld = canasta_melds[meld_id]
+                    move_dict["params"]["_cards"] = [
+                        {"rank": c.rank, "suit": c.suit} for c in meld
+                    ]
 
             legal_moves.append(move_dict)
 
@@ -509,7 +527,11 @@ def ai_move(request: Request, session_id: str):
         from engine.metacognition.confidence import DecisionConfidenceTracker
         allocator = session.get("effort_allocator") or EffortAllocator()
         conf_tracker = session.get("confidence_tracker") or DecisionConfidenceTracker()
-        reasoner = Reasoner(engine, max_depth=session["ai_depth"],
+        # Cap depth for untrained card games — deep search with huge branching is pointless
+        depth = session["ai_depth"]
+        if not session.get("eval_fn") and state.card_zones:
+            depth = min(depth, 1)
+        reasoner = Reasoner(engine, max_depth=depth,
                            eval_fn=session.get("eval_fn"),
                            effort_allocator=allocator,
                            confidence_tracker=conf_tracker,

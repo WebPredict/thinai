@@ -175,6 +175,7 @@ const GAME_LABELS = {
   backgammon: 'Backgammon',
   hearts: 'Hearts',
   spades: 'Spades',
+  canasta: 'Canasta',
   wizard: 'Wizard',
   scrabble: 'Scrabble',
   gin_rummy: 'Gin Rummy',

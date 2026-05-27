@@ -170,11 +170,18 @@ class GameEngine:
 
     def _advance_turn(self, state: GameState, rule: dict, ctx: EvalContext):
         """Determine and set the next player."""
+        prev_player = state.current_player
         if self.meta["turn_order"] == "alternating":
             state.current_player = state.next_player_alternating()
         elif self._turn_rule:
             next_p = self._eval_turn_rule(state, ctx)
             state.current_player = next_p
+
+        # Reset turn phase when player changes (for multi-phase turn games)
+        if state.current_player != prev_player and "_turn_phases" in state.state_vars:
+            phases = state.state_vars["_turn_phases"]
+            if phases:
+                state.state_vars["phase"] = phases[0]
 
     def _parse_turn_rule(self, rule_str: str):
         """Parse a turn rule like 'if has_legal_move(next_player): next_player else: same_player'."""
@@ -432,6 +439,48 @@ class GameEngine:
             moves = get_grid_moves(state, state.current_player, directions, forward_only)
             for m in moves:
                 yield m.move_id
+
+        elif select == "canasta_meldable":
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+            if hand:
+                from engine.gdl.melds import find_sets
+                melds = find_sets(hand.cards, min_size=3, wild_ranks=["2", "Joker"])
+                table_melds = state.state_vars.get(f"melds_{suffix}", [])
+                has_canasta = any(len(m) >= 7 for m in table_melds)
+                for i, meld in enumerate(melds):
+                    # Don't allow melding if it would leave hand empty without a canasta
+                    cards_after = len(hand.cards) - len(meld)
+                    if cards_after == 0 and not has_canasta and len(meld) < 7:
+                        continue
+                    yield i
+
+        elif select == "canasta_addable":
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+            table_melds = state.state_vars.get(f"melds_{suffix}", [])
+            if hand and table_melds:
+                from engine.gdl.melds import can_add_to_meld
+                from engine.gdl.cards import Card
+                has_canasta = any(len(m) >= 7 for m in table_melds)
+                idx = 0
+                for card in hand.cards:
+                    for mi, meld_data in enumerate(table_melds):
+                        meld_cards = [Card(m["suit"], m["rank"], m["id"]) for m in meld_data]
+                        if can_add_to_meld(card, meld_cards, wild_ranks=["2", "Joker"]):
+                            # Don't allow if it leaves hand empty without a canasta
+                            if len(hand.cards) == 1 and not has_canasta and len(meld_data) + 1 < 7:
+                                idx += 1
+                                continue
+                            yield idx
+                            idx += 1
+
+        elif select == "canasta_hand":
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.card_zones.get(f"hand_{suffix}") if state.card_zones else None
+            if hand:
+                for card in hand.cards:
+                    yield card.id
 
         elif select == "spades_bid_options":
             suffix = "p1" if state.current_player == "player1" else "p2"

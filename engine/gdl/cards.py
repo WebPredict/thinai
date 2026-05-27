@@ -157,7 +157,15 @@ def create_standard_deck(deck_type: str = "standard52") -> list[Card]:
     Supported types:
       - "standard52": standard 52-card deck
       - "standard52_jokers": 52 + 2 jokers
+      - "double_deck": 2x52 + 4 jokers = 108 cards (Canasta)
+      - "uno": 108-card Uno deck
     """
+    if deck_type == "uno":
+        return _create_uno_deck()
+
+    if deck_type == "double_deck":
+        return _create_double_deck()
+
     cards = []
     card_id = 0
     for suit in SUITS:
@@ -170,9 +178,22 @@ def create_standard_deck(deck_type: str = "standard52") -> list[Card]:
         card_id += 1
         cards.append(Card(suit="joker", rank="Joker", id=card_id))
 
-    if deck_type == "uno":
-        return _create_uno_deck()
+    return cards
 
+
+def _create_double_deck() -> list[Card]:
+    """Create a double deck: 2x standard 52 + 4 jokers = 108 cards."""
+    cards = []
+    card_id = 0
+    for _copy in range(2):
+        for suit in SUITS:
+            for rank in RANKS:
+                cards.append(Card(suit=suit, rank=rank, id=card_id))
+                card_id += 1
+    # 4 jokers
+    for _ in range(4):
+        cards.append(Card(suit="joker", rank="Joker", id=card_id))
+        card_id += 1
     return cards
 
 

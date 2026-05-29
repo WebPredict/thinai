@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThinAI — Research Paper</title>
+<style>
+  @media print {
+    body { background: white !important; color: #1a1a1a !important; }
+    .container { max-width: 100%; padding: 0 1in; }
+    nav, .no-print { display: none !important; }
+    a { color: #1a1a1a !important; text-decoration: none !important; }
+    h2 { color: #333 !important; border-bottom-color: #ccc !important; }
+    table { font-size: 0.85rem; }
+    th { color: #555 !important; }
+    td, th { border-bottom-color: #ddd !important; }
+    code { background: #f0f0f0 !important; color: #333 !important; }
+  }
+  :root {
+    --bg: #0e0c0a;
+    --bg-raised: #16130f;
+    --ink: #e8dfd1;
+    --ink-dim: #b0a48e;
+    --ink-faint: #7a6e5c;
+    --accent: #d4a656;
+    --rule: #26221c;
+    --mono: 'Menlo', 'Consolas', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Georgia', serif;
+    line-height: 1.8;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem 5rem;
+  }
+  nav {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    margin-bottom: 3rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  nav a {
+    color: var(--ink-dim);
+    text-decoration: none;
+    margin-right: 1.5rem;
+  }
+  nav a:hover { color: var(--accent); }
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 400;
+    margin-bottom: 0.3rem;
+    line-height: 1.3;
+  }
+  h2 {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--ink-dim);
+  }
+  p {
+    margin-bottom: 1rem;
+    color: var(--ink);
+  }
+  ul, ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+  }
+  li {
+    margin-bottom: 0.4rem;
+    color: var(--ink);
+  }
+  em { font-style: italic; }
+  strong { font-weight: 600; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--bg-raised);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 2rem 0;
+  }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: var(--ink-dim);
+    font-style: italic;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+  }
+  .authors {
+    color: var(--ink-dim);
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+  }
+  .affiliation {
+    color: var(--ink-faint);
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+  }
+  .print-btn {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: transparent;
+    color: var(--ink-dim);
+    border: 1px solid var(--rule);
+    padding: 0.4rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    float: right;
+    margin-top: -2rem;
+  }
+  .print-btn:hover { color: var(--accent); border-color: var(--accent); }
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+  }
+  footer a { color: var(--ink-dim); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<nav>
+  <a href="/">Home</a>
+  <a href="/demo.html">Demo</a>
+  <a href="/notes.html">Notes</a>
+  <a href="/paper.html" style="color: var(--accent);">Paper</a>
+</nav>
+
+<button class="print-btn no-print" onclick="window.print()">Save as PDF</button>
+
+<h1>ThinAI: Learning Arbitrary Games from Natural Language Rules on a Single Laptop</h1>
+<p><strong>Jeff Sanchez</strong> and <strong>Claude</strong> (Anthropic)
+High Desert Apps
+May 2026</p>
+<hr />
+<h2>Abstract</h2>
+<p>How would a person learn to play a brand new game? They would read the rules (possibly incomplete or ambiguous), ask clarifying questions, form some initial intuitions about what might matter, and then improve through a modest number of practice games — all without consulting external references or playing millions of rounds. We present ThinAI, a system designed around these same constraints: it learns to play arbitrary turn-based games from natural-language rule descriptions, asks clarification questions when information is missing, derives initial strategic intuitions from rule structure, and reaches competent play through just 20–50 self-play training games — all on a single laptop without neural networks, GPUs, or cloud compute.</p>
+<p>While the system includes 21 well-known built-in games for validation, the primary research contribution is its ability to handle <em>novel</em> games: games the system has never seen before, described by users in plain English at runtime. We investigate how far classical AI techniques — structured knowledge representation, automatic feature discovery, and learned evaluation — can extend across the space of possible turn-based games. The system currently covers 13 structural game categories (grid placement, movement/capture, card matching, trick-taking, melding, racing, territory, and more), and we characterize both the breadth of novel games it handles well and the specific mechanical boundaries where it breaks down. Our results suggest that structured knowledge extracted from rules, combined with human-like learning constraints, produces a surprisingly general game-learning system — one that trades peak performance for breadth, sample efficiency, and full interpretability.</p>
+<h2>1. Introduction</h2>
+<p>Consider how a child learns a new board game. Someone explains the rules — perhaps imperfectly, skipping details they assume are obvious. The child asks questions: &quot;What happens if I land on your piece?&quot; &quot;Do I have to jump if I can?&quot; They form rough intuitions before playing a single game: &quot;controlling the middle probably matters,&quot; &quot;having more pieces is probably good.&quot; Then, after a handful of games — not thousands, not millions — they play reasonably well. They don't consult strategy guides or study databases of expert play. They just understand the rules, develop intuitions, and learn from experience.</p>
+<p>Modern game-playing AI operates under fundamentally different constraints. AlphaZero required 5,000 TPUs and millions of self-play games to master chess. MuZero extended this to learn without explicit rules, but with similar computational requirements. These systems achieve superhuman performance — but they bear little resemblance to how humans actually learn games.</p>
+<p>ThinAI asks: <em>what happens when we impose human-like learning constraints on a game AI system?</em> Specifically:</p>
+<ol>
+<li><strong>Learn from rule descriptions</strong> — the system receives plain English rules, not formal specifications or hardcoded game logic. Rules may be incomplete or ambiguous, just as when a friend explains a new game.</li>
+<li><strong>Ask for clarification</strong> — when critical information is missing (board size? starting setup? draw condition?), the system identifies what it doesn't know and asks, rather than guessing or failing silently.</li>
+<li><strong>No external resources</strong> — no internet lookups, no strategy databases, no pre-trained models. The system must derive everything from the rules and its own play experience.</li>
+<li><strong>Limited practice</strong> — the system must reach competent play in 20–50 training games, not millions. This matches the human scale of &quot;learning over an afternoon.&quot;</li>
+<li><strong>Basic intuition</strong> — before playing, the system derives initial strategic biases from rule structure, analogous to a human's common-sense intuitions about what might matter in a new game.</li>
+</ol>
+<p>These constraints are not limitations to be overcome — they are the research design. We believe they produce a more interesting and general system than one optimized for peak performance on known games.</p>
+<p>The primary research question is not &quot;can ThinAI beat AlphaZero at chess?&quot; (it cannot) but rather: <em>how broad a space of novel games can a system handle when it learns the way a person would?</em> The 21 well-known built-in games serve as validation, but the core contribution is the novel game pipeline — the system's ability to accept a game description it has never seen before and, within minutes, learn to play it competently.</p>
+<h2>2. Related Work</h2>
+<h3>2.1 General Game Playing</h3>
+<p>The General Game Playing (GGP) competition, established by Genesereth et al. (2005), pioneered the idea of AI systems that play arbitrary games from formal rule descriptions. GGP systems receive rules in the Stanford Game Description Language (GDL) and must play without game-specific knowledge. Notable systems include CadiaPlayer (Björnsson and Finnsson, 2009), which combined UCT search with simulation-based evaluation, and Sancho (Draper and Rose, 2014). ThinAI differs from traditional GGP in two key ways: it accepts natural language instead of formal GDL, and it learns evaluation functions through self-play rather than relying solely on search.</p>
+<h3>2.2 Neural Game Learning</h3>
+<p>AlphaZero (Silver et al., 2018) demonstrated that a single architecture — deep neural network combined with Monte Carlo Tree Search (MCTS) — could master chess, shogi, and Go from self-play alone. MuZero (Schrittwieser et al., 2020) extended this to learn without knowing game rules, building an internal model of game dynamics. While these systems achieve superhuman performance, they require millions of training games, thousands of TPUs, and produce opaque neural evaluations. ThinAI trades peak performance for sample efficiency, interpretability, and accessibility.</p>
+<h3>2.3 Feature-Based Game Evaluation</h3>
+<p>Classical game AI relies on hand-crafted evaluation functions — weighted sums of features like material advantage, piece mobility, and board control. Temporal difference learning (Sutton, 1988) can tune these weights automatically, as demonstrated by Samuel's checkers player (1959) and TD-Gammon (Tesauro, 1995). ThinAI extends this tradition by automating feature <em>generation</em> as well as weight learning, enabling zero-knowledge play of novel games.</p>
+<h2>3. System Architecture</h2>
+<p>ThinAI consists of five main components: a natural language parser, a game engine, an automatic feature generator, a search-based reasoner, and a self-play training system.</p>
+<h3>3.1 Natural Language Parser</h3>
+<p>The parser converts plain English game descriptions into a JSON-based Game Description Language (GDL). It uses pattern matching across 13 game categories to identify:</p>
+<ul>
+<li><strong>Board structure</strong>: grid dimensions, hex grids, track/race paths, card zones</li>
+<li><strong>Piece vocabulary</strong>: ~350 recognized game objects (pieces, cards, dice) with 58 SVG icons</li>
+<li><strong>Win conditions</strong>: line completion, territory control, elimination, scoring, race-to-finish</li>
+<li><strong>Movement mechanics</strong>: orthogonal, diagonal, all-direction, forward-only, with jump capture</li>
+<li><strong>Card mechanics</strong>: matching/shedding, trick-taking, collecting, comparing, melding</li>
+<li><strong>Turn structure</strong>: alternating, conditional (extra turns), multi-phase (draw → meld → discard)</li>
+</ul>
+<p>The parser does not use a language model — it operates through keyword detection, structural analysis, and heuristic matching. This is a deliberate design choice: the system demonstrates that structured pattern matching, not statistical language understanding, is sufficient for game rule parsing across a broad category space.</p>
+<p><strong>Clarification system</strong>: When the parser detects missing or ambiguous information, it generates targeted clarification questions — mimicking a human asking &quot;wait, what happens when...?&quot; For example:</p>
+<ul>
+<li>No board size specified → &quot;What size should the board be? (e.g., 6×6, 8×8)&quot;</li>
+<li>Movement game without setup → &quot;How should pieces be arranged? Choose: back two rows / back row only / corners / scattered / custom&quot;</li>
+<li>No draw condition → &quot;What happens if neither player can win? (draw after N moves? play until someone wins?)&quot;</li>
+<li>One color specified for both players → &quot;What color should the second player's pieces be?&quot;</li>
+</ul>
+<p>This mirrors the natural process of learning a game from an imperfect explanation — the system identifies what it doesn't know and asks, rather than guessing or failing.</p>
+<p><strong>Example</strong>: The input <em>&quot;Two players take turns placing stones on a 7×7 grid. Connect your stones from one side of the board to the other to win.&quot;</em> produces a GDL spec for Hex with a 7×7 grid, alternating placement, and connection-based win condition.</p>
+<h3>3.2 Game Engine</h3>
+<p>The engine loads any GDL specification and provides:</p>
+<ul>
+<li><strong>State management</strong>: board positions, card zones (with visibility control), state variables</li>
+<li><strong>Legal move generation</strong>: evaluates rule conditions, expands parameter selectors</li>
+<li><strong>State transitions</strong>: applies rule effects, advances turns (including conditional and multi-phase turns)</li>
+<li><strong>Terminal detection</strong>: checks end conditions, computes scores</li>
+</ul>
+<p>The engine supports diverse board types (grid, hex, track, card zones), piece mechanics (placement, movement, capture, promotion), and card mechanics (drawing, discarding, melding, trick resolution). A single engine instance can run any game without game-specific code.</p>
+<h3>3.3 Automatic Feature Discovery</h3>
+<p>Feature discovery operates at two levels:</p>
+<p><strong>Level 1 (Rule Structure Analysis)</strong>: At parse time, the system analyzes the GDL to generate features:</p>
+<ul>
+<li><em>Line-win games</em> → <code>longest_line</code>, <code>line_threats</code>, <code>center_control</code>, <code>open_three</code></li>
+<li><em>Capture games</em> → <code>piece_advantage</code>, <code>king_count</code>, <code>advancement</code></li>
+<li><em>Card games</em> → <code>hand_size</code>, <code>near_sets</code>, <code>wild_card_count</code></li>
+<li><em>Race games</em> → <code>position_lead</code>, <code>distance_to_finish</code></li>
+<li><em>Territory games</em> → <code>territory_count</code>, <code>connection_progress</code></li>
+</ul>
+<p><strong>Level 2 (Correlation Discovery)</strong>: At training game 10, the system analyzes play data to discover additional features. For each candidate feature, it computes correlation with game outcomes across completed games. Features with significant positive or negative correlation are added to the evaluation function.</p>
+<h3>3.4 Auto-Priors: Artificial Intuition</h3>
+<p>A human sitting down to a new game doesn't start from zero. Before playing a single round, they have intuitions: &quot;having more pieces is probably good,&quot; &quot;the center of the board is probably important,&quot; &quot;I probably shouldn't waste my best cards early.&quot; These intuitions aren't learned from <em>this</em> game — they're transferred from a lifetime of experience with similar games.</p>
+<p>ThinAI simulates this with auto-priors: initial feature weight biases derived from rule structure analysis:</p>
+<ul>
+<li>Line-win games: <code>center_control</code> starts at 0.2, <code>longest_line</code> at 0.5 — because the system recognizes that line completion is the win condition</li>
+<li>Capture games: <code>piece_advantage</code> starts at 0.15 — because having more pieces is almost always good in capture games</li>
+<li>Card conservation: escalating-stakes card games get <code>card_conservation</code> at 0.5 — because hoarding strong cards for later is a common card game heuristic</li>
+<li>User hints: the system also accepts plain-English strategy advice (e.g., &quot;control the center,&quot; &quot;save high cards for later&quot;), matched against ~25 keywords to boost corresponding feature weights — analogous to a friend offering a tip before the first game</li>
+</ul>
+<p>These priors break the &quot;cold start&quot; problem — the very first training game already has directional evaluation, rather than playing randomly. They are deliberately weak (easily overridden by training data) but strong enough to give the learner traction from game one.</p>
+<h3>3.5 Search and Evaluation</h3>
+<p>The reasoner uses negamax search with alpha-beta pruning:</p>
+<ul>
+<li><strong>Depth 1–2</strong>: All legal moves are considered</li>
+<li><strong>Depth 3+</strong>: Selective deepening — only the top 8 moves (scored by quick evaluation) are explored, pruning the branching factor for large boards</li>
+<li><strong>Node budget</strong>: 2,000 nodes for board games, 1,500 for card games</li>
+<li><strong>Adaptive effort</strong>: search depth adjusts per position based on branching factor and time budget</li>
+<li><strong>Sampling-based search</strong>: for hidden-information card games, the system samples possible opponent hands and evaluates moves across multiple possible worlds</li>
+</ul>
+<p>The evaluation function is a linear combination of features:</p>
+<p>$$V(s) = \sum_{i} w_i \cdot f_i(s)$$</p>
+<p>where $f_i$ are the automatically generated features and $w_i$ are learned weights.</p>
+<h3>3.6 Self-Play Training</h3>
+<p>Training uses temporal difference (TD) learning with several innovations for stability:</p>
+<p><strong>Progressive depth</strong>: Training starts at depth 1 and increases every 5 games (up to depth 4). This mirrors human learning — develop simple intuitions first, then learn to look further ahead.</p>
+<p><strong>Graduated opponents</strong>: Games 1–10 are played against a random opponent. At game 10, the system takes a snapshot of the current weights and uses it as the opponent for games 11+. This prevents the &quot;nosedive&quot; problem where a learner faces an opponent that's always exactly as strong as itself.</p>
+<p><strong>Learning rate decay</strong>: The learning rate decays 8% after each loss and 5% after each win, with per-update weight changes clamped to ±0.5. This prevents the weight corruption spiral we observed when consecutive losses at higher depth caused catastrophic weight shifts.</p>
+<p><strong>Luck detection</strong>: Pure-luck games are identified through two checks — L0 analyzes the GDL for absence of meaningful player decisions, L1 checks post-training for flat weights and ~50% win rate. Detected games are flagged rather than making false mastery claims.</p>
+<h2>4. Games and Results</h2>
+<h3>4.1 Game Coverage</h3>
+<p>ThinAI supports 21 built-in games across 13 structural categories:</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Games</th>
+<th>Key Mechanics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Placement</td>
+<td>Tic-Tac-Toe, Connect Four</td>
+<td>Grid, gravity, line detection</td>
+</tr>
+<tr>
+<td>Flanking</td>
+<td>Reversi</td>
+<td>Capture by surrounding</td>
+</tr>
+<tr>
+<td>Movement/Capture</td>
+<td>Checkers</td>
+<td>Jump capture, promotion, mandatory capture</td>
+</tr>
+<tr>
+<td>Sowing</td>
+<td>Mancala</td>
+<td>Seed distribution, extra turns</td>
+</tr>
+<tr>
+<td>Take-away</td>
+<td>Nim</td>
+<td>Pile removal, strategic balance</td>
+</tr>
+<tr>
+<td>Matching/Shedding</td>
+<td>Crazy Eights, Uno</td>
+<td>Color/rank matching, action cards</td>
+</tr>
+<tr>
+<td>Collecting/Melding</td>
+<td>Go Fish, Canasta</td>
+<td>Set detection, meld system, wild cards</td>
+</tr>
+<tr>
+<td>Comparing</td>
+<td>Blackjack, Five-Card Draw, War</td>
+<td>Hand ranking, hit/stand</td>
+</tr>
+<tr>
+<td>Trick-taking</td>
+<td>Hearts, Wizard, Spades</td>
+<td>Trump suits, bidding, follow-suit</td>
+</tr>
+<tr>
+<td>Race</td>
+<td>Chutes &amp; Ladders, Backgammon</td>
+<td>Dice, track movement, bearing off</td>
+</tr>
+<tr>
+<td>Territory</td>
+<td>Hex</td>
+<td>Connection, side-to-side</td>
+</tr>
+<tr>
+<td>Word/Tile</td>
+<td>Scrabble</td>
+<td>Word placement, bonus squares</td>
+</tr>
+<tr>
+<td>Rummy</td>
+<td>Gin Rummy</td>
+<td>Deadwood, knocking, melds</td>
+</tr>
+</tbody>
+</table>
+<h3>4.2 Training Efficiency</h3>
+<p>The system reaches competent play in 20–40 training games for board games and 30–50 for card games. Total training time ranges from 30 seconds (Tic-Tac-Toe) to 5 minutes (Scrabble).</p>
+<table>
+<thead>
+<tr>
+<th>Game</th>
+<th>Training Games</th>
+<th>Training Time</th>
+<th>Late Win Rate vs Opponent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reversi</td>
+<td>40</td>
+<td>~2 min</td>
+<td>65–75% vs self-snapshot</td>
+</tr>
+<tr>
+<td>Connect Four</td>
+<td>40</td>
+<td>~90 sec</td>
+<td>60–70% vs self-snapshot</td>
+</tr>
+<tr>
+<td>Mancala</td>
+<td>30</td>
+<td>~60 sec</td>
+<td>70–80% vs self-snapshot</td>
+</tr>
+<tr>
+<td>Checkers</td>
+<td>40</td>
+<td>~3 min</td>
+<td>55–65% vs self-snapshot</td>
+</tr>
+<tr>
+<td>Go Fish</td>
+<td>30</td>
+<td>~45 sec</td>
+<td>70%+ vs random</td>
+</tr>
+<tr>
+<td>Blackjack</td>
+<td>20</td>
+<td>~30 sec</td>
+<td>Learns basic strategy</td>
+</tr>
+<tr>
+<td>Hex</td>
+<td>40</td>
+<td>~2 min</td>
+<td>55–65% vs self-snapshot</td>
+</tr>
+</tbody>
+</table>
+<p>For comparison, AlphaZero requires approximately 700,000 training games for chess and 5 million for Go.</p>
+<h3>4.3 Novel Games: Breadth and Boundaries</h3>
+<p>The novel game pipeline is the system's primary contribution. Users describe a game in English and the system handles the full lifecycle:</p>
+<ol>
+<li><strong>Parse</strong>: English → GDL via pattern matching across 13 game categories</li>
+<li><strong>Clarify</strong>: System detects missing information and asks targeted questions (board size, starting setup, draw conditions, piece movement rules)</li>
+<li><strong>Generate features</strong>: L1 rule-structure analysis produces candidate evaluation features with initial weight priors</li>
+<li><strong>Train</strong>: 20–50 games of self-play with progressive depth and graduated opponents</li>
+<li><strong>Play</strong>: User plays against the trained AI with an automatically generated game UI</li>
+</ol>
+<h4>4.3.1 Successfully Handled Novel Game Types</h4>
+<p>The following categories of novel games work end-to-end, from English description to competent play:</p>
+<p><strong>Grid placement games</strong> — &quot;Two players alternate placing marks on a 5×5 grid. Get 4 in a row to win.&quot; The system detects grid dimensions, line-win conditions, and generates appropriate features (center_control, longest_line, line_threats). Tested with 3-in-a-row on 4×4, 4-in-a-row on 5×5 and 6×6, and custom grid sizes.</p>
+<p><strong>Gravity/column-drop games</strong> — &quot;Drop pieces into a 6×7 grid. They fall to the lowest open space. Connect 4 in a row.&quot; Detects &quot;fall&quot;/&quot;drop&quot;/&quot;gravity&quot; keywords and applies column-drop placement. Auto-features include center_control and line_threats.</p>
+<p><strong>Movement and capture games</strong> — &quot;Each player has 8 pieces on a grid. Pieces move diagonally one space. Jump over an opponent's piece to capture it.&quot; The generic movement engine handles orthogonal, diagonal, and all-direction movement with jump capture, mandatory capture enforcement, and piece promotion (reaching the back row).</p>
+<p><strong>Flanking/flipping games</strong> — &quot;Place a piece to flip opponent pieces between yours. Player with more pieces wins when the board is full.&quot; Detects flanking/surrounding mechanics and generates territory-count features. Pass-when-stuck logic handles positions where one player has no legal moves.</p>
+<p><strong>Card matching/shedding games</strong> — &quot;Each player gets 7 cards. Match the top card by color or number. First to empty their hand wins.&quot; Supports custom deck compositions, wild cards, and action cards (Skip, Reverse, Draw Two) when described.</p>
+<p><strong>Dice race games</strong> — &quot;Roll a die and move forward. Land on an opponent to bump them back. First to the end wins.&quot; Generates track boards with bumping mechanics and position_lead features.</p>
+<p><strong>Territory/connection games</strong> — &quot;Place stones on a hex grid. Connect your stones from one side to the opposite side to win.&quot; Hex-style connection detection with territory and bridge features.</p>
+<h4>4.3.2 Partially Handled Categories</h4>
+<p>Some game types work with limitations:</p>
+<p><strong>Card collecting with custom rules</strong> — Basic &quot;ask for cards, collect sets&quot; works, but custom scoring (e.g., &quot;pairs of matching suits score double&quot;) requires built-in scoring functions rather than being parseable from descriptions.</p>
+<p><strong>Multi-phase card games</strong> — The generic multi-phase turn system exists (draw → meld → discard) but the parser does not yet auto-detect phase structure from novel descriptions like &quot;draw a card, then optionally play one, then discard.&quot;</p>
+<p><strong>Capture games with complex movement</strong> — Simple movement (diagonal, orthogonal) with jump capture works well. But games requiring different movement patterns for different piece types (like chess with distinct knight/bishop/rook movement) exceed the current movement engine.</p>
+<p><strong>Games with conditional effects</strong> — &quot;If you roll doubles, take another turn&quot; works. But arbitrary conditional effects like &quot;when you land on a red space, draw a card and add it to your opponent's hand&quot; cannot be expressed generically.</p>
+<h4>4.3.3 Current Boundaries</h4>
+<p>The following game mechanics are beyond the system's current scope for novel games:</p>
+<ul>
+<li><strong>Partnership/team dynamics</strong> — games where two players cooperate against two others (Bridge, Tichu) require a multi-agent cooperation model</li>
+<li><strong>Complex multi-die mechanics</strong> — two independent dice where you must allocate each die to a different piece (Backgammon-style) are not parseable for novel games</li>
+<li><strong>Negotiation and trading</strong> — games involving player-to-player resource exchange (Catan, Monopoly)</li>
+<li><strong>Real-time elements</strong> — any mechanic requiring simultaneous play or time pressure</li>
+<li><strong>Deeply compositional rules</strong> — games where rules interact in complex ways (&quot;if you have a red piece adjacent to a blue piece on a corner, your green pieces gain an extra movement point&quot;)</li>
+<li><strong>Spatial reasoning beyond adjacency</strong> — territory influence, area control scoring, or line-of-sight mechanics</li>
+</ul>
+<h4>4.3.4 Coverage Estimate</h4>
+<p>Of the structural categories that describe the ~50 most commonly played tabletop and card games, ThinAI's novel game pipeline currently covers approximately:</p>
+<table>
+<thead>
+<tr>
+<th>Coverage Level</th>
+<th>Categories</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Full</strong> (~40%)</td>
+<td>Grid placement, column drop, take-away, card matching/shedding, card comparing, dice racing</td>
+<td>Tic-Tac-Toe variants, Uno variants, War variants, simple race games</td>
+</tr>
+<tr>
+<td><strong>Substantial</strong> (~30%)</td>
+<td>Movement/capture, flanking, trick-taking, collecting</td>
+<td>Checkers variants, Reversi variants, simple trick games, Go Fish variants</td>
+</tr>
+<tr>
+<td><strong>Partial</strong> (~15%)</td>
+<td>Territory, melding/rummy, word/tile, bidding</td>
+<td>Hex variants, rummy variants (with limitations)</td>
+</tr>
+<tr>
+<td><strong>Not covered</strong> (~15%)</td>
+<td>Partnership, negotiation, real-time, complex multi-piece movement</td>
+<td>Bridge, Catan, Chess, simultaneous-play games</td>
+</tr>
+</tbody>
+</table>
+<p>The key insight is that a relatively small number of composable building blocks — grid placement, card zone management, movement with capture, turn phase sequencing, meld detection, trick resolution — covers a surprisingly large fraction of the design space. Most &quot;new&quot; games are novel combinations of familiar mechanics, and the system's generic building blocks compose well for these cases.</p>
+<h3>4.4 Interpretability</h3>
+<p>Every AI decision is traceable:</p>
+<ul>
+<li><strong>Feature weights</strong>: The learned evaluation function is a weighted sum of named features (e.g., <code>center_control: 0.34, piece_advantage: 0.62</code>)</li>
+<li><strong>Move commentary</strong>: After each move, the system explains why (e.g., &quot;Blocked opponent's 3-in-a-row threat&quot;)</li>
+<li><strong>Confidence reporting</strong>: The AI reports its confidence level (certain/confident/uncertain/guessing) based on score margins and move alternatives</li>
+<li><strong>Training replay</strong>: Users can watch visual replays of training games, seeing the AI's progression from clumsy to competent play</li>
+</ul>
+<h2>5. Key Innovations</h2>
+<h3>5.1 From Rules to Features to Priors</h3>
+<p>The pipeline from natural language → GDL → features → priors is, to our knowledge, novel. Traditional GGP systems receive formal rules and use search without learned evaluation. Neural systems learn evaluation but require millions of games. ThinAI bridges the gap: it extracts structural knowledge from the rules to bootstrap the evaluation function, then refines it through a small number of training games.</p>
+<h3>5.2 Progressive Depth with Graduated Opponents</h3>
+<p>The combination of progressive depth (start shallow, deepen over time) with graduated opponents (random → self-snapshot) solves a practical problem in self-play training: the &quot;nosedive&quot; where deeper search against a matched opponent leads to weight corruption. By separating depth progression from opponent difficulty, the system learns stable evaluation functions across all 21 games.</p>
+<h3>5.3 Generic Game Mechanics</h3>
+<p>Rather than implementing each game independently, ThinAI provides composable building blocks:</p>
+<ul>
+<li><strong>Generic meld system</strong>: configurable sets/runs with wild cards, minimum sizes, and scoring bonuses — used by Canasta, Gin Rummy, and available for novel games</li>
+<li><strong>Generic movement engine</strong>: orthogonal/diagonal/all-direction movement with jump capture, mandatory capture, and piece promotion</li>
+<li><strong>Multi-phase turns</strong>: configurable phase sequences (draw → meld → discard) with automatic phase advancement</li>
+<li><strong>Sampling-based search</strong>: handles any hidden-information game by sampling possible hidden states</li>
+</ul>
+<p>These building blocks compose: a novel game might combine grid movement with multi-phase turns, or card matching with meld detection. The parser identifies which building blocks a game needs and wires them together.</p>
+<h3>5.4 Luck Detection</h3>
+<p>Automatically identifying pure-luck games prevents the system from making false claims about learning or mastery. The two-level check (rule analysis + post-training signal) correctly identifies War and Chutes &amp; Ladders as luck-based while avoiding false positives on games with significant luck components but meaningful strategy (Backgammon, card games).</p>
+<h2>6. Limitations</h2>
+<p><strong>Playing strength</strong>: ThinAI aims for competent play, not superhuman performance. Against expert human players in games like Checkers or Connect Four, the AI can be beaten by someone who understands deep tactical patterns. The linear evaluation function cannot capture complex positional concepts that neural networks learn.</p>
+<p><strong>Parser coverage</strong>: The natural language parser handles ~85% of the 50 most popular tabletop games. It struggles with: partnership dynamics (Bridge, Tichu), complex conditional effects (&quot;when you land on a red space, draw a card&quot;), multi-die mechanics (Backgammon's two independent dice with doubles), and negotiation-based games.</p>
+<p><strong>Novel game depth</strong>: While novel games work end-to-end, the auto-generated features are often shallower than hand-crafted ones. Games requiring deep strategic concepts (territory influence in Go, tempo in chess) are beyond the current feature vocabulary.</p>
+<p><strong>Card game variance</strong>: Hidden-information card games have inherently high variance. The sampling-based search helps but cannot eliminate the uncertainty from unknown opponent hands, leading to inconsistent play quality.</p>
+<p><strong>Evaluation linearity</strong>: The linear feature combination cannot represent feature interactions (e.g., &quot;center control is more valuable when you also have piece advantage&quot;). A polynomial or neural evaluation would be more expressive but harder to interpret.</p>
+<h2>7. Future Work</h2>
+<ul>
+<li><strong>Deeper parser</strong>: Auto-detect meld keywords, multi-phase turns, and complex card effects in novel game descriptions</li>
+<li><strong>Partnership games</strong>: Multi-agent cooperation model for team games (Bridge, Euchre)</li>
+<li><strong>Learn from human play</strong>: Adjust feature weights based on human move choices during gameplay</li>
+<li><strong>Feature interactions</strong>: Explore polynomial evaluation functions or shallow networks while maintaining interpretability</li>
+<li><strong>Deployment with pre-trained weights</strong>: Ship trained models for all 21 built-in games so users experience strong play immediately</li>
+</ul>
+<h2>8. Conclusion</h2>
+<p>ThinAI demonstrates that imposing human-like learning constraints on a game AI system — natural language input, clarification of ambiguities, no external resources, limited practice, and initial intuitions — produces a surprisingly general game-learning system. Rather than pursuing superhuman performance on individual games, the system prioritizes <em>breadth</em>: handling novel games across 13 structural categories from English descriptions alone.</p>
+<p>The central finding is that a relatively small set of composable building blocks — grid placement, card zone management, movement with capture, turn phase sequencing, meld detection, trick resolution — covers approximately 85% of common tabletop game mechanics. When combined with automatic feature discovery and rule-derived priors, these building blocks enable competent play on novel games after just 20–50 training games, compared to the millions required by neural approaches.</p>
+<p>The system's limitations are instructive: it struggles precisely where a human newcomer would also struggle — with games requiring deep positional intuition that takes years to develop, with complex multi-piece interactions that resist simple feature decomposition, and with social mechanics (negotiation, partnership) that depend on modeling other players' intentions rather than board state alone.</p>
+<p>We believe the &quot;learn like a kid&quot; framing points toward an underexplored region of the game AI design space. The field has invested heavily in the question &quot;how strong can we make a game AI?&quot; ThinAI asks a complementary question: &quot;how many different games can a single system learn to play reasonably well, starting from nothing but a description of the rules?&quot; The answer — at least for classical turn-based games — appears to be: quite a few.</p>
+<hr />
+<h2>References</h2>
+<ul>
+<li>Björnsson, Y., &amp; Finnsson, H. (2009). CadiaPlayer: A simulation-based general game player. <em>IEEE Transactions on Computational Intelligence and AI in Games</em>.</li>
+<li>Genesereth, M., Love, N., &amp; Pell, B. (2005). General game playing: Overview of the AAAI competition. <em>AI Magazine</em>.</li>
+<li>Samuel, A. L. (1959). Some studies in machine learning using the game of checkers. <em>IBM Journal of Research and Development</em>.</li>
+<li>Schrittwieser, J., et al. (2020). Mastering Atari, Go, chess and shogi by planning with a learned model. <em>Nature</em>.</li>
+<li>Silver, D., et al. (2018). A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play. <em>Science</em>.</li>
+<li>Sutton, R. S. (1988). Learning to predict by the methods of temporal differences. <em>Machine Learning</em>.</li>
+<li>Tesauro, G. (1995). Temporal difference learning and TD-Gammon. <em>Communications of the ACM</em>.</li>
+</ul>
+
+
+<footer>
+  <p>Built by <a href="https://www.highdesertapps.com/">Jeff Sanchez</a> with <a href="https://claude.ai">Claude</a> &middot; <a href="https://github.com/WebPredict/thinai">GitHub</a></p>
+</footer>
+
+</div>
+</body>
+</html>

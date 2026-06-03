@@ -195,6 +195,15 @@ def _prior_for_feature(feature_name: str, signals: dict) -> float:
     if "conservation" in name:
         return 0.5  # strong prior: saving high cards is almost always right
 
+    # Score-racing features — being ahead and making progress are good
+    if signals.get("score_comparison"):
+        if "score_racing_lead" in name:
+            return 0.3  # being ahead on score is good
+        if "score_racing_progress" in name:
+            return 0.2  # making progress toward target is good
+        if name == "is_dealer":
+            return 0.1  # slight dealer advantage in many card games
+
     # Center control — moderate bias, usually helpful
     if "center" in name:
         return 0.2

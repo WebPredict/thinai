@@ -1,0 +1,110 @@
+{
+  "meta": {
+    "name": "Cribbage",
+    "players": 2,
+    "turn_order": "conditional",
+    "turn_rule": "if cribbage_turn_done(): next_player else: same_player",
+    "version": "1.0"
+  },
+
+  "board": {
+    "type": "card_zones",
+    "zones": [
+      { "name": "deck", "visible_to": "none", "ordered": true },
+      { "name": "hand_p1", "owner": "player1", "visible_to": "owner", "ordered": false },
+      { "name": "hand_p2", "owner": "player2", "visible_to": "owner", "ordered": false },
+      { "name": "crib", "visible_to": "none", "ordered": false },
+      { "name": "starter", "visible_to": "all", "ordered": false },
+      { "name": "play_area", "visible_to": "all", "ordered": true },
+      { "name": "played_out", "visible_to": "none", "ordered": false }
+    ]
+  },
+
+  "cards": {
+    "deck": "standard52",
+    "deck_zone": "deck"
+  },
+
+  "pieces": [],
+
+  "state_vars": [
+    { "name": "phase", "type": "string", "scope": "global", "initial": "discard" },
+    { "name": "dealer", "type": "string", "scope": "global", "initial": "player2" },
+    { "name": "p1_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_score", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "peg_count", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "peg_cards", "type": "list", "scope": "global", "initial": [] },
+    { "name": "peg_players", "type": "list", "scope": "global", "initial": [] },
+    { "name": "p1_said_go", "type": "bool", "scope": "global", "initial": false },
+    { "name": "p2_said_go", "type": "bool", "scope": "global", "initial": false },
+    { "name": "show_hand_p1", "type": "list", "scope": "global", "initial": [] },
+    { "name": "show_hand_p2", "type": "list", "scope": "global", "initial": [] },
+    { "name": "crib_cards", "type": "list", "scope": "global", "initial": [] },
+    { "name": "p1_discards_done", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "p2_discards_done", "type": "int", "scope": "global", "initial": 0 },
+    { "name": "game_over", "type": "bool", "scope": "global", "initial": false },
+    { "name": "last_action", "type": "string", "scope": "global", "initial": "" },
+    { "name": "last_play", "type": "string", "scope": "global", "initial": "" }
+  ],
+
+  "setup": [
+    { "action": "shuffle", "zone": "deck" },
+    { "action": "deal", "from": "deck", "to": "hand_p1", "count": 6 },
+    { "action": "deal", "from": "deck", "to": "hand_p2", "count": 6 }
+  ],
+
+  "rules": [
+    {
+      "name": "discard_to_crib",
+      "action": "discard",
+      "params": [
+        { "name": "card_id", "select": "cribbage_discard_hand" }
+      ],
+      "conditions": ["cribbage_can_discard()"],
+      "effects": ["cribbage_discard(card_id)"]
+    },
+    {
+      "name": "cut_deck",
+      "action": "cut",
+      "params": [],
+      "conditions": ["cribbage_can_cut()"],
+      "effects": ["cribbage_cut()"]
+    },
+    {
+      "name": "play_peg_card",
+      "action": "play",
+      "params": [
+        { "name": "card_id", "select": "cribbage_peggable" }
+      ],
+      "conditions": ["cribbage_can_peg()"],
+      "effects": ["cribbage_peg(card_id)"]
+    },
+    {
+      "name": "say_go",
+      "action": "pass",
+      "params": [],
+      "conditions": ["cribbage_can_say_go()"],
+      "effects": ["cribbage_say_go()"]
+    },
+    {
+      "name": "score_show",
+      "action": "score",
+      "params": [],
+      "conditions": ["cribbage_can_score_show()"],
+      "effects": ["cribbage_score_show()"]
+    }
+  ],
+
+  "end_conditions": [
+    {
+      "type": "win",
+      "player": "player_by_score",
+      "condition": "cribbage_game_over()",
+      "score": "cribbage_score(current_player)"
+    }
+  ],
+
+  "_comments": {
+    "rules": "2-player Cribbage: standard 52-card deck, deal 6 each, discard 2 to crib. Cut starter (Jack = 2 pts to dealer). Pegging phase: alternate plays toward 31, scoring 15s/31/pairs/runs. Show phase: non-dealer first, then dealer hand, then crib. Score 15s (2 each), pairs (2 each), runs (length, with multiplicity), flush (4-5), nobs (1). First to 121 wins."
+  }
+}

@@ -524,6 +524,25 @@ class GameEngine:
             for m in moves:
                 yield m.move_id
 
+        # === Cribbage selectors ===
+
+        elif select == "cribbage_discard_hand":
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.get_zone(f"hand_{suffix}")
+            if hand:
+                for card in hand.cards:
+                    yield card.id
+
+        elif select == "cribbage_peggable":
+            from engine.gdl.card_scoring import CRIBBAGE_PEG_VALUES
+            suffix = "p1" if state.current_player == "player1" else "p2"
+            hand = state.get_zone(f"hand_{suffix}")
+            peg_count = state.state_vars.get("peg_count", 0)
+            if hand:
+                for card in hand.cards:
+                    if CRIBBAGE_PEG_VALUES.get(card.rank, 0) + peg_count <= 31:
+                        yield card.id
+
         else:
             # Unknown selector type
             pass

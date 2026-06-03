@@ -62,28 +62,39 @@ def find_sets(cards: list[Card], min_size: int = 3,
 
 
 def find_runs(cards: list[Card], min_size: int = 3,
-              wild_ranks: Optional[list[str]] = None) -> list[list[Card]]:
-    """Find all valid runs (sequential same suit) from cards.
+              wild_ranks: Optional[list[str]] = None,
+              same_suit: bool = True,
+              rank_values: Optional[dict] = None) -> list[list[Card]]:
+    """Find all valid runs (sequential cards) from cards.
 
     Args:
         cards: list of Card objects
         min_size: minimum cards per run (default 3)
         wild_ranks: ranks that act as wild (e.g., ["2", "Joker"])
+        same_suit: if True (default), runs must be same suit.
+            If False, runs can span suits (e.g., Cribbage).
+        rank_values: custom rank-to-value mapping. Defaults to RANK_VALUES.
 
     Returns:
         List of card groups, each forming a valid run.
     """
     wild_ranks = set(wild_ranks or [])
+    rv = rank_values or RANK_VALUES
     naturals = [c for c in cards if c.rank not in wild_ranks]
 
-    # Group by suit, sort by rank value
-    by_suit = defaultdict(list)
-    for c in naturals:
-        by_suit[c.suit].append(c)
+    if same_suit:
+        # Group by suit, find runs within each suit
+        by_suit = defaultdict(list)
+        for c in naturals:
+            by_suit[c.suit].append(c)
+        groups = list(by_suit.values())
+    else:
+        # All cards in one group (cross-suit runs)
+        groups = [naturals] if naturals else []
 
     runs = []
-    for suit, suited_cards in by_suit.items():
-        sorted_cards = sorted(suited_cards, key=lambda c: RANK_VALUES.get(c.rank, 0))
+    for group_cards in groups:
+        sorted_cards = sorted(group_cards, key=lambda c: rv.get(c.rank, 0))
 
         # Find consecutive sequences
         i = 0
@@ -91,8 +102,8 @@ def find_runs(cards: list[Card], min_size: int = 3,
             run = [sorted_cards[i]]
             j = i + 1
             while j < len(sorted_cards):
-                prev_val = RANK_VALUES.get(run[-1].rank, 0)
-                curr_val = RANK_VALUES.get(sorted_cards[j].rank, 0)
+                prev_val = rv.get(run[-1].rank, 0)
+                curr_val = rv.get(sorted_cards[j].rank, 0)
                 if curr_val == prev_val + 1:
                     run.append(sorted_cards[j])
                     j += 1

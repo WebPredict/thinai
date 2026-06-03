@@ -650,6 +650,29 @@ def _eval_func_call(node: FuncCall, ctx: EvalContext) -> Any:
     if name == "mancala_store_count":
         return _mancala_store_count(ctx.state, args[0])
 
+    # === Cribbage condition built-ins ===
+
+    if name == "cribbage_can_discard":
+        return _cribbage_can_discard(ctx.state)
+    if name == "cribbage_can_cut":
+        return _cribbage_can_cut(ctx.state)
+    if name == "cribbage_can_peg":
+        return _cribbage_can_peg(ctx.state)
+    if name == "cribbage_can_say_go":
+        return _cribbage_can_say_go(ctx.state)
+    if name == "cribbage_can_score_show":
+        return _cribbage_can_score_show(ctx.state)
+    if name == "cribbage_turn_done":
+        return _cribbage_turn_done(ctx.state)
+    if name == "cribbage_game_over":
+        return ctx.state.state_vars.get("game_over", False)
+    if name == "cribbage_score":
+        player = args[0] if args else ctx.state.current_player
+        if player == "current_player":
+            player = ctx.state.current_player
+        suffix = "p1" if player == "player1" else "p2"
+        return ctx.state.state_vars.get(f"{suffix}_score", 0)
+
     raise NameError(f"Unknown function: {name}")
 
 
@@ -1144,6 +1167,26 @@ def _execute_effect_func(node: EffectFuncCall, ctx: EvalContext):
         args = [evaluate(a, ctx) for a in node.args]
         roll = args[0] if args else None
         _roll_and_move(ctx.state, roll, bump=True)
+        return
+
+    # === Cribbage effect built-ins ===
+
+    if name == "cribbage_discard":
+        args = [evaluate(a, ctx) for a in node.args]
+        _cribbage_discard(ctx.state, args[0])
+        return
+    if name == "cribbage_cut":
+        _cribbage_cut(ctx.state)
+        return
+    if name == "cribbage_peg":
+        args = [evaluate(a, ctx) for a in node.args]
+        _cribbage_peg(ctx.state, args[0])
+        return
+    if name == "cribbage_say_go":
+        _cribbage_say_go(ctx.state)
+        return
+    if name == "cribbage_score_show":
+        _cribbage_score_show(ctx.state)
         return
 
     raise NameError(f"Unknown effect function: {name}")
@@ -3527,3 +3570,505 @@ def _race_move_choice(state: GameState, forward: bool = True):
             state.remove_piece(new_space, op)
             state.add_piece(TrackSpace(0), op)
         state.state_vars["last_play"] += f" — bumped opponent back to start!"
+
+
+# ======================================================================
+# Cribbage helpers
+# ======================================================================
+
+from engine.gdl.card_scoring import (
+    CRIBBAGE_PEG_VALUES, CRIBBAGE_RANK_ORDER,
+    find_subsets_summing_to, count_rank_pairs, count_rank_run_points,
+    count_flush, sequential_play_pairs, sequential_play_run,
+)
+
+
+def _cribbage_suffix(state: GameState) -> str:
+    """Get 'p1' or 'p2' suffix for the current player."""
+    return "p1" if state.current_player == "player1" else "p2"
+
+
+def _cribbage_opponent(state: GameState) -> str:
+    return "player2" if state.current_player == "player1" else "player1"
+
+
+def _cribbage_nondealer(state: GameState) -> str:
+    dealer = state.state_vars.get("dealer", "player2")
+    return "player2" if dealer == "player1" else "player1"
+
+
+def _cribbage_add_score(state: GameState, player: str, points: int) -> bool:
+    """Add points to a player's score. Returns True if game is won."""
+    if points <= 0:
+        return False
+    suffix = "p1" if player == "player1" else "p2"
+    state.state_vars[f"{suffix}_score"] = state.state_vars.get(f"{suffix}_score", 0) + points
+    if state.state_vars[f"{suffix}_score"] >= 121:
+        state.state_vars["game_over"] = True
+        return True
+    return False
+
+
+def _cribbage_hand_zone(state: GameState, player: str):
+    """Get the hand zone for a player."""
+    suffix = "p1" if player == "player1" else "p2"
+    return state.get_zone(f"hand_{suffix}")
+
+
+def _cribbage_peg_value(card) -> int:
+    """Card value for pegging: A=1, 2-10=face, J/Q/K=10."""
+    return CRIBBAGE_PEG_VALUES.get(card.rank, 0)
+
+
+# --- Condition helpers ---
+
+def _cribbage_can_discard(state: GameState) -> bool:
+    if state.state_vars.get("phase") != "discard":
+        return False
+    suffix = _cribbage_suffix(state)
+    return state.state_vars.get(f"{suffix}_discards_done", 0) < 2
+
+
+def _cribbage_can_cut(state: GameState) -> bool:
+    return state.state_vars.get("phase") == "cut"
+
+
+def _cribbage_can_peg(state: GameState) -> bool:
+    if state.state_vars.get("phase") != "peg":
+        return False
+    if state.state_vars.get("game_over"):
+        return False
+    hand = _cribbage_hand_zone(state, state.current_player)
+    if not hand or hand.is_empty:
+        return False
+    peg_count = state.state_vars.get("peg_count", 0)
+    return any(_cribbage_peg_value(c) + peg_count <= 31 for c in hand.cards)
+
+
+def _cribbage_can_say_go(state: GameState) -> bool:
+    if state.state_vars.get("phase") != "peg":
+        return False
+    if state.state_vars.get("game_over"):
+        return False
+    suffix = _cribbage_suffix(state)
+    if state.state_vars.get(f"{suffix}_said_go"):
+        return False
+    hand = _cribbage_hand_zone(state, state.current_player)
+    if not hand or hand.is_empty:
+        return False
+    peg_count = state.state_vars.get("peg_count", 0)
+    # Can only say go if no playable card
+    return not any(_cribbage_peg_value(c) + peg_count <= 31 for c in hand.cards)
+
+
+def _cribbage_can_score_show(state: GameState) -> bool:
+    phase = state.state_vars.get("phase", "")
+    return phase in ("show_nondealer", "show_dealer", "show_crib", "round_end")
+
+
+def _cribbage_turn_done(state: GameState) -> bool:
+    """Returns True when the current player's action means turn passes."""
+    last_action = state.state_vars.get("last_action", "")
+    phase = state.state_vars.get("phase", "")
+
+    if phase == "discard":
+        # After a discard, switch to the other player for their discard
+        # unless both are done (phase auto-advances)
+        return last_action == "discard"
+    if phase == "peg":
+        if last_action not in ("peg", "say_go"):
+            return False
+        # Don't switch if opponent has no cards or can't play
+        player = state.current_player
+        opponent = "player2" if player == "player1" else "player1"
+        opp_hand = _cribbage_hand_zone(state, opponent)
+        if not opp_hand or opp_hand.is_empty:
+            return False  # opponent has no cards, current player continues
+        opp_suffix = "p1" if opponent == "player1" else "p2"
+        if state.state_vars.get(f"{opp_suffix}_said_go"):
+            return False  # opponent said go, current player continues
+        peg_count = state.state_vars.get("peg_count", 0)
+        if not any(_cribbage_peg_value(c) + peg_count <= 31 for c in opp_hand.cards):
+            return False  # opponent can't play under 31
+        return True
+    # For cut and show phases, same player continues
+    return False
+
+
+# --- Effect helpers ---
+
+def _cribbage_discard(state: GameState, card_id: int):
+    """Discard a card from hand to crib."""
+    suffix = _cribbage_suffix(state)
+    hand = _cribbage_hand_zone(state, state.current_player)
+    crib = state.get_zone("crib")
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    hand.remove(card)
+    crib.add(card)
+    state.state_vars[f"{suffix}_discards_done"] = state.state_vars.get(f"{suffix}_discards_done", 0) + 1
+    state.state_vars["last_action"] = "discard"
+    state.state_vars["last_play"] = f"Discarded {card} to crib"
+
+    # Check if both players have discarded 2
+    p1_done = state.state_vars.get("p1_discards_done", 0) >= 2
+    p2_done = state.state_vars.get("p2_discards_done", 0) >= 2
+    if p1_done and p2_done:
+        # Snapshot hands for show phase
+        hand_p1 = state.get_zone("hand_p1")
+        hand_p2 = state.get_zone("hand_p2")
+        state.state_vars["show_hand_p1"] = [c.to_dict() for c in hand_p1.cards]
+        state.state_vars["show_hand_p2"] = [c.to_dict() for c in hand_p2.cards]
+        state.state_vars["crib_cards"] = [c.to_dict() for c in crib.cards]
+        # Move to cut phase — non-dealer cuts
+        state.state_vars["phase"] = "cut"
+        state.current_player = _cribbage_nondealer(state)
+        state.state_vars["last_action"] = ""
+
+
+def _cribbage_cut(state: GameState):
+    """Reveal the starter card. His heels = 2 pts to dealer."""
+    deck = state.get_zone("deck")
+    starter_zone = state.get_zone("starter")
+
+    card = deck.draw()
+    if card:
+        starter_zone.add(card)
+        state.state_vars["last_play"] = f"Cut: {card}"
+
+        # His heels: if starter is a Jack, dealer scores 2
+        if card.rank == "J":
+            dealer = state.state_vars.get("dealer", "player2")
+            _cribbage_add_score(state, dealer, 2)
+            state.state_vars["last_play"] += " — His heels! Dealer scores 2"
+
+    if not state.state_vars.get("game_over"):
+        state.state_vars["phase"] = "peg"
+        # Non-dealer leads pegging
+        state.current_player = _cribbage_nondealer(state)
+
+    state.state_vars["last_action"] = "cut"
+
+
+def _cribbage_peg(state: GameState, card_id: int):
+    """Play a card during pegging phase."""
+    player = state.current_player
+    hand = _cribbage_hand_zone(state, player)
+
+    card = None
+    for c in hand.cards:
+        if c.id == card_id:
+            card = c
+            break
+    if not card:
+        return
+
+    peg_val = _cribbage_peg_value(card)
+    peg_count = state.state_vars.get("peg_count", 0)
+
+    # Move card from hand to play area
+    hand.remove(card)
+    play_area = state.get_zone("play_area")
+    play_area.add(card)
+
+    # Update pegging state
+    new_count = peg_count + peg_val
+    state.state_vars["peg_count"] = new_count
+    peg_cards = state.state_vars.get("peg_cards", [])
+    peg_cards.append(card.to_dict())
+    state.state_vars["peg_cards"] = peg_cards
+    peg_players = state.state_vars.get("peg_players", [])
+    peg_players.append(player)
+    state.state_vars["peg_players"] = peg_players
+    state.state_vars["last_action"] = "peg"
+    state.state_vars["last_play"] = f"Played {card} (count: {new_count})"
+
+    # Score pegging points
+    peg_ranks = [cd["rank"] for cd in peg_cards]
+    points = 0
+
+    # 15: count hits exactly 15
+    if new_count == 15:
+        points += 2
+
+    # 31: count hits exactly 31
+    if new_count == 31:
+        points += 2
+
+    # Pairs (consecutive matching ranks from end)
+    pair_pts = sequential_play_pairs(peg_ranks)
+    points += pair_pts
+
+    # Runs (longest suffix forming consecutive sequence)
+    run_len = sequential_play_run(peg_ranks, min_size=3, rank_order=CRIBBAGE_RANK_ORDER)
+    points += run_len
+
+    if points > 0:
+        _cribbage_add_score(state, player, points)
+        state.state_vars["last_play"] += f" — scored {points}"
+
+    if state.state_vars.get("game_over"):
+        return
+
+    # Check if sub-round should reset (count=31 or both can't play)
+    opponent = _cribbage_opponent(state)
+    opp_hand = _cribbage_hand_zone(state, opponent)
+    my_hand = hand  # already updated (card removed)
+
+    if new_count == 31:
+        _cribbage_reset_peg_subround(state)
+        # After 31, the OTHER player leads next sub-round
+        # (the player who hit 31 already got their 2 points)
+        if not _cribbage_check_pegging_done(state):
+            state.current_player = opponent
+        return
+
+    # Check if opponent can play
+    opp_suffix = "p1" if player == "player2" else "p2"
+    opp_said_go = state.state_vars.get(f"{opp_suffix}_said_go", False)
+
+    if opp_said_go:
+        # Opponent already said go — keep playing if we can
+        if not any(_cribbage_peg_value(c) + new_count <= 31 for c in my_hand.cards):
+            # We also can't play — score 1 for go (last card)
+            _cribbage_add_score(state, player, 1)
+            state.state_vars["last_play"] += " — Go! 1 point"
+            _cribbage_reset_peg_subround(state)
+            if not _cribbage_check_pegging_done(state):
+                # Player who didn't play last leads
+                state.current_player = opponent
+        # else: we can still play, stay as current player (don't switch)
+        else:
+            pass  # same player continues
+        return
+
+    # Check if both hands are empty — pegging is done, award last card
+    if my_hand.is_empty and (not opp_hand or opp_hand.is_empty):
+        _cribbage_add_score(state, player, 1)
+        state.state_vars["last_play"] += " — last card, 1 point"
+        _cribbage_reset_peg_subround(state)
+        _cribbage_check_pegging_done(state)
+        return
+
+    # Check if opponent can't play under current count
+    if opp_hand and not any(_cribbage_peg_value(c) + new_count <= 31 for c in opp_hand.cards):
+        # Opponent can't play — if we also can't, it's a go situation
+        if my_hand.is_empty or not any(_cribbage_peg_value(c) + new_count <= 31 for c in my_hand.cards):
+            # Neither can play — last card point
+            _cribbage_add_score(state, player, 1)
+            state.state_vars["last_play"] += " — Go! 1 point"
+            _cribbage_reset_peg_subround(state)
+            if not _cribbage_check_pegging_done(state):
+                state.current_player = opponent
+            return
+        # We can still play — stay as current player
+        return
+
+    # Normal case: switch to opponent
+    # (turn_done returns True, engine switches via turn_rule)
+
+
+def _cribbage_say_go(state: GameState):
+    """Current player says 'go' (cannot play under 31)."""
+    player = state.current_player
+    suffix = _cribbage_suffix(state)
+    state.state_vars[f"{suffix}_said_go"] = True
+    state.state_vars["last_action"] = "say_go"
+    state.state_vars["last_play"] = "Go!"
+
+    opponent = _cribbage_opponent(state)
+    opp_suffix = "p1" if player == "player2" else "p2"
+    opp_said_go = state.state_vars.get(f"{opp_suffix}_said_go", False)
+    opp_hand = _cribbage_hand_zone(state, opponent)
+    peg_count = state.state_vars.get("peg_count", 0)
+
+    if opp_said_go or not opp_hand or opp_hand.is_empty or \
+       not any(_cribbage_peg_value(c) + peg_count <= 31 for c in opp_hand.cards):
+        # Both can't play — last player to play a card gets 1 for go
+        peg_players = state.state_vars.get("peg_players", [])
+        if peg_players:
+            last_player = peg_players[-1]
+            _cribbage_add_score(state, last_player, 1)
+            state.state_vars["last_play"] += f" — {last_player} scores 1 for go"
+        _cribbage_reset_peg_subround(state)
+        if not _cribbage_check_pegging_done(state):
+            # Player who didn't play last leads
+            if peg_players:
+                state.current_player = _cribbage_opponent(state) if peg_players[-1] == player else player
+            else:
+                state.current_player = opponent
+
+
+def _cribbage_reset_peg_subround(state: GameState):
+    """Reset pegging sub-round: clear count, move cards to played_out."""
+    state.state_vars["peg_count"] = 0
+    state.state_vars["peg_cards"] = []
+    state.state_vars["peg_players"] = []
+    state.state_vars["p1_said_go"] = False
+    state.state_vars["p2_said_go"] = False
+
+    play_area = state.get_zone("play_area")
+    played_out = state.get_zone("played_out")
+    if play_area and played_out:
+        while not play_area.is_empty:
+            card = play_area.draw()
+            if card:
+                played_out.add(card)
+
+
+def _cribbage_check_pegging_done(state: GameState) -> bool:
+    """Check if pegging is complete (both hands empty). Advance to show if so."""
+    hand_p1 = state.get_zone("hand_p1")
+    hand_p2 = state.get_zone("hand_p2")
+    if (not hand_p1 or hand_p1.is_empty) and (not hand_p2 or hand_p2.is_empty):
+        state.state_vars["phase"] = "show_nondealer"
+        # Non-dealer scores first
+        state.current_player = _cribbage_nondealer(state)
+        state.state_vars["last_action"] = ""
+        return True
+    return False
+
+
+def _cribbage_score_show(state: GameState):
+    """Score hands and crib during show phase, then advance."""
+    from engine.gdl.cards import Card as CardCls
+    phase = state.state_vars.get("phase", "")
+    dealer = state.state_vars.get("dealer", "player2")
+    nondealer = "player2" if dealer == "player1" else "player1"
+
+    # Get starter card
+    starter_zone = state.get_zone("starter")
+    starter = starter_zone.cards[0] if starter_zone and starter_zone.cards else None
+
+    if phase == "show_nondealer":
+        hand_data = state.state_vars.get("show_hand_p1" if nondealer == "player1" else "show_hand_p2", [])
+        hand_cards = [CardCls.from_dict(d) for d in hand_data]
+        points = _cribbage_score_hand(hand_cards, starter, is_crib=False)
+        _cribbage_add_score(state, nondealer, points)
+        nd_suffix = "p1" if nondealer == "player1" else "p2"
+        state.state_vars["last_play"] = f"Non-dealer ({nd_suffix}) hand: {points} points"
+        state.state_vars["last_action"] = "show"
+        if not state.state_vars.get("game_over"):
+            state.state_vars["phase"] = "show_dealer"
+            state.current_player = dealer
+
+    elif phase == "show_dealer":
+        hand_data = state.state_vars.get("show_hand_p1" if dealer == "player1" else "show_hand_p2", [])
+        hand_cards = [CardCls.from_dict(d) for d in hand_data]
+        points = _cribbage_score_hand(hand_cards, starter, is_crib=False)
+        _cribbage_add_score(state, dealer, points)
+        d_suffix = "p1" if dealer == "player1" else "p2"
+        state.state_vars["last_play"] = f"Dealer ({d_suffix}) hand: {points} points"
+        state.state_vars["last_action"] = "show"
+        if not state.state_vars.get("game_over"):
+            state.state_vars["phase"] = "show_crib"
+
+    elif phase == "show_crib":
+        crib_data = state.state_vars.get("crib_cards", [])
+        crib_cards = [CardCls.from_dict(d) for d in crib_data]
+        points = _cribbage_score_hand(crib_cards, starter, is_crib=True)
+        _cribbage_add_score(state, dealer, points)
+        state.state_vars["last_play"] = f"Crib: {points} points to dealer"
+        state.state_vars["last_action"] = "show"
+        if not state.state_vars.get("game_over"):
+            state.state_vars["phase"] = "round_end"
+
+    elif phase == "round_end":
+        _cribbage_start_new_round(state)
+
+
+def _cribbage_score_hand(hand_cards: list, starter, is_crib: bool) -> int:
+    """Score a Cribbage hand (4 cards + starter).
+
+    Uses generic card_scoring primitives for combination detection.
+    """
+    if not hand_cards or not starter:
+        return 0
+
+    all_five = hand_cards + [starter]
+    points = 0
+
+    # 15s: all subsets summing to 15, 2 pts each
+    fifteens = find_subsets_summing_to(all_five, 15, CRIBBAGE_PEG_VALUES)
+    points += len(fifteens) * 2
+
+    # Pairs: same-rank pairs among all 5 cards, 2 pts each
+    points += count_rank_pairs(all_five)
+
+    # Runs: cross-suit runs with multiplicity
+    points += count_rank_run_points(all_five, min_size=3, rank_order=CRIBBAGE_RANK_ORDER)
+
+    # Flush
+    hand_suits = [c.suit for c in hand_cards]
+    if len(set(hand_suits)) == 1:
+        # All 4 hand cards same suit
+        if starter.suit == hand_suits[0]:
+            points += 5  # 5-card flush
+        elif not is_crib:
+            points += 4  # 4-card flush (hand only, not crib)
+        # Crib requires all 5 for a flush
+
+    # Nobs: Jack of starter's suit in hand
+    for c in hand_cards:
+        if c.rank == "J" and c.suit == starter.suit:
+            points += 1
+            break
+
+    return points
+
+
+def _cribbage_start_new_round(state: GameState):
+    """Swap dealer, collect all cards, re-deal for a new round."""
+    # Swap dealer
+    dealer = state.state_vars.get("dealer", "player2")
+    new_dealer = "player2" if dealer == "player1" else "player1"
+    state.state_vars["dealer"] = new_dealer
+
+    # Collect all cards back to deck
+    deck = state.get_zone("deck")
+    for zone_name in ("hand_p1", "hand_p2", "crib", "starter", "play_area", "played_out"):
+        zone = state.get_zone(zone_name)
+        if zone:
+            while not zone.is_empty:
+                card = zone.draw()
+                if card:
+                    deck.add(card)
+
+    # Shuffle and deal
+    deck.shuffle()
+    hand_p1 = state.get_zone("hand_p1")
+    hand_p2 = state.get_zone("hand_p2")
+    for _ in range(6):
+        c = deck.draw()
+        if c:
+            hand_p1.add(c)
+    for _ in range(6):
+        c = deck.draw()
+        if c:
+            hand_p2.add(c)
+
+    # Reset state
+    state.state_vars["phase"] = "discard"
+    state.state_vars["peg_count"] = 0
+    state.state_vars["peg_cards"] = []
+    state.state_vars["peg_players"] = []
+    state.state_vars["p1_said_go"] = False
+    state.state_vars["p2_said_go"] = False
+    state.state_vars["show_hand_p1"] = []
+    state.state_vars["show_hand_p2"] = []
+    state.state_vars["crib_cards"] = []
+    state.state_vars["p1_discards_done"] = 0
+    state.state_vars["p2_discards_done"] = 0
+    state.state_vars["last_action"] = ""
+    state.state_vars["last_play"] = "New round — dealer is now " + new_dealer
+
+    # Non-dealer goes first in discard phase
+    nondealer = "player2" if new_dealer == "player1" else "player1"
+    state.current_player = nondealer

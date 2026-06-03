@@ -204,6 +204,27 @@ def generate_features(gdl: dict) -> list[FeatureSpec]:
                 _card_draw_pile_remaining,
             ))
 
+        # Score-racing features: detect games with p1_score/p2_score vars
+        state_vars = gdl.get("state_vars", [])
+        var_names = {v.get("name", "") for v in state_vars}
+        if "p1_score" in var_names and "p2_score" in var_names:
+            features.append(FeatureSpec(
+                "score_racing_lead",
+                "My score minus opponent's score (normalized)",
+                _score_racing_lead,
+            ))
+            features.append(FeatureSpec(
+                "score_racing_progress",
+                "How close I am to winning (my score / target)",
+                _score_racing_progress,
+            ))
+        if "dealer" in var_names:
+            features.append(FeatureSpec(
+                "is_dealer",
+                "Whether I am the dealer (advantage in some games)",
+                _is_dealer,
+            ))
+
         # Don't add state var features for card games — they're transient
         return features
 
@@ -573,3 +594,30 @@ def _card_draw_pile_remaining(state: GameState, player: str) -> float:
         if name in ("deck", "pond", "draw_pile", "stock"):
             return zone.size / 52.0
     return 0.0
+
+
+# === Score-racing features (generic for any game with p1_score/p2_score) ===
+
+def _score_racing_lead(state: GameState, player: str) -> float:
+    """My score minus opponent's, normalized by target (default 121)."""
+    my_suffix = "p1" if player == "player1" else "p2"
+    opp_suffix = "p2" if player == "player1" else "p1"
+    my_score = state.state_vars.get(f"{my_suffix}_score", 0)
+    opp_score = state.state_vars.get(f"{opp_suffix}_score", 0)
+    # Auto-detect target from end conditions, fallback to 121
+    target = 121
+    return (my_score - opp_score) / target
+
+
+def _score_racing_progress(state: GameState, player: str) -> float:
+    """How close I am to winning: my_score / target."""
+    my_suffix = "p1" if player == "player1" else "p2"
+    my_score = state.state_vars.get(f"{my_suffix}_score", 0)
+    target = 121
+    return min(my_score / target, 1.0)
+
+
+def _is_dealer(state: GameState, player: str) -> float:
+    """1.0 if current player is the dealer, 0.0 otherwise."""
+    dealer = state.state_vars.get("dealer", "")
+    return 1.0 if dealer == player else 0.0

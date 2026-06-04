@@ -6,7 +6,7 @@ import './App.css'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 // Display order: most interesting demos first
-const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'spades', 'wizard', 'canasta', 'scrabble', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
+const GAME_ORDER = ['reversi', 'connect_four', 'checkers', 'hex', 'backgammon', 'mancala', 'hearts', 'spades', 'wizard', 'canasta', 'cribbage', 'scrabble', 'gin_rummy', 'five_card_draw', 'uno', 'crazy_eights', 'blackjack', 'go_fish', 'war', 'tictactoe', 'nim', 'chutes_and_ladders']
 
 const PLAYER_INDICATOR = {
   tictactoe: { label: 'X', color: '#d4a656' },
@@ -26,6 +26,7 @@ const PLAYER_INDICATOR = {
   hearts: { label: 'Player 1', color: '#d4a656' },
   spades: { label: 'Player 1', color: '#d4a656' },
   canasta: { label: 'Player 1', color: '#d4a656' },
+  cribbage: { label: 'Player 1', color: '#d4a656' },
   wizard: { label: 'Player 1', color: '#d4a656' },
   scrabble: { label: 'Player 1', color: '#d4a656' },
   gin_rummy: { label: 'Player 1', color: '#d4a656' },
@@ -50,6 +51,7 @@ const GAME_LABELS = {
   hearts: 'Hearts',
   spades: 'Spades',
   canasta: 'Canasta',
+  cribbage: 'Cribbage',
   wizard: 'Wizard',
   scrabble: 'Scrabble',
   gin_rummy: 'Gin Rummy',
@@ -245,6 +247,18 @@ const GAME_RULES = {
       'Trump cards beat any non-trump card. Highest card of the lead suit wins otherwise.',
       'Scoring: if you win exactly your bid, you get 20 + 10\u00D7tricks. If you miss, you lose 10 per trick off.',
       'The game lasts 5 rounds. Highest cumulative score wins.',
+    ],
+  },
+  cribbage: {
+    title: 'How to play Cribbage',
+    intro: 'Score points through card combinations. First to 121 wins!',
+    rules: [
+      'Each player is dealt 6 cards. Discard 2 to the crib (dealer scores it later).',
+      'A starter card is cut from the deck. If it\'s a Jack, dealer scores 2 ("his heels").',
+      'Pegging: alternate playing cards, keeping a running count toward 31. Score for hitting 15 (2 pts), 31 (2 pts), pairs, and runs.',
+      'If you can\'t play under 31, say "Go." Last player to play scores 1 point.',
+      'Show: score your 4-card hand + starter. 15s (2 pts each), pairs (2 pts), runs (length), flush (4-5 pts), nobs (Jack of starter suit = 1 pt).',
+      'Non-dealer scores first (can win before dealer). Then dealer scores hand, then crib.',
     ],
   },
   canasta: {

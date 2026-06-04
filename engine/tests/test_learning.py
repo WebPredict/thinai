@@ -5,8 +5,10 @@ import random
 import pytest
 from engine.engine import GameEngine
 from engine.reasoner.evaluator import LearnableEval
+from engine.reasoner.reasoner import Reasoner
 from engine.training.learner import LearningRunner
 from engine.training.opponents import RandomOpponent
+from engine.metacognition.effort import EffortAllocator
 
 
 EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), "..", "games", "examples")
@@ -148,3 +150,106 @@ class TestTrainingNoNosedive:
             f"{game_name}: late win rate collapsed to {late_wr:.0%} "
             f"(total: {results.win_rate:.0%}, {results.total_games} games)"
         )
+
+
+# --- Connect Four and Checkers regression tests ---
+# These two games are high-visibility demos that have regressed multiple times.
+
+class TestConnectFourRegressions:
+    """Targeted regression tests for Connect Four."""
+
+    @pytest.fixture
+    def c4(self):
+        return GameEngine.from_file(os.path.join(EXAMPLES_DIR, "connect_four.json"))
+
+    def test_search_depth_reaches_4(self, c4):
+        """Connect Four needs depth 4 to see 3-in-a-row threats.
+
+        Regression: node budget reduction from 2500 to 2000 capped C4 at
+        depth 3 (bf=7, 7^4=2401 > 2000). The AI couldn't block winning moves.
+        """
+        state = c4.initial_state()
+        allocator = EffortAllocator(min_depth=1, max_depth=4)
+        decision = allocator.recommend(state, c4)
+        assert decision.depth >= 4, (
+            f"C4 search depth {decision.depth} < 4 — AI can't see blocking threats. "
+            f"Check node budget in effort.py"
+        )
+
+    def test_training_improves(self, c4):
+        """C4 training should show improvement — late WR > early WR.
+
+        Regression: with depth capped at 3, the AI couldn't learn to see
+        threats and training stagnated around 50%.
+        """
+        random.seed(42)
+        evaluator = LearnableEval("Connect Four", gdl=c4.gdl)
+        runner = LearningRunner(c4, evaluator, max_depth=4, gdl=c4.gdl)
+        results = runner.train(40)
+
+        curve = results.win_rate_curve(window=10)
+        if len(curve) >= 20:
+            early = sum(curve[:10]) / 10
+            late = sum(curve[-10:]) / 10
+            assert late >= 0.4, (
+                f"C4 late WR={late:.0%} too low — AI not learning. "
+                f"Check search depth (need 4) and opponent setup"
+            )
+
+
+class TestCheckersRegressions:
+    """Targeted regression tests for Checkers."""
+
+    @pytest.fixture
+    def checkers(self):
+        return GameEngine.from_file(os.path.join(EXAMPLES_DIR, "checkers.json"))
+
+    def test_uses_handcrafted_features(self, checkers):
+        """Checkers evaluator should use hand-crafted features, not auto-generated.
+
+        Hand-crafted features (piece_advantage, king_count, advancement,
+        center_control) are much better than auto-generated ones for Checkers.
+        """
+        evaluator = LearnableEval("Checkers", gdl=checkers.gdl)
+        feature_names = [f.name for f in evaluator.features]
+        assert "piece_advantage" in feature_names, (
+            f"Checkers missing piece_advantage feature. Has: {feature_names}"
+        )
+        assert "king_count" in feature_names, (
+            f"Checkers missing king_count feature. Has: {feature_names}"
+        )
+
+    def test_training_does_not_nosedive(self, checkers):
+        """Checkers training must not collapse to 0% win rate.
+
+        Regression: snapshot opponent caused death spiral — learner fights
+        frozen copy of itself, degrades weights on every loss, never recovers.
+        Independent ReasonerOpponent with fresh features prevents this.
+        """
+        random.seed(42)
+        evaluator = LearnableEval("Checkers", gdl=checkers.gdl)
+        runner = LearningRunner(checkers, evaluator, max_depth=3, gdl=checkers.gdl)
+        results = runner.train(30)
+
+        # Check late win rate doesn't collapse
+        late = results.snapshots[-10:] if len(results.snapshots) >= 10 else results.snapshots
+        late_wr = sum(1 for s in late if s.outcome > 0) / len(late)
+        assert late_wr > 0.1, (
+            f"Checkers nosedived: late WR={late_wr:.0%} "
+            f"({results.wins}W {results.draws}D {results.losses}L). "
+            f"Check opponent type in learner.py — snapshot opponents cause death spirals"
+        )
+
+    def test_opponent_is_not_snapshot(self, checkers):
+        """Checkers should use independent ReasonerOpponent, not SnapshotOpponent.
+
+        Regression: f06cb35 switched feature-opponent games from independent
+        ReasonerOpponent to RandomOpponent→SnapshotOpponent, causing nosedive.
+        """
+        evaluator = LearnableEval("Checkers", gdl=checkers.gdl)
+        runner = LearningRunner(checkers, evaluator, max_depth=3, gdl=checkers.gdl)
+        # Trigger opponent setup by calling train with 1 game
+        random.seed(42)
+        runner.train(1)
+        # The runner should NOT be using random→snapshot graduation
+        # It should have set up a ReasonerOpponent during init

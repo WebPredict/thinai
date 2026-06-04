@@ -146,7 +146,7 @@
 
 <h1>Thin <em>ai</em> &mdash; Research Notes</h1>
 <p class="subtitle">A plain-language log of what's been built, what works, what doesn't, and what's next.</p>
-<div class="updated">Last updated: May 2026</div>
+<div class="updated">Last updated: June 2026</div>
 
 <h2>What ThinAI Is</h2>
 <p>ThinAI is a system that learns to play arbitrary turn-based games from a natural-language description of the rules. It runs entirely on a single laptop — no cloud APIs, no pre-trained models, no GPU clusters. The system parses game rules into a structured format, generates evaluation features automatically, and learns through self-play.</p>
@@ -183,18 +183,34 @@
 
 <h2>Key Numbers</h2>
 <ul>
-  <li><strong>21</strong> playable games across 13 categories</li>
-  <li><strong>413</strong> automated tests (including 8 training quality regression tests)</li>
+  <li><strong>22</strong> playable games across 14 categories</li>
+  <li><strong>418+</strong> automated tests (including targeted regression tests for C4 and Checkers)</li>
   <li><strong>~12,000</strong> lines of engine code</li>
   <li><strong>~2,700</strong> word Scrabble dictionary</li>
   <li><strong>40</strong> training games to reach competence (board games)</li>
   <li><strong>< 2 seconds</strong> per AI move (typically under 1 second)</li>
-  <li><strong>1,500 / 2,000</strong> max nodes per move (card / board games)</li>
+  <li><strong>1,500 / 2,500</strong> max nodes per move (card / board games)</li>
   <li><strong>350+</strong> game objects recognized by the parser (58 with SVG icons)</li>
   <li><strong>0</strong> GPUs required</li>
 </ul>
 
-<h2>Recent Changes (May 27, 2026)</h2>
+<h2>Recent Changes (June 2026)</h2>
+<ul>
+  <li><strong>Cribbage (new game):</strong> Full 2-player Cribbage — deal 6, discard 2 to crib, cut starter (his heels), pegging toward 31 with pairs/runs/15s/go, hand scoring (15s, pairs, runs with multiplicity, flush, nobs), crib scoring, dealer alternation, race to 121. Custom UI with peg count display, play area, Go button, and phase-aware prompts.</li>
+  <li><strong>Generic card scoring module:</strong> New reusable <code>engine/gdl/card_scoring.py</code> with primitives for any card game: <code>find_subsets_summing_to()</code> (card subsets hitting a target value), <code>count_rank_pairs()</code>, <code>count_rank_run_points()</code> (cross-suit runs with duplicate multiplicity), <code>count_flush()</code>, and sequential play scoring (<code>sequential_play_pairs/runs()</code>). Configurable rank values (Cribbage A=1 vs standard A=14).</li>
+  <li><strong>Cross-suit runs:</strong> <code>melds.py find_runs()</code> gains <code>same_suit</code> and <code>rank_values</code> parameters (backward compatible). Enables run detection across suits for Cribbage and similar games.</li>
+  <li><strong>Score-racing features:</strong> Auto-detected for any game with score state variables — <code>score_racing_lead</code>, <code>score_racing_progress</code>, <code>is_dealer</code>. Benefits Cribbage, Canasta, and future score-target games without game-specific code.</li>
+  <li><strong>Training regression fixes:</strong> Two regressions from the training stability commit (f06cb35) fixed:
+    <ul>
+      <li><em>Connect Four depth:</em> Board game node budget restored to 2500 (was 2000). C4 needs depth 4 to see 3-in-a-row blocking threats (7<sup>4</sup>=2401 nodes).</li>
+      <li><em>Checkers nosedive:</em> Games with hand-crafted features (Checkers, Mancala, Reversi) restored to independent <code>ReasonerOpponent</code> instead of snapshot-of-self. Snapshot opponents caused a death spiral — learner fights frozen copy, degrades weights on every loss, never recovers.</li>
+      <li><em>Learning rate decay:</em> Loss decay restored to 0.995 (was 0.92). The aggressive 8% decay killed learning capacity by game 30.</li>
+    </ul>
+  </li>
+  <li><strong>New regression tests:</strong> Targeted tests for C4 (search depth &ge; 4, training improves) and Checkers (uses hand-crafted features, no nosedive, correct opponent type) to prevent recurrence.</li>
+</ul>
+
+<h2>Changes (May 27, 2026)</h2>
 <ul>
   <li><strong>Canasta (new game):</strong> Full 2-player Canasta with double deck (108 cards), multi-phase turns (draw → meld → discard), wild cards (2s, Jokers), discard pile pickup, canasta bonuses (7+ card meld: natural 500 pts, mixed 300 pts), and going out detection. Custom UI with table melds, meld action buttons showing actual cards, and discard prompts.</li>
   <li><strong>Generic meld system:</strong> Reusable module (<code>engine/gdl/melds.py</code>) with <code>find_sets()</code>, <code>find_runs()</code>, <code>best_melds()</code>, <code>deadwood_value()</code>, and <code>can_add_to_meld()</code>. Configurable wild cards, minimum meld size, and scoring bonuses. Any card game mentioning "melds" or "sets" can use it.</li>
@@ -249,7 +265,7 @@
   <li>Capture games default to filling all squares — dark-square-only placement requires "dark squares" in the description</li>
 </ul>
 
-<h2>Games Implemented (20)</h2>
+<h2>Games Implemented (22)</h2>
 <table>
   <tr><th>Game</th><th>Type</th><th>Training Quality</th><th>Notes</th></tr>
   <tr><td>Reversi</td><td>Flanking</td><td><span class="status done">strong</span></td><td>Learns corner strategy, mobility. Consistently good play.</td></tr>
@@ -270,6 +286,7 @@
   <tr><td>War</td><td>Comparing</td><td><span class="status done">luck</span></td><td>Pure luck. Detected and flagged automatically.</td></tr>
   <tr><td>Spades</td><td>Trick-taking + Bidding</td><td><span class="status partial">decent</span></td><td>Spades always trump. 2-player with bidding. Shares UI with Wizard.</td></tr>
   <tr><td>Canasta</td><td>Rummy/Melding</td><td><span class="status partial">decent</span></td><td>Double deck, multi-phase turns, wild cards, meld management, canasta bonuses.</td></tr>
+  <tr><td>Cribbage</td><td>Pegging/Scoring</td><td><span class="status partial">decent</span></td><td>Pegging toward 31, hand scoring (15s/pairs/runs/flush/nobs), crib, race to 121. Uses generic card scoring module.</td></tr>
   <tr><td>Tic-Tac-Toe</td><td>Placement</td><td><span class="status partial">decent</span></td><td>Auto-features. Learning against strong opponent.</td></tr>
   <tr><td>Nim</td><td>Take-away</td><td><span class="status done">strong</span></td><td>Pile balance, single-pile detection.</td></tr>
   <tr><td>Chutes &amp; Ladders</td><td>Race</td><td><span class="status done">luck</span></td><td>Pure luck. Detected and flagged automatically.</td></tr>
@@ -281,7 +298,7 @@
   <li><strong>Learning from scratch:</strong> Games like Reversi, Mancala, Go Fish, and Checkers show clear improvement from zero knowledge to competent play in 20-40 training games.</li>
   <li><strong>Feature auto-discovery:</strong> Auto-generated features for line games, capture games (piece_advantage), territory (count_pieces), and escalating-stakes card games (card_conservation). L2 correlation discovery finds additional features mid-training.</li>
   <li><strong>Luck detection:</strong> Pure-luck games (War, Chutes &amp; Ladders) are automatically identified and flagged — no false "mastery" claims.</li>
-  <li><strong>Game variety:</strong> 21 built-in games across 13 categories, plus novel games parsed from English descriptions.</li>
+  <li><strong>Game variety:</strong> 22 built-in games across 14 categories, plus novel games parsed from English descriptions.</li>
   <li><strong>Novel game pipeline:</strong> Describe a game in English → parse → auto-generate features → train → play. Works for grid placement, gravity drop, movement/capture, flanking, territory, card games, dice races, and tile placement.</li>
   <li><strong>Movement and capture:</strong> Generic movement engine handles diagonal, orthogonal, and all-direction movement with jump capture, mandatory capture, and piece promotion (kinging).</li>
   <li><strong>Interpretable AI:</strong> Every decision can be traced to feature weights. Commentary explains moves. Training partner strength is disclosed.</li>

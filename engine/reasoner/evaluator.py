@@ -89,10 +89,12 @@ class LearnableEval:
                 self.weights[i] += adjustment
 
         # Adaptive learning rate decay
+        # Wins → decay faster (we're on the right track, stabilize)
+        # Losses → decay slowly (still exploring, keep adjusting)
         if outcome > 0:
-            self.learning_rate = max(0.01, self.learning_rate * 0.95)
+            self.learning_rate = max(0.01, self.learning_rate * 0.97)
         elif outcome < 0:
-            self.learning_rate = max(0.01, self.learning_rate * 0.92)
+            self.learning_rate = max(0.01, self.learning_rate * 0.995)
         else:
             self.learning_rate = max(0.01, self.learning_rate * 0.99)
 

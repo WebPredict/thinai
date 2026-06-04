@@ -177,28 +177,36 @@ class LearningRunner:
                         gdl=self._gdl,
                     )
                     has_dice = any(r.get("chance") for r in self._gdl.get("rules", []))
+                    has_dice = any(r.get("chance") for r in self._gdl.get("rules", []))
+                    opp_depth = 1 if has_dice else min(2, self.max_depth)
+                    opponent = ReasonerOpponent(
+                        self.engine, max_depth=opp_depth, eval_fn=opp_eval,
+                    )
                     if has_dice:
-                        opp_depth = 1
-                        opponent = ReasonerOpponent(
-                            self.engine, max_depth=opp_depth, eval_fn=opp_eval,
-                        )
                         opponent_desc = "Uses game intuition, 1 move ahead (dice limit deeper planning)"
                     else:
-                        # Use graduated difficulty: random → self-snapshot
-                        opponent = RandomOpponent(self.engine)
-                        opponent_desc = "Plays random, then graduates to self-snapshot"
+                        opponent_desc = f"Uses game intuition, looks {opp_depth} move{'s' if opp_depth != 1 else ''} ahead"
                 else:
                     opponent = RandomOpponent(self.engine)
                     opponent_desc = "Plays random, then graduates to self-snapshot"
             else:
-                # If no hand-crafted features, default_eval is too strong — use graduated difficulty
-                has_hc_features = bool(_get_features(self.evaluator.game_name))
-                if not has_hc_features:
+                # Line-win and flanking games: use independent opponent with
+                # fresh features at capped depth so learner can compete early
+                opp_features = _get_features(self.evaluator.game_name)
+                if opp_features:
+                    opp_eval = LearnableEval(
+                        self.evaluator.game_name,
+                        features=opp_features,
+                        gdl=self._gdl,
+                    )
+                    opp_depth = min(2, self.max_depth)
+                    opponent = ReasonerOpponent(
+                        self.engine, max_depth=opp_depth, eval_fn=opp_eval,
+                    )
+                    opponent_desc = f"Uses game intuition, looks {opp_depth} move{'s' if opp_depth != 1 else ''} ahead"
+                else:
                     opponent = RandomOpponent(self.engine)
                     opponent_desc = "Plays random, then graduates to self-snapshot"
-                else:
-                    opponent = ReasonerOpponent(self.engine, max_depth=self.max_depth)
-                    opponent_desc = f"Counts lines and patterns, looks {self.max_depth} move{'s' if self.max_depth != 1 else ''} ahead"
 
         # Effort allocator for training — cost-aware, adapts depth per position
         if not self.effort_allocator:

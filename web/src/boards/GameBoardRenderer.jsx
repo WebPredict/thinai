@@ -20,6 +20,7 @@ import PokerBoard from './PokerBoard'
 import WizardBoard from './WizardBoard'
 import ScrabbleBoard from './ScrabbleBoard'
 import CanastaBoard from './CanastaBoard'
+import CribbageBoard from './CribbageBoard'
 
 export default function GameBoardRenderer({ gameType, state, onMove, disabled, aiLastMove }) {
   if (!state) return null
@@ -55,6 +56,8 @@ export default function GameBoardRenderer({ gameType, state, onMove, disabled, a
       return <ScrabbleBoard state={state} onMove={move} disabled={off} />
     case 'canasta':
       return <CanastaBoard state={state} onMove={move} disabled={off} />
+    case 'cribbage':
+      return <CribbageBoard state={state} onMove={move} disabled={off} />
     case 'gin_rummy':
       return <GinRummyBoard state={state} onMove={move} disabled={off} />
     case 'five_card_draw':
